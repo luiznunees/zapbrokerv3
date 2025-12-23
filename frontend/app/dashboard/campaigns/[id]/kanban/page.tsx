@@ -84,7 +84,7 @@ export default function KanbanPage() {
         let lead: Lead | undefined
 
         for (const [status, leads] of Object.entries(kanbanData)) {
-            const foundLead = leads.find(l => l.id === leadId)
+            const foundLead = leads.find((l: Lead) => l.id === leadId)
             if (foundLead) {
                 currentStatus = status
                 lead = foundLead
