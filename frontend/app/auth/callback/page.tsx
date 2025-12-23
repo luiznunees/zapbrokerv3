@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { api } from '@/services/api';
 
 // Safe initialization for Docker build time where envs might be missing
 const getSupabase = () => {
@@ -33,6 +34,23 @@ export default function AuthCallbackPage() {
                 // Bridge: Copy session to LocalStorage for our app's logic
                 localStorage.setItem('token', session.access_token);
                 localStorage.setItem('user', JSON.stringify(session.user));
+
+                // Sync Location
+                try {
+                    const geoRes = await fetch('https://geoip.vuiz.net/geoip');
+                    const geoData = await geoRes.json();
+                    if (geoData && geoData.city) {
+                        await api.auth.updateProfile({
+                            onboarding_steps: {
+                                ...(session.user as any).onboarding_steps,
+                                last_location: `${geoData.city}, ${geoData.countryCode}`,
+                                last_geo_ip: geoData.ip
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('GeoIP sync failed in callback', e);
+                }
 
                 // Check if we have a planId to process
                 const urlParams = new URLSearchParams(window.location.search);
