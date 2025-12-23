@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Safe initialization for Docker build time where envs might be missing
+const getSupabase = () => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://placeholder.com';
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+    return createClient(url, key);
+};
+
+const supabase = getSupabase();
 
 export default function AuthCallbackPage() {
     const router = useRouter();
