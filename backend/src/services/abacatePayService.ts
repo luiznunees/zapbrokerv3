@@ -31,8 +31,9 @@ export const createCustomer = async (data: CustomerData) => {
         const response = await api.post('/customer/create', data);
         return response.data.data;
     } catch (error: any) {
-        console.error('Error creating AbacatePay customer:', error.response?.data || error.message);
-        throw new Error('Failed to create customer');
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error creating AbacatePay customer:', detail);
+        throw new Error(`Failed to create AbacatePay customer: ${detail}`);
     }
 };
 
@@ -72,5 +73,34 @@ export const createPixQrCode = async (data: PixData) => {
             console.error('AbacatePay Error Details:', JSON.stringify(error.response.data, null, 2));
         }
         throw new Error(`Failed to create PIX QR Code: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+};
+export const createBillingSession = async (data: {
+    frequency: 'ONE_TIME' | 'MULTIPLE_PAYMENTS',
+    methods: string[],
+    products: Array<{
+        externalId: string,
+        name: string,
+        quantity: number,
+        price: number
+    }>,
+    returnUrl: string,
+    completionUrl: string,
+    customerId?: string,
+    customer?: {
+        name?: string,
+        cellphone?: string,
+        email: string,
+        taxId?: string
+    },
+    metadata?: any
+}) => {
+    try {
+        const response = await api.post('/billing/create', data);
+        return response.data.data;
+    } catch (error: any) {
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error creating AbacatePay billing session:', detail);
+        throw new Error(`Failed to create billing session: ${detail}`);
     }
 };

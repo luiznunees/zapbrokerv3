@@ -63,16 +63,7 @@ export const api = {
         profile: () => fetchAPI('/auth/me'),
         updateProfile: (data: any) => fetchAPI('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
         google: async () => {
-            // Dynamically import supabase to avoid SSR/build issues if needed, or just assume global usage
-            // But frontend typically uses @supabase/ssr or creates browser client. 
-            // Here we don't have the client instance available in api.ts easily. 
-            // We'll trust the component to call `supabase.auth.signInWithOAuth` directly OR
-            // We'll implement a simple redirect to the backend auth endpoint if we were doing server-side auth.
-            // But standard pattern is frontend SDK. 
-            // Let's rely on importing the client from 'lib/supabase' if it exists, or just use `window.location`.
-            // User asked to "leave google functioning". The simplest way for Supabase is usually:
-            const { createClient } = await import('@supabase/supabase-js');
-            const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+            const { supabase } = await import('@/lib/supabase');
             return supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {

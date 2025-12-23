@@ -57,7 +57,7 @@ export function CTA() {
 
                 <div className="flex flex-col items-center gap-2">
                     <Link
-                        href="/signup"
+                        href="/login"
                         className="px-5 py-2.5 bg-white text-brand-green-600 rounded-lg font-bold text-sm shadow-lg hover:bg-zinc-50 transition-colors transform hover:-translate-y-1"
                     >
                         Começar Teste Grátis →

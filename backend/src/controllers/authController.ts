@@ -126,17 +126,27 @@ export const getProfile = async (req: any, res: Response) => {
             first_message_sent: dbUser?.first_message_sent || false
         };
 
-        // Fetch subscription status
+        // Fetch subscription status and plan info
         const { data: subscription } = await supabase
             .from('subscriptions')
-            .select('status, next_billing_date')
+            .select('status, next_billing_date, plan_id')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
         let subscriptionStatus = 'none';
+        let planName = 'Free Account';
+
         if (subscription) {
+            // Get Plan Name from our constant or DB
+            const planNames: Record<string, string> = {
+                'prod_AXPStPBEeB5xrpubKyWB6EnY': 'ZapBroker - Pro',
+                'prod_n6CMApuNhHqPCUrL2JmHyWbz': 'ZapBroker - Plus',
+                'prod_ZxwseRQWbKLxHKsnfcUCMfYc': 'ZapBroker - Basico'
+            };
+            planName = planNames[subscription.plan_id] || 'ZapBroker Plan';
+
             if (subscription.status === 'active') {
                 const now = new Date();
                 const nextBilling = new Date(subscription.next_billing_date);
@@ -150,9 +160,9 @@ export const getProfile = async (req: any, res: Response) => {
             }
         }
 
-        // Mock tenant for now, but include subscriptionStatus
+        // Mock tenant for now, but include subscriptionStatus and planName
         res.status(200).json({
-            user: { ...profile, subscriptionStatus },
+            user: { ...profile, subscriptionStatus, planName },
             tenant: { id: 'default', name: 'Default Tenant' }
         });
     } catch (error: any) {
@@ -169,7 +179,22 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 
         // Whitelist allowed fields to update
         const allowedUpdates: any = {};
-        if (updates.onboarding_steps) allowedUpdates.onboarding_steps = updates.onboarding_steps;
+
+        // Handle onboarding_steps and preferences
+        if (updates.onboarding_steps) {
+            allowedUpdates.onboarding_steps = updates.onboarding_steps;
+        }
+
+        // Specifically allow individual preference updates that might come separate
+        if (typeof updates.email_notifications === 'boolean' || typeof updates.quota_alerts === 'boolean') {
+            const currentSteps = req.user?.onboarding_steps || {};
+            allowedUpdates.onboarding_steps = {
+                ...currentSteps,
+                email_notifications: updates.email_notifications !== undefined ? updates.email_notifications : currentSteps.email_notifications,
+                quota_alerts: updates.quota_alerts !== undefined ? updates.quota_alerts : currentSteps.quota_alerts
+            };
+        }
+
         if (typeof updates.first_message_sent === 'boolean') allowedUpdates.first_message_sent = updates.first_message_sent;
         // Map 'nome' from frontend to 'name' in database
         if (updates.nome) allowedUpdates.name = updates.nome;

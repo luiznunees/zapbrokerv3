@@ -128,62 +128,23 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Customer Form */}
-                        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                            <h2 className="text-xl font-bold mb-4">Informações de Cobrança</h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">Nome Completo</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={customer.name}
-                                        onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                        placeholder="João Silva"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">Email</label>
-                                    <input
-                                        type="email"
-                                        required
-                                        value={customer.email}
-                                        onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                        placeholder="joao@example.com"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">Celular</label>
-                                        <input
-                                            type="tel"
-                                            required
-                                            value={customer.cellphone}
-                                            onChange={(e) => setCustomer({ ...customer, cellphone: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                            placeholder="(11) 99999-9999"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">CPF/CNPJ</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={customer.taxId}
-                                            onChange={(e) => setCustomer({ ...customer, taxId: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                            placeholder="000.000.000-00"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                        {/* Checkout Section */}
+                        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                <Shield className="w-5 h-5 text-primary" />
+                                Checkout Seguro
+                            </h2>
+                            <p className="text-muted-foreground mb-6">
+                                Você será redirecionado para a plataforma da AbacatePay para realizar seu pagamento via PIX com total segurança.
+                            </p>
 
                             <button
-                                type="submit"
+                                onClick={() => {
+                                    setLoading(true);
+                                    window.location.href = `/checkout/redirect?planId=${selectedPlanId}`;
+                                }}
                                 disabled={loading}
-                                className="w-full mt-6 bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {loading ? (
                                     <>
@@ -193,16 +154,16 @@ export default function CheckoutPage() {
                                 ) : (
                                     <>
                                         <Zap className="w-5 h-5" />
-                                        Assinar Agora
+                                        Ir para o Pagamento Seguro
                                     </>
                                 )}
                             </button>
 
                             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                                 <Shield className="w-4 h-4" />
-                                Pagamento 100% seguro via PIX
+                                Pagamento 100% seguro via AbacatePay
                             </div>
-                        </form>
+                        </div>
                     </div>
 
                     {/* Right Column - Summary */}

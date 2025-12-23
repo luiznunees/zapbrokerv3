@@ -33,12 +33,9 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
             if (user.subscriptionStatus === 'active') {
                 setAuthorized(true)
             } else {
-                // If not active, redirect to payment onboarding
-                // But allow access if we are ALREADY on the payment page (to prevent loops, though this Guard wraps dashboard)
-                // Since this guard is inside dashboard layout, redirecting to /onboarding/payment takes them out of this layout
-                // So we just push to /onboarding/payment
+                // If not active, redirect to home pricing
                 console.log('Subscription not active:', user.subscriptionStatus)
-                router.push(`/onboarding/payment?status=${user.subscriptionStatus}`)
+                router.push(`/#pricing?status=${user.subscriptionStatus}`)
                 return;
             }
         } catch (error) {

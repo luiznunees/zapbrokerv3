@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Send, Users, Settings, LogOut, BookOpen, Lightbulb, Search, HelpCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
 const NAV_ITEMS = [
@@ -37,6 +37,30 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
 }
 
 export default function Sidebar() {
+    const [user, setUser] = useState<any>(null)
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const { user } = await import('@/services/api').then(m => m.api.auth.profile())
+                setUser(user)
+            } catch (error) {
+                console.error('Failed to fetch profile for sidebar', error)
+            }
+        }
+        fetchProfile()
+    }, [])
+
+    const getInitials = (name: string) => {
+        if (!name) return 'U'
+        return name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .substring(0, 2)
+    }
+
     const pathname = usePathname()
     const [searchQuery, setSearchQuery] = useState('')
 
@@ -47,6 +71,9 @@ export default function Sidebar() {
     const filteredItems = searchQuery
         ? allItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
         : null
+
+    const userName = user?.nome || user?.name || 'Carregando...'
+    const planName = user?.planName || 'Consultando plano...'
 
     return (
         <aside className="w-60 bg-card/95 border-r border-border flex flex-col min-h-screen transition-all duration-300 shadow-xl z-20">
@@ -99,14 +126,14 @@ export default function Sidebar() {
 
             {/* Footer */}
             <div className="p-3 border-t border-border mt-auto bg-card">
-                {/* User Profile - Compact */}
+                {/* User Profile - Dynamic */}
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center shadow-md shadow-primary/20">
-                        <span className="font-bold text-white text-xs">AS</span>
+                        <span className="font-bold text-white text-xs">{getInitials(userName)}</span>
                     </div>
                     <div className="overflow-hidden">
-                        <h3 className="font-bold text-foreground text-xs truncate">Anderson Silva</h3>
-                        <p className="text-[10px] text-muted-foreground font-medium truncate">Corretor Pro</p>
+                        <h3 className="font-bold text-foreground text-xs truncate">{userName}</h3>
+                        <p className="text-[10px] text-muted-foreground font-medium truncate">{planName}</p>
                     </div>
                 </div>
 

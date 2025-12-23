@@ -39,7 +39,7 @@ export function MockupSection() {
                         </div>
 
                         <Link
-                            href="/signup"
+                            href="/login"
                             className="inline-flex h-8 items-center justify-center rounded-md bg-brand-purple-600 px-3 text-xs font-medium text-white shadow transition-colors hover:bg-brand-purple-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
                             Testar Gratuitamente →

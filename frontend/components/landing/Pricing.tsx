@@ -3,6 +3,7 @@ import Link from "next/link"
 
 const PLANS = [
     {
+        id: "prod_ZxwseRQWbKLxHKsnfcUCMfYc",
         name: "Básico",
         price: "49",
         perMsg: "0,98",
@@ -18,6 +19,7 @@ const PLANS = [
         highlight: false
     },
     {
+        id: "prod_n6CMApuNhHqPCUrL2JmHyWbz",
         name: "Plus",
         price: "99",
         perMsg: "0,99",
@@ -34,6 +36,7 @@ const PLANS = [
         highlight: true
     },
     {
+        id: "prod_AXPStPBEeB5xrpubKyWB6EnY",
         name: "Pro",
         price: "197",
         perMsg: "0,78",
@@ -93,7 +96,7 @@ export function Pricing() {
                             </div>
 
                             <Link
-                                href="/signup"
+                                href={`/login?planId=${plan.id}`}
                                 className={`
                                     w-full py-1.5 rounded-md font-bold text-[10px] text-center transition-colors block mb-3
                                     ${plan.highlight

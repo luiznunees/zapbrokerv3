@@ -79,7 +79,7 @@ export function Hero() {
 
                     <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
                         <Link
-                            href="/signup"
+                            href="/login"
                             className="w-full sm:w-auto px-3.5 py-1.5 bg-gradient-to-r from-brand-green-500 to-brand-green-600 hover:from-brand-green-400 hover:to-brand-green-500 text-white rounded-lg font-bold text-xs shadow-lg shadow-brand-green-500/20 transform transition-all hover:-translate-y-1"
                         >
                             Começar Teste Grátis de 7 Dias →

@@ -83,12 +83,19 @@ export default function DashboardPage() {
             const campaigns = await api.campaigns.list().catch(() => []);
             setRecentCampaigns(campaigns.slice(0, 5));
 
+            // Fetch Leads (Contacts)
+            const contacts = await api.contacts.getAll().catch(() => []);
+
+            // Fetch Today's Campaigns for the badge
+            const today = new Date().toLocaleDateString();
+            const campaignsToday = campaigns.filter((c: any) => new Date(c.created_at).toLocaleDateString() === today).length;
+
             // Calculate simple stats
             setStats({
-                leads: '1,204',
+                leads: contacts.length.toLocaleString(),
                 campaigns: campaigns.length.toString(),
-                deliveryRate: '98.5%',
-                responses: '342'
+                deliveryRate: '100%', // Placeholder for now or calculate from actual message logic if available
+                responses: campaignsToday.toString() // Using this for the "+3 hoje" logic
             });
         } catch (error) {
             console.error("Failed to fetch dashboard data", error);
@@ -228,10 +235,10 @@ export default function DashboardPage() {
                         <div className="bg-emerald-500/10 p-3 rounded-xl">
                             <Users className="w-6 h-6 text-emerald-500" />
                         </div>
-                        <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">+12%</span>
+                        <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">+100%</span>
                     </div>
                     <div className="z-10">
-                        <h3 className="text-3xl font-bold text-foreground">1,204</h3>
+                        <h3 className="text-3xl font-bold text-foreground">{stats.leads}</h3>
                         <p className="text-sm text-muted-foreground font-medium">Total de Leads</p>
                     </div>
                     <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
@@ -243,10 +250,10 @@ export default function DashboardPage() {
                         <div className="bg-purple-500/10 p-3 rounded-xl">
                             <Send className="w-6 h-6 text-purple-500" />
                         </div>
-                        <span className="text-xs font-bold text-purple-500 bg-purple-500/10 px-2 py-1 rounded-full">+3 hoje</span>
+                        <span className="text-xs font-bold text-purple-500 bg-purple-500/10 px-2 py-1 rounded-full">+{stats.responses} hoje</span>
                     </div>
                     <div className="z-10">
-                        <h3 className="text-3xl font-bold text-foreground">28</h3>
+                        <h3 className="text-3xl font-bold text-foreground">{stats.campaigns}</h3>
                         <p className="text-sm text-muted-foreground font-medium">Campanhas Enviadas</p>
                     </div>
                     <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors" />

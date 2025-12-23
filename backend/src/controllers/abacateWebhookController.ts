@@ -18,17 +18,35 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
         const { event: eventType, data } = event;
 
         if (eventType === 'pix.paid' || eventType === 'billing.paid') {
-            // Metadata can be in different places depending on the event
-            const metadata = data.metadata || data.pixQrCode?.metadata || data.bill?.metadata;
+            // Support both 'bill' and 'billing' naming conventions found in different versions/events
+            const billingObj = data.billing || data.bill;
+            const pixObj = data.pixQrCode;
 
-            const subscriptionId = metadata?.subscription_id;
-            const paymentId = data.id || data.pixQrCode?.id; // External ID
+            // Metadata can be in different places depending on the event
+            const metadata = data.metadata || billingObj?.metadata || pixObj?.metadata;
+
+            // Try to find subscriptionId in metadata or from product externalId
+            let subscriptionId = metadata?.subscription_id;
+
+            if (!subscriptionId) {
+                // Fallback: check products externalId (where we also store it now)
+                const products = data.products || billingObj?.products || pixObj?.products;
+                if (Array.isArray(products) && products.length > 0) {
+                    subscriptionId = products[0].externalId;
+                }
+            }
+
+            const paymentId = data.id || billingObj?.id || pixObj?.id; // External ID
 
             if (subscriptionId) {
                 // 1. Update Payment Status
                 await supabase
                     .from('payments')
-                    .update({ status: 'PAID', updated_at: new Date() })
+                    .update({
+                        status: 'PAID',
+                        updated_at: new Date(),
+                        metadata: { ...metadata, webhook_received_at: new Date() }
+                    })
                     .eq('external_id', paymentId);
 
                 // 2. Update Subscription Status & Next Billing Date
