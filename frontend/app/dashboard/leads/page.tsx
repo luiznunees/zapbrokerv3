@@ -186,6 +186,32 @@ export default function LeadsPage() {
         }
     }
 
+    const handleExportCSV = () => {
+        if (!contacts || contacts.length === 0) return
+
+        const headers = ['Nome', 'Telefone', 'Data de Cadastro']
+        const rows = contacts.map(c => [
+            c.name,
+            c.phone,
+            new Date(c.created_at).toLocaleDateString()
+        ])
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(r => r.join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `leads_${selectedList?.name || 'export'}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
     const filteredLists = lists.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
     const filteredContacts = contacts.filter(c =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -417,6 +443,14 @@ export default function LeadsPage() {
                         )}
                         {view === 'contacts' && (
                             <>
+                                <button
+                                    onClick={handleExportCSV}
+                                    disabled={contacts.length === 0}
+                                    className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border disabled:opacity-50"
+                                >
+                                    <ShareCircle className="w-5 h-5 text-primary" />
+                                    Exportar CSV
+                                </button>
                                 <button
                                     onClick={() => setIsImporting(true)}
                                     className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border"

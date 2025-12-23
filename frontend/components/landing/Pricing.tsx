@@ -24,7 +24,7 @@ const PLANS = [
         price: "69",
         perMsg: "0,69",
         features: [
-            "100 msgs/semana",
+            "125 msgs/semana",
             "2 conexões WhatsApp",
             "Tudo do Básico +",
             "Analytics avançado",
@@ -90,9 +90,9 @@ export function Pricing() {
                                 <div className="flex items-baseline gap-0.5">
                                     <span className="text-[10px] font-medium text-muted-foreground">R$</span>
                                     <span className="text-2xl font-bold tracking-tight">{plan.price}</span>
-                                    <span className="text-muted-foreground text-[10px]">/sem</span>
+                                    <span className="text-muted-foreground text-[10px]">/mês</span>
                                 </div>
-                                <p className="text-[8px] text-muted-foreground mt-0.5">~R$ {plan.perMsg} por msg</p>
+                                <p className="text-[8px] text-muted-foreground mt-0.5">Mensal (Cotas Semanais)</p>
                             </div>
 
                             <Link

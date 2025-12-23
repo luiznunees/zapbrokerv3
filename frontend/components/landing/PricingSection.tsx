@@ -7,7 +7,7 @@ const PLANS = [
     {
         name: "BÁSICO",
         price: "R$ 29",
-        period: "/semanal",
+        period: "/mensal",
         features: [
             "50 msgs/semana",
             "1 conexão WhatsApp",
@@ -20,10 +20,10 @@ const PLANS = [
     {
         name: "PLUS",
         price: "R$ 69",
-        period: "/semanal",
+        period: "/mensal",
         badge: "🏆 MAIS POPULAR",
         features: [
-            "100 msgs/semana",
+            "125 msgs/semana",
             "2 conexões WhatsApp",
             "Tudo do Básico +",
             "Analytics avançado",
@@ -35,7 +35,7 @@ const PLANS = [
     {
         name: "PRO",
         price: "R$ 119",
-        period: "/semanal",
+        period: "/mensal",
         features: [
             "250 msgs/semana",
             "5 conexões WhatsApp",

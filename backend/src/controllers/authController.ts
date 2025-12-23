@@ -63,14 +63,6 @@ export const register = async (req: Request, res: Response) => {
             await emailService.sendConfirmationEmail(email, confirmationUrl);
         }
 
-        // 4. Send Welcome Email (Optional: usually send AFTER confirmation, but user asked for it)
-        // Let's send it now or after they login first time?
-        // User said: "resend faça o envio de confirmacao e um envio de bem vindo"
-        // Let's send Welcome email immediately for instant gratification? No, bad UX if email is wrong.
-        // Proper way: Webhook on 'INSERT public.users' or on 'auth.users' update.
-        // Compromise: Send it now, assuming they provided real email.
-        await emailService.sendWelcomeEmail(email, name);
-
         res.status(201).json({
             user: user.user,
             message: 'User created. Confirmation email sent via Resend.'

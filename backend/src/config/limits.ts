@@ -4,11 +4,11 @@ export const PLAN_LIMITS: Record<string, { maxInstances: number; maxMonthlyMessa
         maxMonthlyMessages: 50
     },
     'prod_n6CMApuNhHqPCUrL2JmHyWbz': { // Plus
-        maxInstances: 3,
-        maxMonthlyMessages: 100
+        maxInstances: 2,
+        maxMonthlyMessages: 125
     },
     'prod_AXPStPBEeB5xrpubKyWB6EnY': { // Pro
-        maxInstances: 10,
+        maxInstances: 5,
         maxMonthlyMessages: 250
     }
 };

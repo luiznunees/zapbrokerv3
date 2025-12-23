@@ -46,25 +46,6 @@ export default function LoginPage() {
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
 
-                // NEW: Capture GeoIP and save to profile
-                try {
-                    const geoRes = await fetch('https://geoip.vuiz.net/geoip');
-                    const geoData = await geoRes.json();
-                    if (geoData && geoData.city) {
-                        const locationStr = `${geoData.city}, ${geoData.countryCodes || geoData.countryCode}`;
-                        await api.auth.updateProfile({
-                            onboarding_steps: {
-                                ...user.onboarding_steps,
-                                last_location: locationStr,
-                                last_geo_ip: geoData.ip
-                            }
-                        });
-                        console.log('📍 Location saved:', locationStr);
-                    }
-                } catch (geoErr) {
-                    console.error('Failed to save GeoIP on login', geoErr);
-                }
-
                 // Check for pending plan to redirect to checkout
                 const pendingPlanId = localStorage.getItem('pendingPlanId');
                 if (pendingPlanId) {
@@ -133,7 +114,7 @@ export default function LoginPage() {
                     </div>
 
                     <p className="text-center mt-8 text-muted-foreground text-[10px] leading-relaxed max-w-[280px] mx-auto">
-                        Ao continuar, você concorda com nossos <Link href="/legal/terms" className="text-primary hover:underline">Termos</Link> e <Link href="/legal/privacy" className="text-primary hover:underline">Privacidade</Link>.
+                        Ao continuar, você concorda com nossos <Link href="/terms" className="text-primary hover:underline">Termos</Link> e <Link href="/privacy" className="text-primary hover:underline">Privacidade</Link>.
                     </p>
                 </div>
             </div>

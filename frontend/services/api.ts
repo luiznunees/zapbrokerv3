@@ -98,6 +98,7 @@ export const api = {
             if (filters?.listId) params.append('listId', filters.listId);
             return fetchAPI(`/api/contatos?${params.toString()}`);
         },
+        getCount: () => fetchAPI('/api/contacts/count'),
         create: (data: any) => fetchAPI('/api/contatos', { method: 'POST', body: JSON.stringify(data) }),
         update: (id: string, data: any) => fetchAPI(`/api/contatos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
         delete: (id: string) => fetchAPI(`/api/contatos/${id}`, { method: 'DELETE' }),

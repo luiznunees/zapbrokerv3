@@ -67,7 +67,7 @@ const TUTORIAL_CONTENT: Record<string, any> = {
             <p class="mb-4">O WhatsApp possui sistemas rigorosos contra spam. Siga estas dicas para manter seu número seguro e evitar o temido banimento.</p>
 
             <h3 class="text-xl font-bold mt-8 mb-4">1. Aqueça seu chip (Maturação)</h3>
-            <p class="mb-4">Nunca pegue um chip novo e comece a disparar 1.000 mensagens. Use o chip normalmente por 1 ou 2 semanas, converse com amigos, entre em grupos, antes de usar para marketing massivo.</p>
+            <p class="mb-4">Nunca pegue um chip novo e comece a disparar 100 mensagens. Use o chip normalmente por 1 ou 2 semanas, converse com amigos, entre em grupos, antes de usar para marketing massivo.</p>
 
             <h3 class="text-xl font-bold mt-8 mb-4">2. Use variáveis na mensagem</h3>
             <p class="mb-4">O algoritmo do WhatsApp detecta mensagens idênticas enviadas repetidamente. Use a variável <code>{nome}</code> e varie a saudação (Oi, Olá, Tudo bem) para tornar cada mensagem única.</p>
