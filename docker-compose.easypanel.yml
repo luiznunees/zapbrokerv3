@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  # Frontend Service (zapbroker.dev)
+  app:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # These build-time variables usually need to be set in the "Build Args" or "Environment" section in EasyPanel
+      # BEFORE the build happens.
+      - NEXT_PUBLIC_API_URL=https://api.zapbroker.dev
+      # You will need to add your SUPABASE URL and KEY in EasyPanel
+    
+  # Backend Service (api.zapbroker.dev)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+      # Add DATABASE_URL, REDIS_URL, etc in EasyPanel Project Settings
