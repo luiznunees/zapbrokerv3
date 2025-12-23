@@ -22,6 +22,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
     const [showInstanceNameModal, setShowInstanceNameModal] = useState(false);
+    const [location, setLocation] = useState<any>(null);
 
     // QR Code Modal State
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -58,10 +59,21 @@ export default function DashboardPage() {
         // Debounce to avoid multiple simultaneous calls (React StrictMode)
         const timer = setTimeout(() => {
             fetchDashboardData();
+            fetchLocation();
         }, 1500)
 
         return () => clearTimeout(timer)
     }, []);
+
+    const fetchLocation = async () => {
+        try {
+            const res = await fetch('https://geoip.vuiz.net/geoip');
+            const data = await res.json();
+            setLocation(data);
+        } catch (error) {
+            console.error('GeoIP fetch failed', error);
+        }
+    }
 
     const fetchDashboardData = async () => {
         try {

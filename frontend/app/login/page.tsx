@@ -46,6 +46,25 @@ export default function LoginPage() {
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
 
+                // NEW: Capture GeoIP and save to profile
+                try {
+                    const geoRes = await fetch('https://geoip.vuiz.net/geoip');
+                    const geoData = await geoRes.json();
+                    if (geoData && geoData.city) {
+                        const locationStr = `${geoData.city}, ${geoData.countryCodes || geoData.countryCode}`;
+                        await api.auth.updateProfile({
+                            onboarding_steps: {
+                                ...user.onboarding_steps,
+                                last_location: locationStr,
+                                last_geo_ip: geoData.ip
+                            }
+                        });
+                        console.log('📍 Location saved:', locationStr);
+                    }
+                } catch (geoErr) {
+                    console.error('Failed to save GeoIP on login', geoErr);
+                }
+
                 // Check for pending plan to redirect to checkout
                 const pendingPlanId = localStorage.getItem('pendingPlanId');
                 if (pendingPlanId) {
