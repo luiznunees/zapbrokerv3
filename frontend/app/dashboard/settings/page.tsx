@@ -12,24 +12,24 @@ const PLANS = [
     {
         id: 'prod_ZxwseRQWbKLxHKsnfcUCMfYc',
         name: 'Básico',
-        price: 29.90,
+        price: 29.00,
         description: 'Ideal para começar',
-        features: ['1.000 mensagens/semana', '1 instância WhatsApp', '5 campanhas simultâneas', 'Suporte por email']
+        features: ['50 mensagens/semana', '1 instância WhatsApp', 'IA Personalizável', 'Sistema Anti-Ban', 'Suporte por email']
     },
     {
         id: 'prod_n6CMApuNhHqPCUrL2JmHyWbz',
         name: 'Plus',
-        price: 69.90,
+        price: 69.00,
         description: 'Mais popular',
         popular: true,
-        features: ['5.000 mensagens/semana', '3 instâncias WhatsApp', '20 campanhas', 'Kanban de leads', 'Suporte prioritário']
+        features: ['125 mensagens/semana', '2 conexões WhatsApp', 'IA Personalizável', 'Analytics avançado', 'Suporte prioritário']
     },
     {
         id: 'prod_AXPStPBEeB5xrpubKyWB6EnY',
         name: 'Pro',
-        price: 119.90,
+        price: 119.00,
         description: 'Para empresas',
-        features: ['15.000 mensagens/semana', 'Instâncias ilimitadas', 'Campanhas ilimitadas', 'Kanban + AI Agent', 'Suporte VIP 24/7']
+        features: ['250 mensagens/semana', '5 conexões WhatsApp', 'IA Personalizável', 'API Access', 'Suporte VIP']
     }
 ]
 

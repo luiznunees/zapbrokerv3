@@ -391,3 +391,19 @@ export const updateList = async (userId: string, listId: string, name: string) =
 
     return data;
 };
+
+export const getContactsCount = async (userId: string) => {
+    const { count, error } = await supabase
+        .from('contacts')
+        .select(`
+            *,
+            contact_lists!inner(user_id)
+        `, { count: 'exact', head: true })
+        .eq('contact_lists.user_id', userId);
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return { count: count || 0 };
+};

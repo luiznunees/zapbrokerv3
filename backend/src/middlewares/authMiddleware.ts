@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase, supabaseAnon } from '../config/supabase';
+import * as emailService from '../services/emailService';
 
 export interface AuthRequest extends Request {
     user?: any;
@@ -76,6 +77,11 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
                     console.error('Failed to create new user during migration:', insertError);
                     // Attempt rollback of rename?
                 } else {
+                    // Send Welcome Email
+                    if (user.email) {
+                        emailService.sendWelcomeEmail(user.email, user.user_metadata?.nome || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User');
+                    }
+
                     // Migrate children tables
                     const tablesToMigrate = [
                         'instances',
@@ -121,6 +127,11 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 
                 if (insertError) {
                     console.error('Error syncing user to public.users:', insertError);
+                } else {
+                    // Send Welcome Email for new standard users (including Google OAuth)
+                    if (user.email) {
+                        emailService.sendWelcomeEmail(user.email, user.user_metadata?.nome || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User');
+                    }
                 }
             }
         }

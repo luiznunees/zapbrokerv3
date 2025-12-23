@@ -28,7 +28,7 @@ const PLANS = [
         icon: Rocket,
         badge: "🏆 RECOMENDADO",
         features: [
-            "100 msgs/semana",
+            "125 msgs/semana",
             "2 conexões WhatsApp",
             "Tudo do Básico +",
             "Analytics avançado",
@@ -82,8 +82,8 @@ export default function UpgradePage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.1 }}
                             className={`relative flex flex-col rounded-2xl p-8 shadow-lg border-2 transition-all ${plan.highlight
-                                    ? "bg-card border-brand-purple-500 scale-105 z-10 shadow-brand-purple-500/10"
-                                    : "bg-card border-border hover:border-brand-purple-500/50"
+                                ? "bg-card border-brand-purple-500 scale-105 z-10 shadow-brand-purple-500/10"
+                                : "bg-card border-border hover:border-brand-purple-500/50"
                                 }`}
                         >
                             {plan.highlight && (
@@ -99,9 +99,9 @@ export default function UpgradePage() {
                                 </div>
                                 <div className="flex items-baseline mb-2">
                                     <span className="text-4xl font-black text-foreground">R$ {plan.price}</span>
-                                    <span className="text-muted-foreground ml-2 text-sm">/semana</span>
+                                    <span className="text-muted-foreground ml-2 text-sm">/mensal</span>
                                 </div>
-                                <p className="text-xs text-muted-foreground italic">~R$ {plan.perMsg} por mensagem enviada</p>
+                                <p className="text-xs text-muted-foreground italic">Faturamento Mensal (Cotas Semanais)</p>
                             </div>
 
                             <ul className="flex-1 space-y-4 mb-8">
@@ -116,8 +116,8 @@ export default function UpgradePage() {
                             <button
                                 onClick={() => handleSelectPlan(plan.id)}
                                 className={`w-full py-4 rounded-xl font-bold text-lg transition-all active:scale-95 ${plan.highlight
-                                        ? "bg-brand-purple-600 hover:bg-brand-purple-700 text-white shadow-xl shadow-brand-purple-600/20"
-                                        : "bg-secondary hover:bg-secondary/80 text-foreground"
+                                    ? "bg-brand-purple-600 hover:bg-brand-purple-700 text-white shadow-xl shadow-brand-purple-600/20"
+                                    : "bg-secondary hover:bg-secondary/80 text-foreground"
                                     }`}
                             >
                                 Selecionar Plano

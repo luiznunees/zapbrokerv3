@@ -5,9 +5,9 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
 
 const PLANS: any = {
-    'prod_AXPStPBEeB5xrpubKyWB6EnY': { name: 'ZapBroker - Pro', price: 11990 },
-    'prod_n6CMApuNhHqPCUrL2JmHyWbz': { name: 'ZapBroker - Plus', price: 6990 },
-    'prod_ZxwseRQWbKLxHKsnfcUCMfYc': { name: 'ZapBroker - Basico', price: 2990 }
+    'prod_AXPStPBEeB5xrpubKyWB6EnY': { name: 'ZapBroker - Pro', price: 11900 },
+    'prod_n6CMApuNhHqPCUrL2JmHyWbz': { name: 'ZapBroker - Plus', price: 6900 },
+    'prod_ZxwseRQWbKLxHKsnfcUCMfYc': { name: 'ZapBroker - Básico', price: 2900 }
 };
 
 export const createSubscription = async (req: AuthRequest, res: Response) => {

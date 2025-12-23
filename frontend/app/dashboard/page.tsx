@@ -22,7 +22,6 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
     const [showInstanceNameModal, setShowInstanceNameModal] = useState(false);
-    const [location, setLocation] = useState<any>(null);
 
     // QR Code Modal State
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -59,21 +58,10 @@ export default function DashboardPage() {
         // Debounce to avoid multiple simultaneous calls (React StrictMode)
         const timer = setTimeout(() => {
             fetchDashboardData();
-            fetchLocation();
         }, 1500)
 
         return () => clearTimeout(timer)
     }, []);
-
-    const fetchLocation = async () => {
-        try {
-            const res = await fetch('https://geoip.vuiz.net/geoip');
-            const data = await res.json();
-            setLocation(data);
-        } catch (error) {
-            console.error('GeoIP fetch failed', error);
-        }
-    }
 
     const fetchDashboardData = async () => {
         try {
@@ -95,8 +83,8 @@ export default function DashboardPage() {
             const campaigns = await api.campaigns.list().catch(() => []);
             setRecentCampaigns(campaigns.slice(0, 5));
 
-            // Fetch Leads (Contacts)
-            const contacts = await api.contacts.getAll().catch(() => []);
+            // Fetch Leads Count
+            const { count: leadCount } = await api.contacts.getCount().catch(() => ({ count: 0 }));
 
             // Fetch Today's Campaigns for the badge
             const today = new Date().toLocaleDateString();
@@ -104,10 +92,10 @@ export default function DashboardPage() {
 
             // Calculate simple stats
             setStats({
-                leads: contacts.length.toLocaleString(),
+                leads: leadCount.toLocaleString(),
                 campaigns: campaigns.length.toString(),
-                deliveryRate: '100%', // Placeholder for now or calculate from actual message logic if available
-                responses: campaignsToday.toString() // Using this for the "+3 hoje" logic
+                deliveryRate: '100%', // Placeholder for now
+                responses: campaignsToday.toString()
             });
         } catch (error) {
             console.error("Failed to fetch dashboard data", error);

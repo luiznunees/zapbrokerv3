@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { QuotaService } from './quotaService';
 
 export const createCampaign = async (
     userId: string,
@@ -32,7 +33,33 @@ export const createCampaign = async (
 
     if (!instance) throw new Error('WhatsApp instance not found or access denied');
 
-    // 1. Create Campaign
+    // 1. Fetch Contacts Count
+    const { count, error: countError } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('list_id', contactListId);
+
+    if (countError) throw new Error(countError.message);
+    const totalContacts = count || 0;
+
+    if (totalContacts === 0) throw new Error('A lista de contatos selecionada está vazia.');
+
+    // 2. Fetch User Plan for Quota
+    const { data: user } = await supabase
+        .from('users')
+        .select('plan_id')
+        .eq('id', userId)
+        .single();
+
+    const planId = user?.plan_id || 'free';
+
+    // 3. Check Quota Availability
+    const availability = await QuotaService.checkAvailability(userId, planId, totalContacts);
+    if (!availability.available) {
+        throw new Error(`Saldo insuficiente. Você tem ${availability.remaining} mensagens e está tentando enviar para ${totalContacts} contatos.`);
+    }
+
+    // 4. Create Campaign
     const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .insert([{
@@ -56,7 +83,10 @@ export const createCampaign = async (
         throw new Error(campaignError.message);
     }
 
-    // 2. Fetch Contacts
+    // 5. Consume Quota
+    await QuotaService.consumeQuota(userId, planId, totalContacts, campaign.id);
+
+    // 6. Fetch Contacts
     const { data: contacts, error: contactsError } = await supabase
         .from('contacts')
         .select('id, phone')
@@ -66,11 +96,7 @@ export const createCampaign = async (
         throw new Error(contactsError.message);
     }
 
-    if (!contacts || contacts.length === 0) {
-        return campaign; // No contacts to process
-    }
-
-    // 3. Create Messages
+    // 7. Create Messages
     const messages = contacts.map(contact => ({
         campaign_id: campaign.id,
         contact_id: contact.id,

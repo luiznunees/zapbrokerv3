@@ -12,7 +12,19 @@ export function Hero() {
     useEffect(() => {
         async function getLocation() {
             try {
-                // 1. Try ipapi.co
+                // 1. Primary: geoip.vuiz.net (User requested)
+                const response = await fetch('https://geoip.vuiz.net/geoip')
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.city) {
+                        setCity(data.city)
+                        return
+                    }
+                }
+            } catch (e) { console.warn('geoip.vuiz.net failed') }
+
+            try {
+                // 2. Fallback: ipapi.co
                 const response = await fetch('https://ipapi.co/json/')
                 if (response.ok) {
                     const data = await response.json()
@@ -24,19 +36,7 @@ export function Hero() {
             } catch (e) { console.warn('ipapi failed') }
 
             try {
-                // 2. Try ipwho.is
-                const response = await fetch('https://ipwho.is/')
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.city) {
-                        setCity(data.city)
-                        return
-                    }
-                }
-            } catch (e) { console.warn('ipwho failed') }
-
-            try {
-                // 3. Try geojs.io (very reliable backup)
+                // 3. Fallback: geojs.io
                 const response = await fetch('https://get.geojs.io/v1/ip/geo.json')
                 if (response.ok) {
                     const data = await response.json()
@@ -47,8 +47,8 @@ export function Hero() {
                 }
             } catch (e) { console.warn('geojs failed') }
 
-            // 4. Fallback if everything fails
-            setCity('Brasil')
+            // 4. Default if everything fails
+            setCity('Capão da Canoa') // User preferred fallback
             setLoadingCity(false)
         }
         getLocation()
@@ -74,7 +74,7 @@ export function Hero() {
                     </h1>
 
                     <p className="text-xs md:text-sm text-muted-foreground mb-5 max-w-lg mx-auto leading-relaxed">
-                        Envie 500+ mensagens personalizadas por dia enquanto você fecha negócios, faz visitas e capta exclusivas.
+                        Automatize suas mensagens personalizadas e recupere seu tempo enquanto foca no que realmente importa: fechar negócios.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
@@ -122,7 +122,7 @@ export function Hero() {
                                     </div>
                                     <div>
                                         <p className="font-bold text-[8px]">Campanha Enviada</p>
-                                        <p className="text-[6px] text-muted-foreground">500 msgs entregues</p>
+                                        <p className="text-[6px] text-muted-foreground">Mensagens entregues</p>
                                     </div>
                                 </div>
                             </div>

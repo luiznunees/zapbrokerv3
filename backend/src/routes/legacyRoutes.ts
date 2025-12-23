@@ -21,6 +21,7 @@ router.get('/auth/profile', authController.getProfile);
 
 // Contact Routes (Legacy aliases & CRUD)
 router.get('/contatos', contactController.getAllContacts);
+router.get('/contacts/count', authenticateToken, contactController.getContactsCount);
 router.post('/contatos', contactController.createContact);
 router.put('/contatos/:id', contactController.updateContact);
 router.delete('/contatos/:id', contactController.deleteContact);
