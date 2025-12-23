@@ -5,8 +5,8 @@ const PLANS = [
     {
         id: "prod_ZxwseRQWbKLxHKsnfcUCMfYc",
         name: "Básico",
-        price: "49",
-        perMsg: "0,98",
+        price: "29",
+        perMsg: "0,58",
         features: [
             "50 msgs/semana",
             "1 conexão WhatsApp",
@@ -21,8 +21,8 @@ const PLANS = [
     {
         id: "prod_n6CMApuNhHqPCUrL2JmHyWbz",
         name: "Plus",
-        price: "99",
-        perMsg: "0,99",
+        price: "69",
+        perMsg: "0,69",
         features: [
             "100 msgs/semana",
             "2 conexões WhatsApp",
@@ -38,8 +38,8 @@ const PLANS = [
     {
         id: "prod_AXPStPBEeB5xrpubKyWB6EnY",
         name: "Pro",
-        price: "197",
-        perMsg: "0,78",
+        price: "119",
+        perMsg: "0,48",
         features: [
             "250 msgs/semana",
             "5 conexões WhatsApp",
