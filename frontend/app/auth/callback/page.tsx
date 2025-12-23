@@ -34,8 +34,16 @@ export default function AuthCallbackPage() {
                 localStorage.setItem('token', session.access_token);
                 localStorage.setItem('user', JSON.stringify(session.user));
 
-                // Redirect to dashboard
-                router.push('/dashboard');
+                // Check if we have a planId to process
+                const urlParams = new URLSearchParams(window.location.search);
+                const planId = urlParams.get('planId') || localStorage.getItem('pendingPlanId');
+
+                if (planId) {
+                    localStorage.removeItem('pendingPlanId');
+                    router.push(`/checkout/redirect?planId=${planId}`);
+                } else {
+                    router.push('/dashboard');
+                }
             } else {
                 // Handle case where we were redirected but no session found
                 // Usually this happens if the hash fragment is missing or invalid
@@ -45,7 +53,14 @@ export default function AuthCallbackPage() {
                         console.log('✅ Session found via onAuthStateChange!');
                         localStorage.setItem('token', session.access_token);
                         localStorage.setItem('user', JSON.stringify(session.user));
-                        router.push('/dashboard');
+
+                        const savedPlanId = localStorage.getItem('pendingPlanId');
+                        if (savedPlanId) {
+                            localStorage.removeItem('pendingPlanId');
+                            router.push(`/checkout/redirect?planId=${savedPlanId}`);
+                        } else {
+                            router.push('/dashboard');
+                        }
                     }
                 });
             }

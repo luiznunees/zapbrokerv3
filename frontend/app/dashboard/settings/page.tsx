@@ -50,6 +50,8 @@ export default function SettingsPage() {
         taxId: ''
     })
 
+    const [name, setName] = useState('');
+
     // User State
     const [user, setUser] = useState<any>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -95,11 +97,59 @@ export default function SettingsPage() {
             if (freshUser) {
                 setUser(freshUser.user);
                 localStorage.setItem('user', JSON.stringify(freshUser.user));
+
+                // Set name preference explicitly if needed
+                setName(freshUser.user.name || '');
             }
         } catch (error) {
             console.error('Failed to fetch profile', error);
         } finally {
             setLoadingUser(false);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        try {
+            setLoadingUser(true);
+            const updates = {
+                nome: name,
+                email_notifications: user.onboarding_steps?.email_notifications ?? true,
+                quota_alerts: user.onboarding_steps?.quota_alerts ?? true
+            };
+
+            const updatedUser = await api.auth.updateProfile(updates);
+            setUser({ ...user, ...updatedUser });
+            localStorage.setItem('user', JSON.stringify({ ...user, ...updatedUser }));
+            alert('Perfil atualizado com sucesso!');
+        } catch (error) {
+            console.error('Failed to save profile', error);
+            alert('Erro ao salvar perfil.');
+        } finally {
+            setLoadingUser(false);
+        }
+    };
+
+    const handleTogglePreference = async (key: string, value: boolean) => {
+        try {
+            // Optimistic update
+            const newUser = {
+                ...user,
+                onboarding_steps: {
+                    ...(user.onboarding_steps || {}),
+                    [key]: value
+                }
+            };
+            setUser(newUser);
+
+            await api.auth.updateProfile({
+                [key]: value
+            });
+
+            localStorage.setItem('user', JSON.stringify(newUser));
+        } catch (error) {
+            console.error(`Failed to toggle ${key}`, error);
+            // Revert on error
+            fetchUserProfile();
         }
     };
 
@@ -258,7 +308,8 @@ export default function SettingsPage() {
                                 ) : (
                                     <input
                                         type="text"
-                                        defaultValue={user?.name}
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
                                         className="w-full px-4 py-2.5 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                     />
                                 )}
@@ -288,7 +339,12 @@ export default function SettingsPage() {
                                         <p className="text-xs text-muted-foreground">Receber alertas de campanhas e quotas</p>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" defaultChecked className="sr-only peer" />
+                                        <input
+                                            type="checkbox"
+                                            checked={user?.onboarding_steps?.email_notifications !== false}
+                                            onChange={(e) => handleTogglePreference('email_notifications', e.target.checked)}
+                                            className="sr-only peer"
+                                        />
                                         <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
                                 </div>
@@ -299,7 +355,12 @@ export default function SettingsPage() {
                                         <p className="text-xs text-muted-foreground">Avisar quando atingir 80% da quota</p>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" defaultChecked className="sr-only peer" />
+                                        <input
+                                            type="checkbox"
+                                            checked={user?.onboarding_steps?.quota_alerts !== false}
+                                            onChange={(e) => handleTogglePreference('quota_alerts', e.target.checked)}
+                                            className="sr-only peer"
+                                        />
                                         <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
                                 </div>
@@ -316,8 +377,12 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="pt-4 flex items-center justify-between border-t border-border">
-                            <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium shadow hover:bg-primary/90 transition-colors">
-                                Salvar Alterações
+                            <button
+                                onClick={handleSaveProfile}
+                                disabled={loadingUser}
+                                className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium shadow hover:bg-primary/90 transition-colors disabled:opacity-50"
+                            >
+                                {loadingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Alterações'}
                             </button>
 
                             <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors text-sm">
@@ -547,7 +612,7 @@ export default function SettingsPage() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase border border-primary/20">
-                                    Gratuito / Teste
+                                    {user?.planName || 'Gratuito / Teste'}
                                 </span>
                             </div>
                         </div>
@@ -593,84 +658,35 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        {/* Billing Form */}
+                        {/* Updated Billing Section */}
                         <div className="bg-card border border-border rounded-xl p-6">
                             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                                 <CreditCard className="w-5 h-5 text-primary" />
-                                Dados de Cobrança (PIX)
+                                Checkout Seguro
                             </h3>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1.5">Nome Completo</label>
-                                    <input
-                                        type="text"
-                                        value={billingDetails.name}
-                                        onChange={(e) => setBillingDetails(prev => ({ ...prev, name: e.target.value }))}
-                                        placeholder="Seu nome"
-                                        className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1.5">Email</label>
-                                    <input
-                                        type="email"
-                                        value={billingDetails.email}
-                                        onChange={(e) => setBillingDetails(prev => ({ ...prev, email: e.target.value }))}
-                                        placeholder="seu@email.com"
-                                        className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1.5">CPF / CNPJ</label>
-                                    <input
-                                        type="text"
-                                        value={billingDetails.taxId}
-                                        onChange={(e) => setBillingDetails(prev => ({ ...prev, taxId: e.target.value }))}
-                                        placeholder="000.000.000-00"
-                                        className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1.5">WhatsApp</label>
-                                    <input
-                                        type="tel"
-                                        value={billingDetails.cellphone}
-                                        onChange={(e) => setBillingDetails(prev => ({ ...prev, cellphone: e.target.value }))}
-                                        placeholder="(11) 99999-9999"
-                                        className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                            </div>
+                            <p className="text-sm text-muted-foreground mb-6">
+                                Você será redirecionado para o checkout seguro da AbacatePay para concluir sua assinatura via PIX.
+                            </p>
 
                             <button
-                                disabled={loadingPayment || !billingDetails.taxId || !billingDetails.name}
-                                onClick={async () => {
-                                    if (!billingDetails.name || !billingDetails.email || !billingDetails.taxId) return;
-                                    try {
-                                        setLoadingPayment(true);
-                                        const response = await api.payments.createSubscription(selectedPlanId, billingDetails);
-                                        setPixData(response.pix);
-                                        setSubscriptionId(response.subscriptionId);
-                                    } catch (err) {
-                                        console.error(err);
-                                        alert('Erro ao gerar pagamento via PIX');
-                                    } finally {
-                                        setLoadingPayment(false);
-                                    }
+                                disabled={loadingPayment}
+                                onClick={() => {
+                                    setLoadingPayment(true);
+                                    window.location.href = `/checkout/redirect?planId=${selectedPlanId}`;
                                 }}
-                                className="w-full mt-6 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg hover:bg-primary/90 transition-all flex items-center justify-center gap-2"
                             >
                                 {loadingPayment ? (
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                 ) : (
                                     <>
                                         <Zap className="w-5 h-5 fill-current" />
-                                        Gerar PIX de R$ {PLANS.find(p => p.id === selectedPlanId)?.price.toFixed(2)}
+                                        Assinar {PLANS.find(p => p.id === selectedPlanId)?.name} Agora
                                     </>
                                 )}
                             </button>
                             <p className="text-center text-xs text-muted-foreground mt-3 flex items-center justify-center gap-1.5">
-                                <Shield className="w-3 h-3" /> Pagamento seguro via AbacatePay
+                                <Shield className="w-3 h-3" /> Pagamento 100% seguro via AbacatePay
                             </p>
                         </div>
                     </div>

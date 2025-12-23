@@ -32,7 +32,7 @@ export function Header() {
                         Entrar
                     </Link>
                     <Link
-                        href="/signup"
+                        href="/login"
                         className="px-4 py-2 bg-gradient-to-r from-brand-green-500 to-brand-green-600 text-white rounded-xl font-bold shadow-lg shadow-brand-green-500/20 hover:opacity-90 transition-opacity"
                     >
                         Teste Grátis
@@ -59,7 +59,7 @@ export function Header() {
                             Entrar
                         </Link>
                         <Link
-                            href="/signup"
+                            href="/login"
                             className="w-full text-center px-4 py-2 bg-gradient-to-r from-brand-green-500 to-brand-green-600 text-white rounded-xl font-bold"
                         >
                             Começar Teste Grátis
