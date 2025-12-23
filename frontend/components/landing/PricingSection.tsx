@@ -6,8 +6,8 @@ import { Check } from "lucide-react";
 const PLANS = [
     {
         name: "BÁSICO",
-        price: "R$ 49",
-        period: "/mês",
+        price: "R$ 29",
+        period: "/semanal",
         features: [
             "50 msgs/semana",
             "1 conexão WhatsApp",
@@ -19,8 +19,8 @@ const PLANS = [
     },
     {
         name: "PLUS",
-        price: "R$ 99",
-        period: "/mês",
+        price: "R$ 69",
+        period: "/semanal",
         badge: "🏆 MAIS POPULAR",
         features: [
             "100 msgs/semana",
@@ -34,8 +34,8 @@ const PLANS = [
     },
     {
         name: "PRO",
-        price: "R$ 197",
-        period: "/mês",
+        price: "R$ 119",
+        period: "/semanal",
         features: [
             "250 msgs/semana",
             "5 conexões WhatsApp",
@@ -43,6 +43,7 @@ const PLANS = [
             "API access",
             "White label",
             "Suporte VIP",
+            "Gerente de conta",
         ],
         highlight: false,
     },
