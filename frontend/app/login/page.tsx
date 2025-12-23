@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import { ArrowLeft, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AnimatedBackground from '@/components/landing/AnimatedBackground'
 import ScrollAnimation from '@/components/ui/ScrollAnimation'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,25 @@ import { api } from '@/services/api'
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+        // Capture planId from URL and store in localStorage if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const planId = urlParams.get('planId');
+        if (planId) {
+            localStorage.setItem('pendingPlanId', planId);
+        }
+
+        // If already logged in AND we have a planId, go straight to checkout
+        const token = localStorage.getItem('token');
+        if (token && planId) {
+            localStorage.removeItem('pendingPlanId');
+            window.location.href = `/checkout/redirect?planId=${planId}`;
+        } else if (token) {
+            // Already logged in but no planId, just go to dashboard
+            window.location.href = '/dashboard';
+        }
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -26,7 +45,15 @@ export default function LoginPage() {
                 console.log('✅ Login successful, saving token:', token.substring(0, 20) + '...');
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
-                window.location.href = '/dashboard';
+
+                // Check for pending plan to redirect to checkout
+                const pendingPlanId = localStorage.getItem('pendingPlanId');
+                if (pendingPlanId) {
+                    localStorage.removeItem('pendingPlanId'); // Clear after use
+                    window.location.href = `/checkout/redirect?planId=${pendingPlanId}`;
+                } else {
+                    window.location.href = '/dashboard';
+                }
             } else {
                 console.error('❌ No token received from login');
             }

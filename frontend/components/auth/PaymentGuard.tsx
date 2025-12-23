@@ -27,15 +27,22 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
                 return
             }
 
+            // ALLOW ACCESS to upgrade page even without subscription
+            if (pathname === '/dashboard/upgrade') {
+                setAuthorized(true);
+                setLoading(false);
+                return;
+            }
+
             // Check subscription status from backend
             // Statuses: 'active', 'expired', 'none', 'pending_payment'
 
             if (user.subscriptionStatus === 'active') {
                 setAuthorized(true)
             } else {
-                // If not active, redirect to home pricing
+                // If not active, redirect to our internal upgrade page
                 console.log('Subscription not active:', user.subscriptionStatus)
-                router.push(`/#pricing?status=${user.subscriptionStatus}`)
+                router.push(`/dashboard/upgrade?status=${user.subscriptionStatus}`)
                 return;
             }
         } catch (error) {
