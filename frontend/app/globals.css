@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+
+  --color-brand-purple-50: #FAF5FF;
+  --color-brand-purple-100: #F3E8FF;
+  --color-brand-purple-500: #8A5BF5;
+  --color-brand-purple-600: #7C3AED;
+  --color-brand-purple-700: #6E29DA;
+  --color-brand-purple-900: #4C1D95;
+
+  --color-brand-green-400: #4ADE80;
+  --color-brand-green-500: #22C55E;
+  --color-brand-green-600: #16A34A;
+}
+
+/* Modern Clean Zinc + Indigo Palette */
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+
+  --card: #ffffff;
+  --card-foreground: #09090b;
+
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+
+  --primary: #8A5BF5;
+  /* Brand Purple */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #8A5BF5;
+
+  --radius: 0.5rem;
+
+  --gradient-purple: linear-gradient(135deg, #6E29DA 0%, #8A5BF5 100%);
+  --gradient-green: linear-gradient(135deg, #4ADE80 0%, #22C55E 100%);
+  --gradient-hero: linear-gradient(180deg, #FAF5FF 0%, #FFFFFF 100%);
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+
+  --card: #18181b;
+  --card-foreground: #fafafa;
+
+  --popover: #09090b;
+  --popover-foreground: #fafafa;
+
+  --primary: #8A5BF5;
+  --primary-foreground: #fafafa;
+
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fafafa;
+
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #8A5BF5;
+
+  --gradient-hero: linear-gradient(180deg, #18181B 0%, #09090B 100%);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom Landing Page Utilities */
+.text-brand-purple {
+  background: linear-gradient(135deg, #6E29DA 0%, #8A5BF5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-brand-gradient {
+  background: var(--gradient-purple);
+}
+
+.bg-green-gradient {
+  background: var(--gradient-green);
+}
+
+.glass-nav {
+  background: rgba(var(--background), 0.7);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.grid-pattern {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  opacity: 0.2;
+}
+
+.dark .grid-pattern {
+  opacity: 0.2;
+  background-image: linear-gradient(to right, #52525b 1px, transparent 1px),
+    linear-gradient(to bottom, #52525b 1px, transparent 1px);
+}
