@@ -20,7 +20,7 @@ export default function LinksPage() {
         },
         {
             title: "Falar no WhatsApp",
-            href: "https://wa.me/5511999999999", // Replace with actual number if available, or keep generic
+            href: "https://wa.me/5551989194794",
             variant: "outline",
             icon: <MessageCircle className="w-4 h-4" />
         },
