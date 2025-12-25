@@ -6,7 +6,9 @@ import {
     Restart,
     UploadMinimalistic,
     FileText,
-    InfoCircle
+    InfoCircle,
+    FileDownload,
+    DocumentText
 } from '@solar-icons/react'
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -15,34 +17,48 @@ interface LeadImporterModalProps {
     isOpen: boolean
     onClose: () => void
     onSuccess: () => void
+    targetListId?: string
+    targetListName?: string
 }
 
-export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterModalProps) {
+export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, targetListName }: LeadImporterModalProps) {
+    const [mode, setMode] = useState<'pdf' | 'csv'>(targetListId ? 'csv' : 'pdf')
     const [step, setStep] = useState<'input' | 'result'>('input')
-    const [pdfFile, setPdfFile] = useState<File | null>(null)
-    const [pdfResult, setPdfResult] = useState<{ listName: string, count: number } | null>(null)
+
+    const [file, setFile] = useState<File | null>(null)
+    const [importResult, setImportResult] = useState<{ listName?: string, count: number } | null>(null)
+
     const [isSubmitting, setIsSubmitting] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const handlePdfImport = async () => {
-        if (!pdfFile) return
+    const handleImport = async () => {
+        if (!file) return
 
         setIsSubmitting(true)
         try {
             const formData = new FormData()
-            formData.append('file', pdfFile)
+            formData.append('file', file)
 
-            const response = await api.contacts.importPdf(formData)
+            let result;
 
-            setPdfResult({
-                listName: response.list.name,
-                count: response.count
-            })
+            if (mode === 'pdf') {
+                const response = await api.contacts.importPdf(formData)
+                result = { listName: response.list.name, count: response.count }
+            } else {
+                // CSV Import
+                if (!targetListId) {
+                    throw new Error("Selecione uma pasta para importar o CSV.")
+                }
+                const response = await api.contacts.import(targetListId, formData)
+                result = { listName: targetListName, count: response.count }
+            }
+
+            setImportResult(result)
             setStep('result')
-            onSuccess() // Refresh lists in background
+            onSuccess()
         } catch (error: any) {
-            console.error("PDF Import failed", error)
-            alert("Erro ao importar PDF: " + (error.message || "Erro desconhecido"))
+            console.error("Import failed", error)
+            alert("Erro ao importar: " + (error.message || "Erro desconhecido"))
         } finally {
             setIsSubmitting(false)
         }
@@ -50,8 +66,17 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterMo
 
     const resetState = () => {
         setStep('input')
-        setPdfFile(null)
-        setPdfResult(null)
+        setFile(null)
+        setImportResult(null)
+    }
+
+    const downloadTemplate = () => {
+        const link = document.createElement('a')
+        link.href = '/template_contatos.csv'
+        link.download = 'template_zapbroker.csv'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
     }
 
     if (!isOpen) return null
@@ -69,37 +94,88 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterMo
                     <div>
                         <h2 className="text-2xl font-black text-foreground flex items-center gap-2">
                             <MagicStick className="w-6 h-6 text-primary" />
-                            Importador Inteligente
+                            Importador de Contatos
                         </h2>
                         <p className="text-muted-foreground font-medium text-sm mt-1">
-                            Criará uma <span className="text-primary font-bold">nova pasta</span> com o nome do arquivo.
+                            {mode === 'pdf'
+                                ? <span>Criará uma <span className="text-primary font-bold">nova pasta</span> com o nome do arquivo.</span>
+                                : <span>Importando para <span className="text-primary font-bold">{targetListName || 'Pasta Selecionada'}</span>.</span>
+                            }
                         </p>
                     </div>
                 </div>
 
+                {/* Tabs (Only if not forcing a specific mode implicitly, but user might want to switch) */}
+                {/* Actually, if targetListId is present, we probably only want CSV, or maybe PDF into existing list? 
+                   Backend PDF import creates a NEW list. So if we are in a list, we probably only want CSV.
+                   Let's keep it simple: If targetListId is present, show CSV mode. If not, show PDF mode (default) but maybe allow switching?
+                   For now, let's stick to the logic: Inside folder -> CSV. Outside -> PDF.
+                */}
+
                 {/* Content */}
                 <div className="p-8 overflow-y-auto flex-1 custom-scrollbar relative">
 
-                    {/* Disclaimer Alert */}
-                    <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex gap-3 items-start">
-                        <InfoCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
-                        <div>
-                            <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400">Importante</h4>
-                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                A extração automática não é 100% precisa. Ela depende da formatação do PDF original.
-                                Sempre revise os dados na pasta criada antes de iniciar campanhas.
-                            </p>
+                    {!targetListId && (
+                        <div className="flex gap-2 mb-6 bg-accent/50 p-1 rounded-xl w-fit mx-auto">
+                            <button
+                                onClick={() => { setMode('pdf'); setFile(null); }}
+                                className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", mode === 'pdf' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}
+                            >
+                                Importar PDF (Nova Pasta)
+                            </button>
+                            <button
+                                onClick={() => { alert("Para importar CSV, entre em uma pasta primeiro."); }}
+                                className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all opacity-50 cursor-not-allowed", mode === 'csv' ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
+                            >
+                                Importar CSV (Excel)
+                            </button>
                         </div>
-                    </div>
+                    )}
 
-                    {step === 'result' && pdfResult && (
+                    {/* Disclaimer / Template */}
+                    {mode === 'pdf' ? (
+                        <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex gap-3 items-start">
+                            <InfoCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400">Importante</h4>
+                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                    A extração automática não é 100% precisa. Ela depende da formatação do PDF original.
+                                    Sempre revise os dados na pasta criada antes de iniciar campanhas.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-center justify-between">
+                            <div className="flex gap-3 items-start">
+                                <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400">Use nosso modelo</h4>
+                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                        Para garantir que seus contatos sejam importados corretamente, use nossa planilha modelo.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={downloadTemplate}
+                                className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap"
+                            >
+                                <FileDownload className="w-4 h-4" />
+                                Baixar Modelo
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'result' && importResult && (
                         <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
                             <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
                                 <CheckCircle className="w-10 h-10 text-green-500" />
                             </div>
                             <h3 className="text-2xl font-bold text-foreground">Importação Concluída!</h3>
                             <p className="text-muted-foreground max-w-sm">
-                                Criamos a pasta <b className="text-foreground">{pdfResult.listName}</b> e importamos <b>{pdfResult.count}</b> contatos com sucesso.
+                                {mode === 'pdf'
+                                    ? <span>Criamos a pasta <b className="text-foreground">{importResult.listName}</b> e importamos <b>{importResult.count}</b> contatos.</span>
+                                    : <span>Importamos <b>{importResult.count}</b> contatos para a pasta <b className="text-foreground">{importResult.listName}</b>.</span>
+                                }
                             </p>
                         </div>
                     )}
@@ -110,21 +186,21 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterMo
 
                             <input
                                 type="file"
-                                accept=".pdf"
+                                accept={mode === 'pdf' ? ".pdf" : ".csv,.xlsx,.xls"}
                                 ref={fileInputRef}
                                 className="hidden"
-                                onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                                onChange={(e) => setFile(e.target.files?.[0] || null)}
                             />
 
-                            {pdfFile ? (
+                            {file ? (
                                 <div className="text-center">
-                                    <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-500">
-                                        <FileText className="w-8 h-8" />
+                                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-primary">
+                                        {mode === 'pdf' ? <FileText className="w-8 h-8" /> : <DocumentText className="w-8 h-8" />}
                                     </div>
-                                    <p className="text-lg font-bold text-foreground">{pdfFile.name}</p>
-                                    <p className="text-sm text-muted-foreground mt-1">{(pdfFile.size / 1024).toFixed(1)} KB</p>
+                                    <p className="text-lg font-bold text-foreground">{file.name}</p>
+                                    <p className="text-sm text-muted-foreground mt-1">{(file.size / 1024).toFixed(1)} KB</p>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); setPdfFile(null); }}
+                                        onClick={(e) => { e.stopPropagation(); setFile(null); }}
                                         className="mt-4 px-4 py-2 bg-accent hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-lg text-xs font-bold transition-colors"
                                     >
                                         Remover Arquivo
@@ -135,9 +211,13 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterMo
                                     <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-primary">
                                         <UploadMinimalistic className="w-8 h-8" />
                                     </div>
-                                    <p className="text-lg font-bold text-foreground">Clique para selecionar o PDF</p>
+                                    <p className="text-lg font-bold text-foreground">
+                                        Clique para selecionar o {mode === 'pdf' ? 'PDF' : 'CSV'}
+                                    </p>
                                     <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
-                                        Nós criaremos uma nova pasta automaticamente com o nome do arquivo.
+                                        {mode === 'pdf'
+                                            ? "Nós criaremos uma nova pasta automaticamente."
+                                            : "Certifique-se de seguir o modelo padrão."}
                                     </p>
                                 </div>
                             )}
@@ -164,14 +244,14 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: LeadImporterMo
                         </button>
                     ) : (
                         <button
-                            onClick={handlePdfImport}
-                            disabled={isSubmitting || !pdfFile}
+                            onClick={handleImport}
+                            disabled={isSubmitting || !file}
                             className="px-8 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
                         >
                             {isSubmitting ? (
                                 <>
                                     <Restart className="w-5 h-5 animate-spin" />
-                                    Processando PDF...
+                                    Processando...
                                 </>
                             ) : (
                                 <>
