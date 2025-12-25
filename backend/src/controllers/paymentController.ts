@@ -48,8 +48,8 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
                 price: plan.price,
                 quantity: 1
             }],
-            returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
-            completionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/success`,
+            returnUrl: `${process.env.FRONTEND_URL || 'https://zapbroker.dev'}/dashboard`,
+            completionUrl: `${process.env.FRONTEND_URL || 'https://zapbroker.dev'}/dashboard/success`,
             // Omit customer object to allow user to fill everything manually at checkout
             metadata: {
                 subscription_id: subscription.id
