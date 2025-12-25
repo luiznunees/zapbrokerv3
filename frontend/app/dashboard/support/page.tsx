@@ -37,7 +37,7 @@ export default function SupportPage() {
                     <h3 className="font-bold text-lg mb-2">Suporte via WhatsApp</h3>
                     <p className="text-sm text-muted-foreground mb-4">Fale diretamente com nosso time de suporte técnico.</p>
                     <a
-                        href="https://wa.me/5511999999999"
+                        href="https://wa.me/5551989194794"
                         target="_blank"
                         className="inline-flex items-center justify-center w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
                     >
