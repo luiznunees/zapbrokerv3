@@ -23,7 +23,7 @@ const port = process.env.PORT || 3000;
 app.use(helmet());
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'http://192.168.0.242:3000'],
+    origin: ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'http://192.168.0.242:3000', 'https://zapbroker.dev', 'https://www.zapbroker.dev'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
