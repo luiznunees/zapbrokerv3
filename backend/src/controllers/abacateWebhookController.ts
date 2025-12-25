@@ -4,16 +4,15 @@ import { supabase } from '../config/supabase';
 export const handleAbacateWebhook = async (req: Request, res: Response) => {
     try {
         const secret = req.headers['x-webhook-secret'];
-        console.log('Webhook Headers:', req.headers); // Debugging
+        const event = req.body;
+
+        console.log('Webhook Headers:', req.headers);
+        console.log('AbacatePay Webhook Received:', JSON.stringify(event, null, 2));
 
         if (secret !== process.env.ABACATE_WEBHOOK_SECRET) {
             console.warn(`Invalid AbacatePay Webhook Secret. Header: ${secret}`);
             return res.status(403).send('Forbidden');
         }
-
-        const event = req.body;
-
-        console.log('AbacatePay Webhook Received:', JSON.stringify(event, null, 2));
 
         const { event: eventType, data } = event;
 
