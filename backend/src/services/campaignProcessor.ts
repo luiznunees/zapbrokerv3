@@ -24,7 +24,7 @@ const processQueue = async () => {
                 id,
                 contact_id,
                 campaign_id,
-                campaigns ( 
+                campaigns!inner ( 
                     id, 
                     message, 
                     message_variations,
@@ -36,10 +36,12 @@ const processQueue = async () => {
                     batch_delay_seconds, 
                     media_type, 
                     media_url,
-                    scheduled_at
+                    scheduled_at,
+                    status
                 )
             `)
             .eq('status', 'PENDING')
+            .not('campaigns.status', 'eq', 'PAUSED') // Ensure we don't pick up paused campaigns
             .limit(BATCH_SIZE);
 
         if (error) {
@@ -54,16 +56,28 @@ const processQueue = async () => {
             return;
         }
 
-        console.log(`[CampaignProcessor] Found ${messages.length} PENDING messages. Enqueuing...`);
+        // Filter out messages where campaign is missing (failed join) or Paused
+        const validMessages = messages.filter(msg => {
+            const camp = msg.campaigns as any;
+            return camp && camp.status !== 'PAUSED';
+        });
+
+        if (validMessages.length === 0) {
+            // console.log('[CampaignProcessor] No active messages to process (others are paused/invalid).');
+            isProcessing = false;
+            return;
+        }
+
+        console.log(`[CampaignProcessor] Found ${validMessages.length} active messages (filtered from ${messages.length}). Enqueuing...`);
 
         // Mark as QUEUED immediately
-        const messageIds = messages.map(m => m.id);
+        const messageIds = validMessages.map(m => m.id);
         await supabase
             .from('campaign_messages')
             .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
             .in('id', messageIds);
 
-        for (const msg of messages) {
+        for (const msg of validMessages) {
             const campaign = msg.campaigns as any;
 
             if (!campaign) {

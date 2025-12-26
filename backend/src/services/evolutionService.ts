@@ -110,7 +110,7 @@ export const sendImage = async (instanceName: string, chatId: string, file: { me
         const response = await api.post(`/message/sendMedia/${instanceName}`, payload);
         return response.data;
     } catch (error: any) {
-        console.error('Error sending image via Evolution:', error.response?.data || error.message);
+        console.error('Error sending image via Evolution:', JSON.stringify(error.response?.data || error.message, null, 2));
         throw new Error('Failed to send image');
     }
 };

@@ -119,6 +119,8 @@ export const api = {
             method: 'PUT',
             body: JSON.stringify({ status })
         }),
+        pause: (id: string) => fetchAPI(`/campaigns/${id}/pause`, { method: 'POST' }),
+        resume: (id: string) => fetchAPI(`/campaigns/${id}/resume`, { method: 'POST' }),
     },
     quotas: {
         current: () => fetchAPI('/quotas/current'),

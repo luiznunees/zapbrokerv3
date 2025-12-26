@@ -111,6 +111,28 @@ export const getDetails = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const pause = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const result = await campaignService.pauseCampaign(userId, id);
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
+export const resume = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const result = await campaignService.resumeCampaign(userId, id);
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
 export const debugStatus = async (req: Request, res: Response) => {
     try {
         const { campaignId, contactListId } = req.query;

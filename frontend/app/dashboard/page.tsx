@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowUpRight, Users, MessageSquare, CheckCircle, Send, Plus, BarChart2 } from 'lucide-react';
+import { ArrowUpRight, Users, MessageSquare, CheckCircle, Send, Plus, BarChart2, Play, Pause } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal';
 import { QuotaWidget } from '@/components/dashboard/QuotaWidget';
 import { WhatsAppStatusWidget } from '@/components/dashboard/WhatsAppStatusWidget';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
-import { Tooltip } from '@/components/ui/Tooltip';
+import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip';
 import { HelpBadge } from '@/components/ui/HelpBadge';
 import { InputModal } from '@/components/modals/InputModal';
 import Link from 'next/link';
@@ -297,9 +298,49 @@ export default function DashboardPage() {
                                     <p className="text-xs text-muted-foreground mt-1">{new Date(camp.created_at).toLocaleDateString()}</p>
                                 </div>
                                 <div className="p-4 border-t border-border bg-card/50 flex justify-between items-center">
-                                    <span className="text-xs font-bold px-2 py-1 rounded-full bg-accent text-muted-foreground uppercase">{camp.status}</span>
-                                    <div className="flex items-center gap-1 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-                                        Ver detalhes <ArrowUpRight className="w-3 h-3" />
+                                    <span className={cn(
+                                        "text-xs font-bold px-2 py-1 rounded-full uppercase",
+                                        camp.status === 'COMPLETED' ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                                            camp.status === 'FAILED' ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                                                camp.status === 'PAUSED' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                                                    "bg-accent text-muted-foreground"
+                                    )}>
+                                        {camp.status === 'PAUSED' ? 'Pausada' : camp.status}
+                                    </span>
+
+                                    <div className="flex items-center gap-2">
+                                        {/* Pause/Resume Controls */}
+                                        {(camp.status === 'PENDING' || camp.status === 'RUNNING' || camp.status === 'PAUSED') && (
+                                            <button
+                                                onClick={async (e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    try {
+                                                        if (camp.status === 'PAUSED') {
+                                                            await api.campaigns.resume(camp.id);
+                                                        } else {
+                                                            await api.campaigns.pause(camp.id);
+                                                        }
+                                                        fetchDashboardData();
+                                                    } catch (err) {
+                                                        console.error('Failed to toggle pause', err);
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "p-1.5 rounded-full transition-colors z-20 hover:bg-background/80",
+                                                    camp.status === 'PAUSED'
+                                                        ? "text-green-500 hover:text-green-600 bg-green-100 dark:bg-green-900/20"
+                                                        : "text-yellow-500 hover:text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20"
+                                                )}
+                                                title={camp.status === 'PAUSED' ? "Retomar Campanha" : "Pausar Campanha"}
+                                            >
+                                                {camp.status === 'PAUSED' ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
+                                            </button>
+                                        )}
+
+                                        <div className="flex items-center gap-1 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
+                                            Ver detalhes <ArrowUpRight className="w-3 h-3" />
+                                        </div>
                                     </div>
                                 </div>
                             </Link>

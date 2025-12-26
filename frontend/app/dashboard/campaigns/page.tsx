@@ -1,551 +1,742 @@
 "use client"
-// Force HMR update
-
 
 import { useState, useEffect } from 'react'
-import { api } from '@/services/api'
-import { ArrowRight, ArrowLeft, CheckCircle2, Rocket, Upload, FileText, Users, Settings2, Folder, Plus, X, Shuffle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import {
+    Rocket,
+    Users,
+    Clock,
+    MessageSquare,
+    AlertTriangle,
+    CheckCircle2,
+    Layers,
+    ArrowRight,
+    ArrowLeft,
+    Plus,
+    Trash2,
+    Image as ImageIcon,
+    Video,
+    FileText,
+    Zap,
+    Info,
+    Smartphone
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { HelpBadge } from '@/components/ui/HelpBadge'
+import { api } from '../../../services/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Card, CardContent } from "@/components/ui/card"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AntiBanWarningModal } from '@/components/modals/AntiBanWarningModal'
 
-export default function NewCampaignPage() {
-    const [currentStep, setCurrentStep] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState<null | { type: 'success' | 'error', msg: string }>(null);
+interface ContactList {
+    id: string
+    name: string
+    total_contacts: number
+    tags: string[]
+}
 
-    // Form State
+interface WhatsAppInstance {
+    id: string
+    name: string
+    status: string
+    phone_number: string
+}
+
+export default function CampaignsPage() {
+    const router = useRouter()
+    const [loading, setLoading] = useState(false)
+    const [instances, setInstances] = useState<WhatsAppInstance[]>([])
+    const [contactLists, setContactLists] = useState<ContactList[]>([])
+    const [currentStep, setCurrentStep] = useState(1)
+    const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
+    const [showAntiBanModal, setShowAntiBanModal] = useState(false)
+
+    // Campaign Form Data
     const [formData, setFormData] = useState({
         name: '',
-        mediaType: 'text',
+        instanceId: '',
+        messageType: 'text' as 'text' | 'image' | 'video' | 'audio' | 'document',
         contactListId: '',
-        delaySeconds: 5,
+        scheduledAt: '',
+        minDelay: 15,
+        maxDelay: 45,
         batchSize: 50,
-        batchDelaySeconds: 10
-    });
-    const [messageVariations, setMessageVariations] = useState<string[]>(['']);
-    const [sequentialMode, setSequentialMode] = useState(false);
-    const [blockDelay, setBlockDelay] = useState(5);
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
-    const [instances, setInstances] = useState<any[]>([]);
-    const [contactLists, setContactLists] = useState<any[]>([]);
-    const [selectedInstanceId, setSelectedInstanceId] = useState('');
-    const [showAntiBanWarning, setShowAntiBanWarning] = useState(false);
-    const [pendingSubmit, setPendingSubmit] = useState(false);
+        batchDelay: 300,
+        sequentialMode: false,
+        sequentialBlockDelay: 10,
+    })
 
+    const [messageVariations, setMessageVariations] = useState<string[]>([''])
+    const [mediaFile, setMediaFile] = useState<File | null>(null)
+
+    // Load initial data
     useEffect(() => {
-        // Fetch Instances
-        api.instances.list().then(data => {
-            setInstances(data);
-            const connected = data.find((i: any) => i.status === 'open' || i.status === 'connected');
-            if (connected) setSelectedInstanceId(connected.id);
-            else if (data.length > 0) setSelectedInstanceId(data[0].id);
-        }).catch(console.error);
-
-        // Fetch Contact Lists
-        api.contacts.list().then(setContactLists).catch(console.error);
-    }, []);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const nextStep = () => setCurrentStep(prev => prev + 1);
-    const prevStep = () => setCurrentStep(prev => prev - 1);
-
-    // Check if settings are risky
-    const checkRiskySettings = () => {
-        const { delaySeconds, batchSize, batchDelaySeconds } = formData;
-
-        // Configurações arriscadas
-        if (delaySeconds < 5 || batchSize > 50 || batchDelaySeconds < 60) {
-            return true;
-        }
-
-        return false;
-    };
-
-    // Get total contacts count
-    const getTotalContacts = () => {
-        const selectedList = contactLists.find(list => list.id === formData.contactListId);
-        return selectedList?.contact_count || 0;
-    };
-
-    async function handleSubmit(skipWarning = false) {
-        // Check for risky settings first
-        if (!skipWarning && checkRiskySettings()) {
-            setPendingSubmit(true);
-            setShowAntiBanWarning(true);
-            return;
-        }
-
-        setLoading(true);
-        setStatus(null);
-        setPendingSubmit(false);
-
-        try {
-            // 1. Get Selected Instance
-            const connectedInstance = instances.find(i => i.id === selectedInstanceId);
-
-            if (!connectedInstance) {
-                throw new Error("Nenhuma instância do WhatsApp selecionada ou encontrada. Vá em Configurações e conecte.");
-            }
-
-            if (connectedInstance.status !== 'open' && connectedInstance.status !== 'connected') {
-                throw new Error(`A instância "${connectedInstance.name}" não está conectada. Por favor, conecte-a nas configurações.`);
-            }
-
-            // 2. Validate Contact List
-            if (!formData.contactListId) {
-                throw new Error("Selecione uma lista de contatos para enviar a campanha.");
-            }
-
-            // 3. Validate Message Variations
-            const validVariations = messageVariations.filter(m => m.trim().length > 0);
-            if (validVariations.length === 0) {
-                throw new Error("Adicione pelo menos uma variação de mensagem.");
-            }
-
-            // 4. Create Campaign
-            const campaignData = new FormData();
-            campaignData.append('name', formData.name);
-            campaignData.append('messageVariations', JSON.stringify(validVariations));
-            campaignData.append('sequentialMode', sequentialMode.toString());
-            campaignData.append('blockDelay', blockDelay.toString());
-            campaignData.append('contactListId', formData.contactListId);
-            campaignData.append('instanceId', connectedInstance.id);
-            campaignData.append('delaySeconds', formData.delaySeconds.toString());
-            campaignData.append('batchSize', formData.batchSize.toString());
-            campaignData.append('batchDelaySeconds', formData.batchDelaySeconds.toString());
-            campaignData.append('mediaType', formData.mediaType);
-
-            if (mediaFile) {
-                campaignData.append('media', mediaFile);
-            }
-
-            const result = await api.campaigns.create(campaignData);
-
-            // Automate "Create Campaign" onboarding step
+        const fetchData = async () => {
             try {
-                const saved = localStorage.getItem('onboarding-checklist')
-                const savedData = saved ? JSON.parse(saved) : {}
-
-                if (!savedData['create-campaign']) {
-                    const newData = { ...savedData, 'create-campaign': true }
-                    localStorage.setItem('onboarding-checklist', JSON.stringify(newData))
-                    window.dispatchEvent(new Event('onboarding-update'))
-                }
-            } catch (e) {
-                console.error('Error updating onboarding status:', e)
+                const [instancesRes, listsRes] = await Promise.all([
+                    api.get('/whatsapp/instances'),
+                    api.get('/contacts/lists')
+                ])
+                setInstances(instancesRes.data.filter((i: WhatsAppInstance) => i.status === 'connected'))
+                setContactLists(listsRes.data)
+            } catch (error) {
+                console.error('Error loading data:', error)
+                setStatus({
+                    type: 'error',
+                    msg: 'Erro ao carregar dados iniciais. Verifique sua conexão e recarregue a página.'
+                })
             }
+        }
+        fetchData()
+    }, [])
 
-            setStatus({ type: 'success', msg: 'Campanha criada e agendada com sucesso! 🚀' });
-            // Reset after success
-            setTimeout(() => {
-                window.location.href = `/dashboard/campaigns/${result.id}`; // Redirect to details page
-            }, 1500);
-
-        } catch (error: any) {
-            console.error(error);
-            setStatus({ type: 'error', msg: error.message || 'Erro ao criar campanha.' });
-        } finally {
-            setLoading(false);
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setMediaFile(e.target.files[0])
         }
     }
 
-    const steps = [
-        { number: 1, title: "Configuração", icon: Settings2 },
-        { number: 2, title: "Mensagem", icon: FileText },
-        { number: 3, title: "Público", icon: Users },
-    ];
+    const addVariation = () => {
+        setMessageVariations([...messageVariations, ''])
+    }
+
+    const removeVariation = (index: number) => {
+        if (messageVariations.length > 1) {
+            const newVariations = messageVariations.filter((_, i) => i !== index)
+            setMessageVariations(newVariations)
+        }
+    }
+
+    const updateVariation = (index: number, value: string) => {
+        const newVariations = [...messageVariations]
+        newVariations[index] = value
+        setMessageVariations(newVariations)
+    }
+
+    const nextStep = () => {
+        if (currentStep < 6) setCurrentStep(currentStep + 1)
+    }
+
+    const prevStep = () => {
+        if (currentStep > 1) setCurrentStep(currentStep - 1)
+    }
+
+    const handleSubmit = async () => {
+        setLoading(true)
+        setStatus(null)
+
+        try {
+            // Validate required fields
+            if (!formData.name || !formData.instanceId || !formData.contactListId) {
+                throw new Error('Preencha todos os campos obrigatórios')
+            }
+
+            if (messageVariations.filter(m => m.trim()).length === 0) {
+                throw new Error('Adicione pelo menos uma mensagem')
+            }
+
+            // Create FormData object for multipart/form-data submission
+            const payload = new FormData()
+
+            // Append basic fields
+            Object.entries(formData).forEach(([key, value]) => {
+                payload.append(key, String(value))
+            })
+
+            // Append messages
+            payload.append('messages', JSON.stringify(messageVariations.filter(m => m.trim())))
+
+            // Append media if exists
+            if (mediaFile) {
+                payload.append('media', mediaFile)
+            }
+
+            // Send to backend
+            await api.post('/campaigns', payload, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            })
+
+            setStatus({
+                type: 'success',
+                msg: 'Campanha criada e agendada com sucesso! O disparo começará em breve.'
+            })
+
+            // Show success for 2 seconds then redirect/reset
+            setTimeout(() => {
+                router.push('/dashboard')
+            }, 2000)
+
+        } catch (error: any) {
+            console.error('Error creating campaign:', error)
+            setStatus({
+                type: 'error',
+                msg: error.response?.data?.message || error.message || 'Erro ao criar campanha'
+            })
+            // If error is about quota, maybe show a specific modal or alert
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Helper to estimate risk based on delay
+    const getRiskLevel = (min: number, max: number) => {
+        const avg = (min + max) / 2
+        if (avg < 10) return { label: 'Alto Risco 🚨', color: 'text-red-500', bg: 'bg-red-500/10' }
+        if (avg < 30) return { label: 'Risco Médio ⚠️', color: 'text-amber-500', bg: 'bg-amber-500/10' }
+        return { label: 'Baixo Risco ✅', color: 'text-green-500', bg: 'bg-green-500/10' }
+    }
+
+    const risk = getRiskLevel(formData.minDelay, formData.maxDelay)
+
 
     return (
-        <div className="max-w-4xl mx-auto pb-20">
-            <div className="mb-8 text-center">
-                <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center justify-center gap-3">
-                    Nova Campanha
-                    <HelpBadge size="sm" />
-                </h1>
-                <p className="text-muted-foreground">Crie seu disparo em massa em 3 passos simples.</p>
+        <div className="container mx-auto p-6 max-w-5xl">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                        <Rocket className="w-8 h-8 text-primary" />
+                        Nova Campanha
+                    </h1>
+                    <p className="text-muted-foreground mt-1">Configuração de disparo em massa seguro</p>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => setShowAntiBanModal(true)}
+                    className="gap-2"
+                >
+                    <Info className="w-4 h-4" /> Dicas Anti-Ban
+                </Button>
             </div>
 
-            {/* Progress Steps */}
-            <div className="flex justify-center mb-12 relative">
-                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-border -z-10 transform -translate-y-1/2 hidden md:block" />
-                <div className="flex gap-4 md:gap-20 w-full md:w-auto justify-between md:justify-center px-4">
-                    {steps.map((step) => (
-                        <div key={step.number} className={cn(
-                            "flex flex-col items-center gap-2 bg-background z-10 transition-all",
-                            currentStep >= step.number ? "text-primary" : "text-muted-foreground"
-                        )}>
+            {/* Stepper */}
+            <div className="mb-8">
+                <div className="flex justify-between relative">
+                    {/* Progress Bar Background */}
+                    <div className="absolute top-1/2 left-0 w-full h-1 bg-border -z-10 -translate-y-1/2" />
+
+                    {/* Active Progress Bar */}
+                    <div
+                        className="absolute top-1/2 left-0 h-1 bg-primary -z-10 -translate-y-1/2 transition-all duration-500"
+                        style={{ width: `${((currentStep - 1) / 5) * 100}%` }}
+                    />
+
+                    {[1, 2, 3, 4, 5, 6].map((step) => (
+                        <div key={step} className="flex flex-col items-center gap-2 bg-background px-2">
                             <div className={cn(
-                                "w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-all",
-                                currentStep >= step.number ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"
+                                "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 font-bold",
+                                step === currentStep ? "border-primary bg-primary text-primary-foreground scale-110" :
+                                    step < currentStep ? "border-primary bg-primary/20 text-primary" :
+                                        "border-muted text-muted-foreground bg-card"
                             )}>
-                                {currentStep > step.number ? <CheckCircle2 className="w-6 h-6" /> : step.number}
+                                {step < currentStep ? <CheckCircle2 className="w-6 h-6" /> : step}
                             </div>
-                            <span className="text-xs font-semibold uppercase tracking-wider">{step.title}</span>
+                            <span className={cn(
+                                "text-xs font-medium hidden md:block",
+                                step === currentStep ? "text-primary" : "text-muted-foreground"
+                            )}>
+                                {step === 1 && "Start"}
+                                {step === 2 && "Conteúdo"}
+                                {step === 3 && "Blocos"}
+                                {step === 4 && "Timing"}
+                                {step === 5 && "Lotes"}
+                                {step === 6 && "Público"}
+                            </span>
                         </div>
                     ))}
                 </div>
             </div>
 
+            {/* Main Content Card */}
             <div className="bg-card border border-border rounded-xl shadow-xl overflow-hidden min-h-[400px] flex flex-col relative">
 
                 {/* Status Message Overlay */}
                 {status && (
                     <div className="absolute inset-0 bg-background/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
                         <div className={cn(
-                            "w-20 h-20 rounded-full flex items-center justify-center mb-4",
+                            "w-20 h-20 rounded-full flex items-center justify-center mb-4 flow-step-icons",
                             status.type === 'success' ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
                         )}>
-                            {status.type === 'success' ? <Rocket className="w-10 h-10" /> : <ArrowLeft className="w-10 h-10" />}
+                            {status.type === 'success' ? <Rocket className="w-10 h-10" /> : <AlertTriangle className="w-10 h-10" />}
                         </div>
                         <h3 className="text-2xl font-bold mb-2">{status.type === 'success' ? 'Sucesso!' : 'Algo deu errado'}</h3>
                         <p className="text-muted-foreground text-lg mb-6">{status.msg}</p>
 
                         {status.type === 'error' && (
-                            <button
+                            <Button
                                 onClick={() => setStatus(null)}
-                                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-bold hover:shadow-lg hover:shadow-primary/20 transition-all"
+                                variant="destructive"
+                                className="px-8"
                             >
                                 Voltar e Corrigir
-                            </button>
+                            </Button>
                         )}
                     </div>
                 )}
 
-                {/* Form Content */}
+                {/* Step Content */}
                 <div className="p-8 flex-1">
 
-                    {/* STEP 1: CONFIGURATION */}
+                    {/* STEP 1: NOME & INSTÂNCIA */}
                     {currentStep === 1 && (
                         <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-muted-foreground">Nome da Campanha</label>
-                                    <input
-                                        name="name"
+                                    <Label className="text-base">Nome da Campanha</Label>
+                                    <Input
+                                        placeholder="Ex: Oferta Black Friday - Lista VIP"
                                         value={formData.name}
-                                        onChange={handleInputChange}
-                                        type="text"
-                                        placeholder="Ex: Oferta de Natal"
-                                        className="w-full bg-background border border-border rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        className="h-12 text-lg"
                                         autoFocus
                                     />
+                                    <p className="text-sm text-muted-foreground">Apenas para sua organização interna.</p>
                                 </div>
+
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-muted-foreground">Instância do WhatsApp</label>
-                                    <select
-                                        name="instanceId"
-                                        value={selectedInstanceId}
-                                        onChange={(e) => setSelectedInstanceId(e.target.value)}
-                                        className="w-full bg-background border border-border rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                                    <Label className="text-base">Instância do WhatsApp</Label>
+                                    <Select
+                                        value={formData.instanceId}
+                                        onValueChange={v => setFormData({ ...formData, instanceId: v })}
                                     >
-                                        <option value="" disabled>Selecione uma instância</option>
-                                        {instances.map(inst => (
-                                            <option key={inst.id} value={inst.id}>
-                                                {inst.name} ({inst.status === 'open' || inst.status === 'connected' ? 'Conectado' : 'Desconectado'})
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {instances.length === 0 && (
-                                        <p className="text-xs text-red-500 mt-1">Nenhuma instância encontrada. Crie uma nas configurações.</p>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-muted-foreground">Tipo de Mídia</label>
-                                    <select
-                                        name="mediaType"
-                                        value={formData.mediaType}
-                                        onChange={handleInputChange}
-                                        className="w-full bg-background border border-border rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
-                                    >
-                                        <option value="text">Apenas Texto</option>
-                                        <option value="image">Imagem + Texto</option>
-                                        <option value="video">Vídeo + Texto</option>
-                                    </select>
+                                        <SelectTrigger className="h-12 text-lg">
+                                            <SelectValue placeholder="Selecione um número" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {instances.length === 0 ? (
+                                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                                    Nenhuma instância conectada.
+                                                    <br />Vá em Configurações &gt; WhatsApp para conectar.
+                                                </div>
+                                            ) : (
+                                                instances.map(inst => (
+                                                    <SelectItem key={inst.id} value={inst.id} className="flex items-center gap-2">
+                                                        <span className="flex items-center gap-2">
+                                                            <Smartphone className="w-4 h-4 text-green-500" />
+                                                            {inst.name} ({inst.phone_number})
+                                                        </span>
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 
-                            <div className="p-6 bg-accent/30 rounded-lg border border-border/50 space-y-4">
-                                <h3 className="font-semibold text-sm flex items-center gap-2"><Settings2 className="w-4 h-4" /> Configurações de Envio (Anti-Ban)</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">Delay (seg)</label>
-                                        <input name="delaySeconds" type="number" min="1" value={formData.delaySeconds} onChange={handleInputChange} className="w-full bg-background border border-border rounded px-3 py-2 text-sm" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">Lote (qtd)</label>
-                                        <input name="batchSize" type="number" min="1" value={formData.batchSize} onChange={handleInputChange} className="w-full bg-background border border-border rounded px-3 py-2 text-sm" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs text-muted-foreground">Pausa Lote (seg)</label>
-                                        <input name="batchDelaySeconds" type="number" min="1" value={formData.batchDelaySeconds} onChange={handleInputChange} className="w-full bg-background border border-border rounded px-3 py-2 text-sm" />
-                                    </div>
+                            <div className="space-y-2 pt-4">
+                                <Label className="text-base">Tipo de Mensagem</Label>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                    {[
+                                        { id: 'text', label: 'Texto', icon: FileText },
+                                        { id: 'image', label: 'Imagem', icon: ImageIcon },
+                                        { id: 'video', label: 'Vídeo', icon: Video },
+                                        { id: 'audio', label: 'Áudio', icon: MessageSquare },
+                                        { id: 'document', label: 'Arquivo', icon: Layers },
+                                    ].map(type => (
+                                        <div
+                                            key={type.id}
+                                            onClick={() => setFormData({ ...formData, messageType: type.id as any })}
+                                            className={cn(
+                                                "cursor-pointer border rounded-lg p-4 flex flex-col items-center gap-2 transition-all hover:bg-accent",
+                                                formData.messageType === type.id ? "border-primary bg-primary/5 text-primary ring-1 ring-primary" : "border-border"
+                                            )}
+                                        >
+                                            <type.icon className="w-6 h-6" />
+                                            <span className="font-medium">{type.label}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* STEP 2: CONTENT */}
+                    {/* STEP 2: VARIAÇÕES & MÍDIA */}
                     {currentStep === 2 && (
                         <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
-                            {formData.mediaType !== 'text' && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-muted-foreground">Upload da Mídia</label>
-                                    <div className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-accent/50 transition-colors cursor-pointer relative">
-                                        <input
+
+                            {/* Media Upload */}
+                            {formData.messageType !== 'text' && (
+                                <div className="bg-accent/30 p-6 rounded-xl border border-dashed border-primary/50 text-center">
+                                    <Label className="cursor-pointer block">
+                                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
+                                            {mediaFile ? <CheckCircle2 className="w-8 h-8" /> : <Layers className="w-8 h-8" />}
+                                        </div>
+                                        <span className="text-lg font-medium block">
+                                            {mediaFile ? mediaFile.name : `Clique para fazer upload de ${formData.messageType}`}
+                                        </span>
+                                        <span className="text-sm text-muted-foreground block mt-1">
+                                            {mediaFile ? 'Arquivo selecionado' : 'Formatos suportados: JPG, PNG, MP4, MP3, PDF'}
+                                        </span>
+                                        <Input
                                             type="file"
-                                            accept={formData.mediaType === 'image' ? "image/*" : "video/*"}
-                                            onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            className="hidden"
+                                            onChange={handleFileUpload}
+                                            accept={
+                                                formData.messageType === 'image' ? 'image/*' :
+                                                    formData.messageType === 'video' ? 'video/*' :
+                                                        formData.messageType === 'audio' ? 'audio/*' :
+                                                            '*/*'
+                                            }
                                         />
-                                        <Upload className={cn("w-10 h-10 mb-2 transition-colors", mediaFile ? "text-primary" : "text-muted-foreground")} />
-                                        {mediaFile ? (
-                                            <span className="font-bold text-primary">{mediaFile.name}</span>
-                                        ) : (
-                                            <span className="text-muted-foreground">Clique ou arraste seu arquivo aqui</span>
-                                        )}
-                                    </div>
+                                    </Label>
                                 </div>
                             )}
 
+                            {/* Message Variations */}
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <label className="text-sm font-medium text-muted-foreground">Variações de Mensagem</label>
-                                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                                            <Shuffle className="w-3 h-3" />
-                                            O sistema escolherá aleatoriamente uma variação para cada contato
-                                        </p>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-base">Mensagens (Spintax / Variações)</Label>
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger>
+                                                    <Info className="w-4 h-4 text-muted-foreground" />
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs">
+                                                    Adicione múltiplas versões da sua mensagem. O sistema irá rotacionar entre elas para simular comportamento humano e reduzir risco de bloqueio.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
                                     </div>
-                                    <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">
-                                        {messageVariations.filter(m => m.trim()).length} variações
-                                    </span>
+                                    <Badge variant="secondary" className="gap-1">
+                                        <Layers className="w-3 h-3" />
+                                        {messageVariations.length} Variações
+                                    </Badge>
                                 </div>
 
-                                {messageVariations.map((variation, index) => (
-                                    <div key={index} className="relative border border-border rounded-xl p-4 bg-background/50">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-muted-foreground">Variação {index + 1}</span>
+                                <div className="grid gap-4 max-h-[400px] overflow-y-auto pr-2">
+                                    {messageVariations.map((msg, idx) => (
+                                        <div key={idx} className="relative group">
+                                            <div className="absolute top-3 left-3 w-6 h-6 bg-muted text-muted-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                                                {idx + 1}
+                                            </div>
+                                            <Textarea
+                                                placeholder={`Escreva a variação ${idx + 1} da sua mensagem...`}
+                                                value={msg}
+                                                onChange={(e) => updateVariation(idx, e.target.value)}
+                                                className="min-h-[120px] pl-12 resize-none text-base"
+                                            />
                                             {messageVariations.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const newVariations = messageVariations.filter((_, i) => i !== index)
-                                                        setMessageVariations(newVariations)
-                                                    }}
-                                                    className="p-1 hover:bg-red-500/10 text-red-500 rounded transition-colors"
+                                                <Button
+                                                    variant="destructive"
+                                                    size="icon"
+                                                    className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => removeVariation(idx)}
                                                 >
-                                                    <X className="w-4 h-4" />
-                                                </button>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
                                             )}
                                         </div>
-                                        <textarea
-                                            value={variation}
-                                            onChange={(e) => {
-                                                const newVariations = [...messageVariations]
-                                                newVariations[index] = e.target.value
-                                                setMessageVariations(newVariations)
-                                            }}
-                                            rows={5}
-                                            placeholder="Olá {nome}, tudo bem? Tenho uma oportunidade..."
-                                            className="w-full bg-background border border-border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary outline-none resize-none text-sm"
-                                            autoFocus={index === 0}
-                                        ></textarea>
-                                        <p className="text-xs text-muted-foreground text-right mt-1">{variation.length} caracteres</p>
+                                    ))}
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    onClick={addVariation}
+                                    className="w-full h-12 border-dashed gap-2 hover:border-primary hover:text-primary"
+                                >
+                                    <Plus className="w-4 h-4" /> Adicionar Nova Variação
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 3: MODO SEQUENCIAL */}
+                    {currentStep === 3 && (
+                        <div className="space-y-8 animate-in slide-in-from-right-8 fade-in duration-300">
+                            <div className="flex items-center justify-between p-6 bg-accent/20 border border-border rounded-xl">
+                                <div className="space-y-1">
+                                    <h3 className="text-lg font-bold flex items-center gap-2">
+                                        <Layers className="w-5 h-5 text-primary" />
+                                        Modo Mensagem Sequencial
+                                    </h3>
+                                    <p className="text-muted-foreground max-w-lg">
+                                        Envia múltiplas mensagens curtas em sequência para o mesmo contato (ex: "Oi" ...digita... "Tudo bem?"), simulando uma conversa real.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.sequentialMode}
+                                    onCheckedChange={c => setFormData({ ...formData, sequentialMode: c })}
+                                    className="scale-150"
+                                />
+                            </div>
+
+                            {formData.sequentialMode && (
+                                <div className="p-6 bg-accent/10 rounded-xl border border-dashed border-primary/30 space-y-4 animate-in fade-in slide-in-from-top-4">
+                                    <div className="flex items-center gap-2 text-primary font-medium">
+                                        <Clock className="w-5 h-5" /> Configuração do Delay entre Blocos
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Tempo de espera simulando "digitando..." entre uma mensagem e outra para o mesmo contato.
+                                    </p>
+                                    <div className="flex items-center gap-4">
+                                        <Input
+                                            type="number"
+                                            value={formData.sequentialBlockDelay}
+                                            onChange={e => setFormData({ ...formData, sequentialBlockDelay: Number(e.target.value) })}
+                                            className="w-32 text-center text-lg font-bold"
+                                        />
+                                        <span className="text-muted-foreground font-medium">segundos (média)</span>
+                                    </div>
+
+                                    <Alert className="bg-blue-500/10 border-blue-500/20 text-blue-700">
+                                        <Info className="w-4 h-4" />
+                                        <AlertTitle>Dica de Uso</AlertTitle>
+                                        <AlertDescription>
+                                            No passo anterior, cada "Variação" será tratada como um bloco. Se você adicionar 3 variações e ativar este modo, o contato receberá as 3 mensagens em sequência.
+                                        </AlertDescription>
+                                    </Alert>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* STEP 4: TIMING (DELAY) */}
+                    {currentStep === 4 && (
+                        <div className="space-y-8 animate-in slide-in-from-right-8 fade-in duration-300">
+                            <div className="text-center space-y-2 mb-8">
+                                <h3 className="text-xl font-bold">Comportamento de Envio</h3>
+                                <p className="text-muted-foreground">Defina o intervalo aleatório entre cada contato para evitar detecção de spam.</p>
+                            </div>
+
+                            <Card className={cn("border-2 transition-all", risk.color.replace('text-', 'border-'))}>
+                                <CardContent className="p-8 space-y-8">
+                                    <div className="flex justify-between items-center">
+                                        <div className="space-y-1">
+                                            <Label>Intervalo Mínimo (seg)</Label>
+                                            <Input
+                                                type="number"
+                                                value={formData.minDelay}
+                                                onChange={e => setFormData({ ...formData, minDelay: Number(e.target.value) })}
+                                                className="w-32 text-center text-xl font-bold"
+                                            />
+                                        </div>
+                                        <div className="h-0.5 flex-1 mx-8 bg-border relative">
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-4 text-muted-foreground font-mono">
+                                                ATÉ
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1 text-right">
+                                            <Label>Intervalo Máximo (seg)</Label>
+                                            <Input
+                                                type="number"
+                                                value={formData.maxDelay}
+                                                onChange={e => setFormData({ ...formData, maxDelay: Number(e.target.value) })}
+                                                className="w-32 text-center text-xl font-bold ml-auto"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Risk Indicator */}
+                                    <div className={cn("rounded-lg p-4 flex items-center justify-between", risk.bg)}>
+                                        <div className="flex items-center gap-3">
+                                            <Zap className={cn("w-6 h-6", risk.color)} />
+                                            <div>
+                                                <p className={cn("font-bold", risk.color)}>Nível de Risco: {risk.label}</p>
+                                                <p className="text-sm opacity-80">Baseado nas configurações atuais</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right text-sm font-mono opacity-70">
+                                            ~{Math.round(3600 / ((formData.minDelay + formData.maxDelay) / 2))} envios/hora
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* STEP 5: LOTES (BATCHES) */}
+                    {currentStep === 5 && (
+                        <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
+                            <div className="text-center space-y-2 mb-8">
+                                <h3 className="text-xl font-bold">Pausas e Lotes</h3>
+                                <p className="text-muted-foreground">Faça pausas longas para "esfriar" o número após certa quantidade de envios.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <Card>
+                                    <CardContent className="p-6 space-y-4">
+                                        <div className="w-12 h-12 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
+                                            <Layers className="w-6 h-6" />
+                                        </div>
+                                        <Label className="text-base">Tamanho do Lote</Label>
+                                        <p className="text-sm text-muted-foreground">Quantas mensagens enviar antes de fazer uma pausa longa?</p>
+                                        <div className="flex items-center gap-3">
+                                            <Input
+                                                type="number"
+                                                value={formData.batchSize}
+                                                onChange={e => setFormData({ ...formData, batchSize: Number(e.target.value) })}
+                                                className="h-12 text-lg font-bold"
+                                            />
+                                            <span className="text-muted-foreground font-medium">mensagens</span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardContent className="p-6 space-y-4">
+                                        <div className="w-12 h-12 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center mb-2">
+                                            <Clock className="w-6 h-6" />
+                                        </div>
+                                        <Label className="text-base">Tempo de Pausa</Label>
+                                        <p className="text-sm text-muted-foreground">Quanto tempo esperar entre os lotes?</p>
+                                        <div className="flex items-center gap-3">
+                                            <Input
+                                                type="number"
+                                                value={formData.batchDelay}
+                                                onChange={e => setFormData({ ...formData, batchDelay: Number(e.target.value) })}
+                                                className="h-12 text-lg font-bold"
+                                            />
+                                            <span className="text-muted-foreground font-medium">segundos</span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            <Alert>
+                                <Info className="w-4 h-4" />
+                                <AlertTitle>Resumo</AlertTitle>
+                                <AlertDescription>
+                                    O sistema enviará <strong>{formData.batchSize} mensagens</strong>,
+                                    fará uma pausa de <strong>{Math.round(formData.batchDelay / 60)} minutos</strong>,
+                                    e então continuará.
+                                </AlertDescription>
+                            </Alert>
+                        </div>
+                    )}
+
+                    {/* STEP 6: PÚBLICO (AUDIENCE) */}\n                    {currentStep === 6 && (
+                        <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
+                            <div className="text-center space-y-2 mb-8">
+                                <h3 className="text-xl font-bold">Quais contatos receberão?</h3>
+                                <p className="text-muted-foreground">Selecione uma lista de contatos previamente importada.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {contactLists.map(list => (
+                                    <div
+                                        key={list.id}
+                                        onClick={() => setFormData({ ...formData, contactListId: list.id })}
+                                        className={cn(
+                                            "cursor-pointer border-2 rounded-xl p-6 transition-all hover:shadow-lg relative overflow-hidden",
+                                            formData.contactListId === list.id
+                                                ? "border-primary bg-primary/5 shadow-md scale-[1.02]"
+                                                : "border-border hover:border-primary/50"
+                                        )}
+                                    >
+                                        {formData.contactListId === list.id && (
+                                            <div className="absolute top-0 right-0 p-2 bg-primary text-white rounded-bl-xl">
+                                                <CheckCircle2 className="w-4 h-4" />
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
+                                                <Users className="w-5 h-5 text-foreground" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold truncate max-w-[150px]">{list.name}</h4>
+                                                <p className="text-xs text-muted-foreground bg-accent/50 px-2 py-0.5 rounded-full inline-block">
+                                                    {new Date().toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mt-4">
+                                            <span className="text-2xl font-bold text-primary">{list.total_contacts}</span>
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Contatos</span>
+                                        </div>
+
+                                        <div className="mt-4 flex flex-wrap gap-1">
+                                            {list.tags?.slice(0, 3).map((tag, i) => (
+                                                <Badge key={i} variant="outline" className="text-[10px] h-5">{tag}</Badge>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
 
-                                {messageVariations.length < 10 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setMessageVariations([...messageVariations, ''])}
-                                        className="w-full py-3 border-2 border-dashed border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Adicionar Variação
-                                    </button>
-                                )}
-
-                                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs text-muted-foreground">
-                                    <p className="font-medium text-primary mb-1">💡 Dica:</p>
-                                    <p>Use {'{nome}'} para personalizar com o nome do contato. Crie variações sutis para tornar o envio mais natural e evitar bloqueios.</p>
-                                </div>
-                            </div>
-
-                            {/* Sequential Message Mode - Intelligent Auto-Split */}
-                            <div className="border-t border-border pt-6 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <label className="text-sm font-medium text-foreground flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={sequentialMode}
-                                                onChange={(e) => setSequentialMode(e.target.checked)}
-                                                className="w-4 h-4 rounded border-border"
-                                            />
-                                            Modo Sequencial (Quebra Automática)
-                                        </label>
-                                        <p className="text-xs text-muted-foreground mt-1 ml-6">
-                                            📨 O sistema quebrará automaticamente suas mensagens em blocos naturais (mais humano e evita bloqueio)
-                                        </p>
+                                {/* Add New List Helper */}
+                                <div
+                                    onClick={() => router.push('/dashboard/contacts')}
+                                    className="cursor-pointer border-2 border-dashed border-muted hover:border-primary/50 rounded-xl p-6 flex flex-col items-center justify-center gap-4 text-muted-foreground hover:text-primary transition-colors min-h-[180px]"
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+                                        <Plus className="w-6 h-6" />
                                     </div>
-                                </div>
-
-                                {sequentialMode && (
-                                    <div className="space-y-4 animate-in slide-in-from-top-4 fade-in">
-                                        <div className="flex items-center gap-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                                            <div className="flex-1">
-                                                <label className="text-xs font-medium text-blue-700 dark:text-blue-400">Delay entre blocos</label>
-                                                <p className="text-[10px] text-muted-foreground">Tempo de espera entre cada bloco de mensagem</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="number"
-                                                    min="3"
-                                                    max="15"
-                                                    value={blockDelay}
-                                                    onChange={(e) => setBlockDelay(parseInt(e.target.value))}
-                                                    className="w-16 px-2 py-1 text-sm border border-border rounded bg-background"
-                                                />
-                                                <span className="text-xs text-muted-foreground">segundos</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
-                                            <p className="font-medium text-blue-700 dark:text-blue-400 mb-2 text-sm">✨ Como funciona:</p>
-                                            <ul className="text-xs text-muted-foreground space-y-1.5 ml-4">
-                                                <li>• O sistema detecta parágrafos nas suas mensagens</li>
-                                                <li>• Quebra automaticamente em blocos naturais</li>
-                                                <li>• Envia cada bloco com {blockDelay}s de intervalo</li>
-                                                <li>• Simula uma conversa real no WhatsApp</li>
-                                            </ul>
-                                            <div className="mt-3 p-3 bg-background/50 rounded border border-border">
-                                                <p className="text-[10px] font-bold text-muted-foreground mb-1">Exemplo de quebra:</p>
-                                                <div className="space-y-2">
-                                                    <div className="text-[10px] text-foreground/80">
-                                                        <span className="font-bold text-blue-600">Bloco 1:</span> "Olá {'{nome}'}! Tudo bem?"
-                                                    </div>
-                                                    <div className="text-[10px] text-muted-foreground">⏱️ +{blockDelay}s</div>
-                                                    <div className="text-[10px] text-foreground/80">
-                                                        <span className="font-bold text-blue-600">Bloco 2:</span> "Vi que você procura imóvel..."
-                                                    </div>
-                                                    <div className="text-[10px] text-muted-foreground">⏱️ +{blockDelay}s</div>
-                                                    <div className="text-[10px] text-foreground/80">
-                                                        <span className="font-bold text-blue-600">Bloco 3:</span> "Tenho opções incríveis!"
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 3: AUDIENCE */}
-                    {currentStep === 3 && (
-                        <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Selecione a Lista de Contatos</label>
-                                {contactLists.length > 0 ? (
-                                    <select
-                                        name="contactListId"
-                                        value={formData.contactListId}
-                                        onChange={handleInputChange}
-                                        className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
-                                        autoFocus
-                                    >
-                                        <option value="" disabled>Selecione uma pasta...</option>
-                                        {contactLists.map(list => (
-                                            <option key={list.id} value={list.id}>
-                                                {list.name} ({new Date(list.created_at).toLocaleDateString()})
-                                            </option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
-                                        <Folder className="w-10 h-10 text-red-500 mx-auto mb-3" />
-                                        <h4 className="font-bold text-red-600 mb-1">Nenhuma lista encontrada</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Você precisa importar contatos na página de Leads antes de criar uma campanha.
-                                        </p>
-                                    </div>
-                                )}
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    A campanha será enviada para todos os contatos da pasta selecionada.
-                                </p>
-                            </div>
-
-                            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex items-start gap-3">
-                                <CheckCircle2 className="w-5 h-5 text-primary mt-0.5" />
-                                <div>
-                                    <h4 className="font-bold text-primary text-sm">Pronto para disparar?</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Ao confirmar, a campanha <strong>{formData.name}</strong> será criada e as mensagens começarão a ser enviadas conforme as configurações de delay.
-                                    </p>
+                                    <span className="font-medium">Criar Nova Lista</span>
                                 </div>
                             </div>
                         </div>
                     )}
+
                 </div>
 
                 {/* Footer Controls */}
                 <div className="p-6 border-t border-border bg-card/50 flex justify-between items-center">
                     {currentStep > 1 ? (
-                        <button
+                        <Button
+                            variant="ghost"
                             onClick={prevStep}
                             disabled={loading}
-                            className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors font-medium"
+                            className="gap-2 pl-2"
                         >
                             <ArrowLeft className="w-4 h-4" /> Voltar
-                        </button>
+                        </Button>
                     ) : (
                         <div></div>
                     )}
 
-                    {currentStep < 3 ? (
-                        <button
+                    {currentStep < 6 ? (
+                        <Button
                             onClick={nextStep}
-                            disabled={!formData.name || formData.name.length < 3} // Name must be at least 3 chars
-                            className="flex items-center gap-2 px-8 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-bold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={
+                                (currentStep === 1 && (!formData.name || !formData.instanceId)) ||
+                                (currentStep === 2 && messageVariations.filter(m => m.trim()).length === 0)
+                            }
+                            className="gap-2 px-8 shadow-lg shadow-primary/20"
                         >
                             Próximo <ArrowRight className="w-4 h-4" />
-                        </button>
+                        </Button>
                     ) : (
-                        <button
-                            onClick={() => handleSubmit()}
+                        <Button
+                            onClick={handleSubmit}
                             disabled={loading || !formData.contactListId}
-                            className="flex items-center gap-2 px-8 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                            className="gap-2 px-8 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
                         >
                             {loading ? "Iniciando..." :
                                 <>
                                     <Rocket className="w-4 h-4" /> Disparar Campanha
                                 </>
                             }
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>
 
             {/* Anti-Ban Warning Modal */}
             <AntiBanWarningModal
-                isOpen={showAntiBanWarning}
-                onClose={() => {
-                    setShowAntiBanWarning(false);
-                    setPendingSubmit(false);
-                }}
-                onConfirm={() => {
-                    setShowAntiBanWarning(false);
-                    handleSubmit(true); // Skip warning check
-                }}
-                delaySeconds={formData.delaySeconds}
-                batchSize={formData.batchSize}
-                batchDelaySeconds={formData.batchDelaySeconds}
-                totalContacts={getTotalContacts()}
+                isOpen={showAntiBanModal}
+                onClose={() => setShowAntiBanModal(false)}
             />
         </div>
     )

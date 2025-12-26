@@ -12,7 +12,9 @@ import {
     Users,
     Send,
     AlertCircle,
-    Search
+    Search,
+    Play,
+    Pause
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
@@ -107,13 +109,55 @@ export default function CampaignDetailsPage() {
                     <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 mb-2">
                         <ArrowLeft className="w-4 h-4" /> Voltar
                     </Link>
-                    <h1 className="text-2xl font-bold text-foreground">{campaign?.name}</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-foreground">{campaign?.name}</h1>
+                        {campaign?.status === 'PAUSED' && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 animate-pulse">
+                                PAUSADA
+                            </span>
+                        )}
+                    </div>
                     <p className="text-sm text-muted-foreground">Criada em {new Date(campaign?.created_at).toLocaleDateString()}</p>
                 </div>
                 <div className="flex gap-3">
+                    {/* Pause/Resume Control */}
+                    <button
+                        onClick={async () => {
+                            try {
+                                if (campaign.status === 'PAUSED') {
+                                    await api.campaigns.resume(id);
+                                } else {
+                                    await api.campaigns.pause(id);
+                                }
+                                fetchDetails(); // Refresh UI
+                            } catch (err) {
+                                console.error('Failed to toggle pause', err);
+                                alert('Erro ao alterar status da campanha');
+                            }
+                        }}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border",
+                            campaign?.status === 'PAUSED'
+                                ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                                : "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
+                        )}
+                    >
+                        {campaign?.status === 'PAUSED' ? (
+                            <>
+                                <Play className="w-4 h-4 fill-current" />
+                                Retomar Envio
+                            </>
+                        ) : (
+                            <>
+                                <Pause className="w-4 h-4 fill-current" />
+                                Pausar Envio
+                            </>
+                        )}
+                    </button>
+
                     <Link
                         href={`/dashboard/campaigns/${id}/kanban`}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors shadow-sm shadow-primary/20"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
@@ -123,10 +167,10 @@ export default function CampaignDetailsPage() {
                     <button
                         onClick={fetchDetails}
                         disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        title="Atualizar dados"
+                        className="p-2 bg-accent hover:bg-accent/80 rounded-lg transition-colors disabled:opacity-50 border border-border"
                     >
                         <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-                        Atualizar Status
                     </button>
                 </div>
             </div>
