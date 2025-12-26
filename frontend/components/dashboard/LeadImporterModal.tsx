@@ -21,8 +21,8 @@ interface LeadImporterModalProps {
     targetListName?: string
 }
 
-export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, targetListName }: LeadImporterModalProps) {
-    const [mode, setMode] = useState<'pdf' | 'csv'>(targetListId ? 'csv' : 'pdf')
+export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImporterModalProps, 'targetListId' | 'targetListName'>) {
+    const [mode, setMode] = useState<'pdf' | 'csv'>('pdf')
     const [step, setStep] = useState<'input' | 'result'>('input')
 
     const [file, setFile] = useState<File | null>(null)
@@ -45,19 +45,14 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, ta
                 const response = await api.contacts.importPdf(formData)
                 result = { listName: response.list.name, count: response.count }
             } else {
-                // CSV or Excel Import
-                if (!targetListId) {
-                    throw new Error("Selecione uma pasta para importar o CSV/Excel.")
-                }
-
-                // Check if file is Excel
+                // CSV or Excel Import - creates new folder automatically
                 const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
 
                 const response = isExcel
-                    ? await api.contacts.importExcel(targetListId, formData)
-                    : await api.contacts.import(targetListId, formData)
+                    ? await api.contacts.importExcel(formData)
+                    : await api.contacts.importCsv(formData)
 
-                result = { listName: targetListName, count: response.count }
+                result = { listName: response.list.name, count: response.count }
             }
 
             setImportResult(result)
@@ -104,10 +99,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, ta
                             Importador de Contatos
                         </h2>
                         <p className="text-muted-foreground font-medium text-sm mt-1">
-                            {mode === 'pdf'
-                                ? <span>Criará uma <span className="text-primary font-bold">nova pasta</span> com o nome do arquivo.</span>
-                                : <span>Importando para <span className="text-primary font-bold">{targetListName || 'Pasta Selecionada'}</span>.</span>
-                            }
+                            Criará uma <span className="text-primary font-bold">nova pasta</span> com o nome do arquivo.
                         </p>
                     </div>
                 </div>
@@ -122,22 +114,21 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, ta
                 {/* Content */}
                 <div className="p-8 overflow-y-auto flex-1 custom-scrollbar relative">
 
-                    {!targetListId && (
-                        <div className="flex gap-2 mb-6 bg-accent/50 p-1 rounded-xl w-fit mx-auto">
-                            <button
-                                onClick={() => { setMode('pdf'); setFile(null); }}
-                                className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", mode === 'pdf' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}
-                            >
-                                Importar PDF (Nova Pasta)
-                            </button>
-                            <button
-                                onClick={() => { alert("Para importar CSV, entre em uma pasta primeiro."); }}
-                                className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all opacity-50 cursor-not-allowed", mode === 'csv' ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
-                            >
-                                Importar CSV (Excel)
-                            </button>
-                        </div>
-                    )}
+                    {/* Tabs */}
+                    <div className="flex gap-2 mb-6 bg-accent/50 p-1 rounded-xl w-fit mx-auto">
+                        <button
+                            onClick={() => { setMode('pdf'); setFile(null); }}
+                            className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", mode === 'pdf' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}
+                        >
+                            Importar PDF
+                        </button>
+                        <button
+                            onClick={() => { setMode('csv'); setFile(null); }}
+                            className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", mode === 'csv' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}
+                        >
+                            Importar CSV/Excel
+                        </button>
+                    </div>
 
                     {/* Disclaimer / Template */}
                     {mode === 'pdf' ? (

@@ -38,12 +38,11 @@ export const addContact = async (req: AuthRequest, res: Response) => {
 export const importContacts = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const { listId } = req.params;
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const result = await contactService.importContactsFromCsv(userId, listId, req.file.path);
+        const result = await contactService.importContactsFromCsv(userId, req.file.path, req.file.originalname);
         res.status(200).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -68,12 +67,11 @@ export const importPdf = async (req: AuthRequest, res: Response) => {
 export const importExcel = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const { listId } = req.params;
         if (!req.file) {
             return res.status(400).json({ error: 'No Excel file uploaded' });
         }
 
-        const result = await contactService.importContactsFromExcel(userId, listId, req.file.path);
+        const result = await contactService.importContactsFromExcel(userId, req.file.path, req.file.originalname);
         res.status(200).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });

@@ -84,7 +84,7 @@ export const api = {
         createList: (name: string) => fetchAPI('/contact-lists', { method: 'POST', body: JSON.stringify({ name }) }),
         updateList: (id: string, name: string) => fetchAPI(`/contact-lists/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
         deleteList: (id: string) => fetchAPI(`/contact-lists/${id}`, { method: 'DELETE' }),
-        import: (listId: string, formData: FormData) => fetchAPI(`/contact-lists/${listId}/import`, {
+        importCsv: (formData: FormData) => fetchAPI('/contact-lists/import-csv', {
             method: 'POST',
             body: formData
         }),
@@ -92,7 +92,7 @@ export const api = {
             method: 'POST',
             body: formData
         }),
-        importExcel: (listId: string, formData: FormData) => fetchAPI(`/contact-lists/${listId}/import-excel`, {
+        importExcel: (formData: FormData) => fetchAPI('/contact-lists/import-excel', {
             method: 'POST',
             body: formData
         }),

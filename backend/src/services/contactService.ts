@@ -135,16 +135,10 @@ export const importContactsFromPdf = async (userId: string, filePath: string, or
     return { list: newList, count: contacts.length };
 };
 
-export const importContactsFromCsv = async (userId: string, listId: string, filePath: string) => {
-    // Verify list ownership
-    const { data: list } = await supabase
-        .from('contact_lists')
-        .select('id')
-        .eq('id', listId)
-        .eq('user_id', userId)
-        .single();
-
-    if (!list) throw new Error('Contact list not found or access denied');
+export const importContactsFromCsv = async (userId: string, filePath: string, originalFilename: string) => {
+    // Create List from filename
+    const listName = originalFilename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const newList = await createList(userId, listName);
 
     const results: any[] = [];
 
@@ -160,7 +154,7 @@ export const importContactsFromCsv = async (userId: string, listId: string, file
                         const phoneKey = Object.keys(row).find(k => k.toLowerCase().includes('phone') || k.toLowerCase().includes('tel') || k.toLowerCase().includes('cel'));
 
                         return {
-                            list_id: listId,
+                            list_id: newList.id,
                             name: (nameKey ? row[nameKey] : row.name || row.Name || 'Sem Nome').trim(),
                             phone: (phoneKey ? row[phoneKey] : row.phone || row.Phone || '').replace(/\D/g, '').trim()
                         };
@@ -177,7 +171,7 @@ export const importContactsFromCsv = async (userId: string, listId: string, file
                     // Clean up file
                     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-                    resolve({ count: contacts.length });
+                    resolve({ list: newList, count: contacts.length });
                 } catch (error) {
                     reject(error);
                 }
@@ -186,18 +180,12 @@ export const importContactsFromCsv = async (userId: string, listId: string, file
     });
 };
 
-export const importContactsFromExcel = async (userId: string, listId: string, filePath: string) => {
+export const importContactsFromExcel = async (userId: string, filePath: string, originalFilename: string) => {
     const XLSX = require('xlsx');
 
-    // Verify list ownership
-    const { data: list } = await supabase
-        .from('contact_lists')
-        .select('id')
-        .eq('id', listId)
-        .eq('user_id', userId)
-        .single();
-
-    if (!list) throw new Error('Contact list not found or access denied');
+    // Create List from filename
+    const listName = originalFilename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const newList = await createList(userId, listName);
 
     try {
         // Read Excel file
@@ -215,7 +203,7 @@ export const importContactsFromExcel = async (userId: string, listId: string, fi
             const phoneKey = Object.keys(row).find(k => k.toLowerCase().includes('phone') || k.toLowerCase().includes('tel') || k.toLowerCase().includes('cel'));
 
             return {
-                list_id: listId,
+                list_id: newList.id,
                 name: (nameKey ? row[nameKey] : row.name || row.Name || 'Sem Nome').toString().trim(),
                 phone: (phoneKey ? row[phoneKey] : row.phone || row.Phone || '').toString().replace(/\D/g, '').trim()
             };
@@ -232,7 +220,7 @@ export const importContactsFromExcel = async (userId: string, listId: string, fi
         // Clean up file
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-        return { count: contacts.length };
+        return { list: newList, count: contacts.length };
     } catch (error: any) {
         // Clean up file on error
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
