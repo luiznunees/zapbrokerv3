@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react'
 import { api } from '@/services/api'
-import { ArrowRight, ArrowLeft, CheckCircle2, Rocket, Upload, FileText, Users, Settings2, Folder } from 'lucide-react'
+import { ArrowRight, ArrowLeft, CheckCircle2, Rocket, Upload, FileText, Users, Settings2, Folder, Plus, X, Shuffle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 
@@ -17,12 +17,12 @@ export default function NewCampaignPage() {
     const [formData, setFormData] = useState({
         name: '',
         mediaType: 'text',
-        message: '',
         contactListId: '',
         delaySeconds: 5,
         batchSize: 50,
         batchDelaySeconds: 10
     });
+    const [messageVariations, setMessageVariations] = useState<string[]>(['']);
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [instances, setInstances] = useState<any[]>([]);
     const [contactLists, setContactLists] = useState<any[]>([]);
@@ -70,10 +70,16 @@ export default function NewCampaignPage() {
                 throw new Error("Selecione uma lista de contatos para enviar a campanha.");
             }
 
-            // 3. Create Campaign
+            // 3. Validate Message Variations
+            const validVariations = messageVariations.filter(m => m.trim().length > 0);
+            if (validVariations.length === 0) {
+                throw new Error("Adicione pelo menos uma variação de mensagem.");
+            }
+
+            // 4. Create Campaign
             const campaignData = new FormData();
             campaignData.append('name', formData.name);
-            campaignData.append('message', formData.message);
+            campaignData.append('messageVariations', JSON.stringify(validVariations));
             campaignData.append('contactListId', formData.contactListId);
             campaignData.append('instanceId', connectedInstance.id);
             campaignData.append('delaySeconds', formData.delaySeconds.toString());
@@ -273,18 +279,68 @@ export default function NewCampaignPage() {
                                 </div>
                             )}
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Mensagem da Campanha</label>
-                                <textarea
-                                    name="message"
-                                    value={formData.message}
-                                    onChange={handleInputChange}
-                                    rows={8}
-                                    placeholder="Olá {nome}, tudo bem? Tenho uma oportunidade..."
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary outline-none resize-none"
-                                    autoFocus
-                                ></textarea>
-                                <p className="text-xs text-muted-foreground text-right">{formData.message.length} caracteres</p>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <label className="text-sm font-medium text-muted-foreground">Variações de Mensagem</label>
+                                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                            <Shuffle className="w-3 h-3" />
+                                            O sistema escolherá aleatoriamente uma variação para cada contato
+                                        </p>
+                                    </div>
+                                    <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">
+                                        {messageVariations.filter(m => m.trim()).length} variações
+                                    </span>
+                                </div>
+
+                                {messageVariations.map((variation, index) => (
+                                    <div key={index} className="relative border border-border rounded-xl p-4 bg-background/50">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-bold text-muted-foreground">Variação {index + 1}</span>
+                                            {messageVariations.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newVariations = messageVariations.filter((_, i) => i !== index)
+                                                        setMessageVariations(newVariations)
+                                                    }}
+                                                    className="p-1 hover:bg-red-500/10 text-red-500 rounded transition-colors"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <textarea
+                                            value={variation}
+                                            onChange={(e) => {
+                                                const newVariations = [...messageVariations]
+                                                newVariations[index] = e.target.value
+                                                setMessageVariations(newVariations)
+                                            }}
+                                            rows={5}
+                                            placeholder="Olá {nome}, tudo bem? Tenho uma oportunidade..."
+                                            className="w-full bg-background border border-border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary outline-none resize-none text-sm"
+                                            autoFocus={index === 0}
+                                        ></textarea>
+                                        <p className="text-xs text-muted-foreground text-right mt-1">{variation.length} caracteres</p>
+                                    </div>
+                                ))}
+
+                                {messageVariations.length < 10 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setMessageVariations([...messageVariations, ''])}
+                                        className="w-full py-3 border-2 border-dashed border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Adicionar Variação
+                                    </button>
+                                )}
+
+                                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs text-muted-foreground">
+                                    <p className="font-medium text-primary mb-1">💡 Dica:</p>
+                                    <p>Use {'{nome}'} para personalizar com o nome do contato. Crie variações sutis para tornar o envio mais natural e evitar bloqueios.</p>
+                                </div>
                             </div>
                         </div>
                     )}

@@ -4,7 +4,7 @@ import { QuotaService } from './quotaService';
 export const createCampaign = async (
     userId: string,
     name: string,
-    message: string,
+    messageVariations: string[],
     contactListId: string,
     instanceId: string,
     scheduledAt?: string,
@@ -59,13 +59,14 @@ export const createCampaign = async (
         throw new Error(`Saldo insuficiente. Você tem ${availability.remaining} mensagens e está tentando enviar para ${totalContacts} contatos.`);
     }
 
-    // 4. Create Campaign
+    // 4. Create Campaign (store first variation as message for backward compatibility)
     const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .insert([{
             user_id: userId,
             name,
-            message,
+            message: messageVariations[0], // First variation for backward compatibility
+            message_variations: messageVariations, // Store all variations
             contact_list_id: contactListId,
             instance_id: instanceId,
             scheduled_at: scheduledAt || null,
