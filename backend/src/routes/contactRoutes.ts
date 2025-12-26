@@ -106,7 +106,7 @@ router.post('/:listId/contacts', contactController.addContact);
  *       200:
  *         description: Import successful
  */
-router.post('/:listId/import', upload.single('file'), contactController.importContacts);
+router.post('/import-csv', upload.single('file'), contactController.importContacts);
 
 /**
  * @swagger
@@ -134,18 +134,12 @@ router.post('/import-pdf', upload.single('file'), contactController.importPdf);
 
 /**
  * @swagger
- * /contact-lists/{listId}/import-excel:
+ * /contact-lists/import-excel:
  *   post:
- *     summary: Import contacts from Excel
+ *     summary: Create a list and import contacts from Excel
  *     tags: [Contacts]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: listId
- *         required: true
- *         schema:
- *           type: string
  *     requestBody:
  *       required: true
  *       content:
@@ -160,7 +154,7 @@ router.post('/import-pdf', upload.single('file'), contactController.importPdf);
  *       200:
  *         description: Import successful
  */
-router.post('/:listId/import-excel', upload.single('file'), contactController.importExcel);
+router.post('/import-excel', upload.single('file'), contactController.importExcel);
 
 // Chat Routes
 router.get('/chats', contactController.getChats);
