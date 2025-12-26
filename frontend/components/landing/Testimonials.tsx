@@ -1,15 +1,18 @@
 import { Star, Quote } from "lucide-react"
+import Image from "next/image"
 
 const TESTIMONIALS = [
     {
         quote: "Antes eu mandava 30-40 mensagens por dia manualmente. Agora disparo 300 automaticamente e agendo 3x mais visitas.",
         author: "Rafael Silva",
-        role: "Corretor em São Paulo, SP"
+        role: "Corretor em São Paulo, SP",
+        image: "/testimonials/rafael-silva.png"
     },
     {
         quote: "Eu odiava perder tempo digitando no WhatsApp. Agora o ZapBroker faz isso enquanto eu faço visitas e atendo clientes. Produtividade absurda.",
         author: "Mariana Costa",
-        role: "Corretora no Rio de Janeiro, RJ"
+        role: "Corretora no Rio de Janeiro, RJ",
+        image: "/testimonials/mariana-costa.png"
     },
     {
         quote: "Testei outras ferramentas e fui banido 2x. ZapBroker há 5 meses, mandando 400 msgs/dia, zero problemas. Sistema anti-ban funciona mesmo.",
@@ -48,9 +51,20 @@ export function Testimonials() {
                             <p className="text-xs font-medium italic mb-2.5 leading-relaxed relative z-10 text-foreground/90">"{t.quote}"</p>
 
                             <div className="flex items-center gap-2">
-                                <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-brand-purple-400 to-brand-blue flex items-center justify-center font-bold text-white text-[9px] shadow-md">
-                                    {t.author.charAt(0)}
-                                </div>
+                                {t.image ? (
+                                    <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-brand-purple-200 dark:border-brand-purple-800 shadow-md relative">
+                                        <Image
+                                            src={t.image}
+                                            alt={t.author}
+                                            fill
+                                            className="object-cover"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-purple-400 to-brand-blue flex items-center justify-center font-bold text-white text-xs shadow-md">
+                                        {t.author.charAt(0)}
+                                    </div>
+                                )}
                                 <div>
                                     <h4 className="font-bold text-[10px] text-foreground">{t.author}</h4>
                                     <p className="text-[8px] text-muted-foreground">{t.role}</p>
