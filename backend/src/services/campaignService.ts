@@ -14,8 +14,7 @@ export const createCampaign = async (
     mediaType: string = 'text',
     mediaUrl?: string,
     sequentialMode: boolean = false,
-    messageBlocks?: string[] | null,
-    blockDelay?: number
+    blockDelay: number = 5
 ) => {
     // 0. Verify Ownership of List and Instance
     const { data: list } = await supabase
@@ -71,8 +70,7 @@ export const createCampaign = async (
             message: messageVariations[0], // First variation for backward compatibility
             message_variations: messageVariations, // Store all variations
             sequential_mode: sequentialMode,
-            message_blocks: messageBlocks || null,
-            block_delay: blockDelay || 5,
+            block_delay: blockDelay,
             contact_list_id: contactListId,
             instance_id: instanceId,
             scheduled_at: scheduledAt || null,

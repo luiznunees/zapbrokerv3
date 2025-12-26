@@ -29,7 +29,6 @@ const processQueue = async () => {
                     message, 
                     message_variations,
                     sequential_mode,
-                    message_blocks,
                     block_delay,
                     instance_id, 
                     delay_seconds, 
@@ -84,7 +83,6 @@ const processQueue = async () => {
                 contactId: msg.contact_id,
                 messageVariations: messageVariations, // Pass all variations
                 sequentialMode: campaign.sequential_mode || false,
-                messageBlocks: campaign.message_blocks || null,
                 blockDelay: campaign.block_delay || 5,
                 instanceId: campaign.instance_id,
                 mediaType: campaign.media_type,
