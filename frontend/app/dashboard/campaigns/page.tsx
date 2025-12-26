@@ -445,7 +445,7 @@ export default function NewCampaignPage() {
                         </button>
                     ) : (
                         <button
-                            onClick={handleSubmit}
+                            onClick={() => handleSubmit()}
                             disabled={loading || !formData.contactListId}
                             className="flex items-center gap-2 px-8 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                         >
