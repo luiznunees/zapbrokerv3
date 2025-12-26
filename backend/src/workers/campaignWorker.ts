@@ -71,6 +71,8 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         finalMessage = finalMessage.replace(/{nome}/gi, contactName);
     }
 
+    let result: any;
+
     // 📨 SEQUENTIAL MODE: Auto-split message into intelligent blocks
     if (sequentialMode && finalMessage) {
         console.log(`[CampaignWorker] Sequential mode enabled. Auto-splitting message...`);
@@ -79,23 +81,23 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         const blocks: string[] = [];
 
         // First, try to split by double line breaks (paragraphs)
-        const paragraphs = finalMessage.split(/\n\n+/).filter(p => p.trim().length > 0);
+        const paragraphs = finalMessage.split(/\n\n+/).filter((p: string) => p.trim().length > 0);
 
         if (paragraphs.length > 1) {
             // Use paragraphs as blocks
-            blocks.push(...paragraphs.map(p => p.trim()));
+            blocks.push(...paragraphs.map((p: string) => p.trim()));
         } else {
             // If no paragraphs, split by single line breaks
-            const lines = finalMessage.split(/\n/).filter(l => l.trim().length > 0);
+            const lines = finalMessage.split(/\n/).filter((l: string) => l.trim().length > 0);
 
             if (lines.length > 1) {
-                blocks.push(...lines.map(l => l.trim()));
+                blocks.push(...lines.map((l: string) => l.trim()));
             } else {
                 // If still one block, check if message is too long (>300 chars)
                 if (finalMessage.length > 300) {
                     // Split by sentences
                     const sentences = finalMessage.match(/[^.!?]+[.!?]+/g) || [finalMessage];
-                    blocks.push(...sentences.map(s => s.trim()));
+                    blocks.push(...sentences.map((s: string) => s.trim()));
                 } else {
                     // Message is short, send as single block
                     blocks.push(finalMessage);
@@ -120,46 +122,49 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         }
 
         console.log(`[CampaignWorker] All ${blocks.length} blocks sent successfully to ${contactName}`);
+        result = { success: true }; // Dummy result for sequential mode
     } else {
-        // 📧 STANDARD MODE: Send single message
-        console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
-        result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
-        console.log(`[CampaignWorker] TEXT Sent successfully`);
-    } else if (mediaType === 'image') {
-        let mediaData = mediaUrl;
-        let mimetype = 'image/jpeg';
+        // 📧 STANDARD MODE: Send message based on media type
+        if (mediaType === 'text' || !mediaUrl) {
+            console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
+            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
+            console.log(`[CampaignWorker] TEXT Sent successfully`);
+        } else if (mediaType === 'image') {
+            let mediaData = mediaUrl;
+            let mimetype = 'image/jpeg';
 
-        // If it's a local URL, try to read the file and convert to base64
-        if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
-            try {
-                const filename = mediaUrl.split('/').pop();
-                const filePath = path.join(process.cwd(), 'uploads', filename);
-                console.log(`[CampaignWorker] Local image detected. Reading from: ${filePath}`);
+            // If it's a local URL, try to read the file and convert to base64
+            if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
+                try {
+                    const filename = mediaUrl.split('/').pop();
+                    const filePath = path.join(process.cwd(), 'uploads', filename);
+                    console.log(`[CampaignWorker] Local image detected. Reading from: ${filePath}`);
 
-                if (fs.existsSync(filePath)) {
-                    const fileBuffer = fs.readFileSync(filePath);
-                    const extension = path.extname(filePath).toLowerCase().replace('.', '');
-                    mimetype = extension === 'png' ? 'image/png' : 'image/jpeg';
-                    // Evolution API often prefers pure base64 without prefix when mimetype is provided
-                    mediaData = fileBuffer.toString('base64');
-                    console.log(`[CampaignWorker] Image converted to pure base64 successfully (mimetype: ${mimetype})`);
-                } else {
-                    console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
+                    if (fs.existsSync(filePath)) {
+                        const fileBuffer = fs.readFileSync(filePath);
+                        const extension = path.extname(filePath).toLowerCase().replace('.', '');
+                        mimetype = extension === 'png' ? 'image/png' : 'image/jpeg';
+                        // Evolution API often prefers pure base64 without prefix when mimetype is provided
+                        mediaData = fileBuffer.toString('base64');
+                        console.log(`[CampaignWorker] Image converted to pure base64 successfully (mimetype: ${mimetype})`);
+                    } else {
+                        console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
+                    }
+                } catch (err: any) {
+                    console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
                 }
-            } catch (err: any) {
-                console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
             }
-        }
 
-        result = await evolutionService.sendImage(targetInstanceName, phone, {
-            media: mediaData,
-            caption: finalMessage,
-            mimetype: mimetype,
-            filename: 'image.jpg'
-        });
-    } else {
-        // Fallback for other media types (video, audio) - send as text link for now or implement sendFile
-        result = await evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nMedia: ${mediaUrl}`);
+            result = await evolutionService.sendImage(targetInstanceName, phone, {
+                media: mediaData,
+                caption: finalMessage,
+                mimetype: mimetype,
+                filename: 'image.jpg'
+            });
+        } else {
+            // Fallback for other media types (video, audio) - send as text link for now or implement sendFile
+            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nMedia: ${mediaUrl}`);
+        }
     }
 
     // Update status in DB
