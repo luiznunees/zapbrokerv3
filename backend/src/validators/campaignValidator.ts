@@ -15,6 +15,18 @@ export const createCampaignSchema = z.object({
             throw new Error('messageVariations inválido: ' + (e as Error).message);
         }
     }),
+    sequentialMode: z.string().transform(str => str === 'true').optional().default('false'),
+    messageBlocks: z.string().transform((str) => {
+        if (!str) return null;
+        try {
+            const parsed = JSON.parse(str);
+            if (!Array.isArray(parsed)) throw new Error('messageBlocks deve ser um array');
+            return parsed;
+        } catch (e) {
+            throw new Error('messageBlocks inválido: ' + (e as Error).message);
+        }
+    }).optional(),
+    blockDelay: z.coerce.number().min(3).max(15).optional(),
     instanceId: z.string().uuid('ID da instância inválido'),
     contactListId: z.string().uuid('ID da lista de contatos inválido'),
     delaySeconds: z.coerce.number().min(1, 'Delay deve ser pelo menos 1 segundo'),
