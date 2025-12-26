@@ -1,4 +1,4 @@
-import { Tooltip } from './Tooltip'
+import { SimpleTooltip } from '@/components/ui/simple-tooltip'
 import { HelpCircle } from 'lucide-react'
 
 interface HelpBadgeProps {
@@ -21,10 +21,10 @@ export function HelpBadge({
     const defaultMessage = "🚧 Estamos em desenvolvimento! Caso encontre algum bug ou problema, entre em contato com o suporte."
 
     return (
-        <Tooltip content={customMessage || defaultMessage} side="top">
+        <SimpleTooltip content={customMessage || defaultMessage} side="top">
             <div className={`inline-flex items-center justify-center rounded-full bg-primary/10 p-1.5 cursor-help hover:bg-primary/20 transition-colors ${className}`}>
                 <HelpCircle className={`${sizeClasses[size]} text-primary`} />
             </div>
-        </Tooltip>
+        </SimpleTooltip>
     )
 }

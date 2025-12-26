@@ -16,7 +16,7 @@ import {
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
-import { Tooltip } from '@/components/ui/Tooltip'
+import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 
 type ContactList = {

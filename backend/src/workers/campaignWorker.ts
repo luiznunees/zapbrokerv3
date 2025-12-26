@@ -8,6 +8,24 @@ import path from 'path';
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay, sequentialMode, blockDelay } = job.data;
 
+    // 0. CHECK PAUSE STATUS
+    const { data: campaignData, error: campaignError } = await supabase
+        .from('campaigns')
+        .select('status')
+        .eq('id', campaignId)
+        .single();
+
+    if (campaignData?.status === 'PAUSED') {
+        console.log(`[CampaignWorker] Campaign ${campaignId} is PAUSED. Aborting job ${job.id} and requeuing later.`);
+        // Revert message status to PENDING so it gets picked up again when resumed
+        await supabase
+            .from('campaign_messages')
+            .update({ status: 'PENDING' })
+            .eq('id', job.data.id); // Use the message ID passed in job
+
+        return; // Exit worker
+    }
+
     console.log(`[CampaignWorker] Processing job ${job.id} for campaign ${campaignId}, contact ${contactId}`);
 
     // Fetch contact details
@@ -27,9 +45,13 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         phone = '55' + phone; // Add Brazil DDI if missing
     }
 
-    // Delay handling (if needed per job, though BullMQ has delay option)
-    if (delay) {
-        await new Promise(resolve => setTimeout(resolve, delay * 1000));
+    // Delay handling - Force Number conversion and logging
+    const delaySeconds = Number(delay);
+    if (!isNaN(delaySeconds) && delaySeconds > 0) {
+        console.log(`[CampaignWorker] Waiting ${delaySeconds}s before sending to ${phone}...`);
+        await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+    } else {
+        console.warn(`[CampaignWorker] Invalid or zero delay: ${delay} (parsed: ${delaySeconds}). Skipping wait.`);
     }
 
     // Send Message

@@ -253,3 +253,49 @@ export const getCampaignDetails = async (userId: string, campaignId: string) => 
         messages: messages || []
     };
 };
+export const pauseCampaign = async (userId: string, campaignId: string) => {
+    // Check ownership
+    const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('id, status')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
+
+    if (!campaign) throw new Error('Campaign not found or access denied');
+
+    // Update status
+    const { data, error } = await supabase
+        .from('campaigns')
+        .update({ status: 'PAUSED' })
+        .eq('id', campaignId)
+        .select()
+        .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+};
+
+export const resumeCampaign = async (userId: string, campaignId: string) => {
+    // Check ownership
+    const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('id, status')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
+
+    if (!campaign) throw new Error('Campaign not found or access denied');
+
+    // Update status -> PENDING will be picked up by processor
+    // Or RUNNING if you prefer, but PENDING is safer for the processor logic
+    const { data, error } = await supabase
+        .from('campaigns')
+        .update({ status: 'PENDING' })
+        .eq('id', campaignId)
+        .select()
+        .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+};

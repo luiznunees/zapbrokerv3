@@ -16,6 +16,8 @@ import { upload } from '../middlewares/uploadMiddleware';
 router.post('/', upload.single('media'), checkQuota, campaignController.create);
 router.get('/', campaignController.list);
 router.get('/:id', campaignController.getDetails);
+router.post('/:id/pause', campaignController.pause);
+router.post('/:id/resume', campaignController.resume);
 router.get('/:campaignId/kanban', campaignController.getKanban);
 router.put('/messages/:messageId/status', campaignController.updateLeadStatus);
 
