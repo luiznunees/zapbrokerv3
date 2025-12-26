@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
-    const { campaignId, contactId, message, instanceId, mediaType, mediaUrl, delay } = job.data;
+    const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay } = job.data;
 
     console.log(`[CampaignWorker] Processing job ${job.id} for campaign ${campaignId}, contact ${contactId}`);
 
@@ -57,8 +57,16 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         }
     }
 
+    // 🎲 RANDOM MESSAGE VARIATION SELECTION
+    // Select a random variation from the array
+    const variations = Array.isArray(messageVariations) ? messageVariations : [messageVariations];
+    const randomIndex = Math.floor(Math.random() * variations.length);
+    const selectedMessage = variations[randomIndex];
+
+    console.log(`[CampaignWorker] Selected variation ${randomIndex + 1}/${variations.length} for ${contactName}`);
+
     // Replace variables in message
-    let finalMessage = message;
+    let finalMessage = selectedMessage;
     if (finalMessage) {
         finalMessage = finalMessage.replace(/{nome}/g, contactName);
     }

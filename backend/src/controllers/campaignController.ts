@@ -13,7 +13,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
         // Zod Validation
         const validatedData = createCampaignSchema.parse(req.body);
-        const { name, message, contactListId, instanceId, delaySeconds, batchSize, batchDelaySeconds, mediaType } = validatedData;
+        const { name, messageVariations, contactListId, instanceId, delaySeconds, batchSize, batchDelaySeconds, mediaType } = validatedData;
         const scheduledAt = req.body.scheduledAt;
 
         let mediaUrl = undefined;
@@ -26,7 +26,7 @@ export const create = async (req: AuthRequest, res: Response) => {
         const result = await campaignService.createCampaign(
             userId,
             name,
-            message,
+            messageVariations,
             contactListId,
             instanceId,
             scheduledAt,

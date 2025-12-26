@@ -27,6 +27,7 @@ const processQueue = async () => {
                 campaigns ( 
                     id, 
                     message, 
+                    message_variations,
                     instance_id, 
                     delay_seconds, 
                     batch_size, 
@@ -71,11 +72,14 @@ const processQueue = async () => {
             // Calculate Delay
             const delay = campaign.delay_seconds || 5;
 
+            // Use message_variations if available, otherwise fall back to message
+            const messageVariations = campaign.message_variations || [campaign.message];
+
             await campaignQueue.add('dispatch', {
                 id: msg.id, // Important: Pass the campaign_message ID
                 campaignId: campaign.id,
                 contactId: msg.contact_id,
-                message: campaign.message,
+                messageVariations: messageVariations, // Pass all variations
                 instanceId: campaign.instance_id,
                 mediaType: campaign.media_type,
                 mediaUrl: campaign.media_url,
