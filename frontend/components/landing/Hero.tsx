@@ -113,31 +113,6 @@ export function Hero() {
                             />
                             {/* Overlay for better text contrast if needed */}
                             <div className="absolute inset-0 bg-gradient-to-tr from-brand-purple-900/10 to-transparent pointer-events-none" />
-
-                            {/* Floating Elements */}
-                            <div className="absolute top-4 left-4 p-1.5 bg-background/90 backdrop-blur border border-border rounded-md shadow-md shadow-brand-purple-500/10 animate-float-slow hidden md:block">
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                                        <CheckCircle2 size={10} />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-[8px]">Campanha Enviada</p>
-                                        <p className="text-[6px] text-muted-foreground">Mensagens entregues</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="absolute bottom-4 right-4 p-1.5 bg-background/90 backdrop-blur border border-border rounded-md shadow-md shadow-brand-purple-500/10 animate-float-slow hidden md:block" style={{ animationDelay: '1s' }}>
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                                        <ArrowRight size={10} />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-[8px]">Lead Qualificado</p>
-                                        <p className="text-[6px] text-muted-foreground">Interesse: Compra</p>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
