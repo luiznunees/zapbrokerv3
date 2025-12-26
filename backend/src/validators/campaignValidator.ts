@@ -15,7 +15,7 @@ export const createCampaignSchema = z.object({
             throw new Error('messageVariations inválido: ' + (e as Error).message);
         }
     }),
-    sequentialMode: z.string().transform(str => str === 'true').optional().default('false'),
+    sequentialMode: z.string().transform(str => str === 'true').optional().default(false),
     messageBlocks: z.string().transform((str) => {
         if (!str) return null;
         try {
