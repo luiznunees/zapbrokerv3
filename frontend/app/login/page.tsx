@@ -99,6 +99,64 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-4">
+                        {/* Email/Password Login - Only in Development */}
+                        {process.env.NODE_ENV === 'development' && (
+                            <>
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div>
+                                        <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                                            Email
+                                        </label>
+                                        <input
+                                            id="email"
+                                            name="email"
+                                            type="email"
+                                            required
+                                            className="w-full px-4 py-3 rounded-xl border-2 border-border bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                            placeholder="seu@email.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+                                            Senha
+                                        </label>
+                                        <input
+                                            id="password"
+                                            name="password"
+                                            type="password"
+                                            required
+                                            className="w-full px-4 py-3 rounded-xl border-2 border-border bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                            placeholder="••••••••"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="w-full px-4 py-3.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Entrando...
+                                            </>
+                                        ) : (
+                                            'Entrar com Email'
+                                        )}
+                                    </button>
+                                </form>
+
+                                <div className="relative">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-border"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-xs uppercase">
+                                        <span className="bg-background px-2 text-muted-foreground">Ou</span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Google Login - Always visible */}
                         <button
                             onClick={handleGoogleLogin}
                             className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border-2 border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
