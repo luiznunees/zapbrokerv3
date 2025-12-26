@@ -16,6 +16,7 @@ import {
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 type ContactList = {
     id: string
@@ -401,14 +402,16 @@ export default function LeadsPage() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div className="flex items-center gap-4">
                         {view === 'contacts' && (
-                            <motion.button
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                onClick={() => setView('folders')}
-                                className="p-3 hover:bg-accent rounded-2xl transition-colors border border-border/50 shadow-sm"
-                            >
-                                <AltArrowLeft className="w-6 h-6" />
-                            </motion.button>
+                            <Tooltip content="Voltar para lista de pastas">
+                                <motion.button
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    onClick={() => setView('folders')}
+                                    className="p-3 hover:bg-accent rounded-2xl transition-colors border border-border/50 shadow-sm"
+                                >
+                                    <AltArrowLeft className="w-6 h-6" />
+                                </motion.button>
+                            </Tooltip>
                         )}
                         <div>
                             <h1 className="text-3xl font-black tracking-tight text-foreground">
@@ -425,46 +428,56 @@ export default function LeadsPage() {
                     <div className="flex items-center gap-4 w-full max-w-md">
                         {view === 'folders' && (
                             <>
-                                <button
-                                    onClick={() => setIsImporting(true)}
-                                    className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border"
-                                >
-                                    <MagicStick className="w-5 h-5 text-primary" />
-                                    Importar PDF
-                                </button>
-                                <button
-                                    onClick={() => setIsCreatingFolder(true)}
-                                    className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
-                                >
-                                    <FolderFavouriteStar className="w-5 h-5" />
-                                    Nova Pasta
-                                </button>
+                                <Tooltip content="Importar contatos de PDF, CSV ou Excel">
+                                    <button
+                                        onClick={() => setIsImporting(true)}
+                                        className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border"
+                                    >
+                                        <MagicStick className="w-5 h-5 text-primary" />
+                                        Importar PDF
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Criar uma nova pasta para organizar leads">
+                                    <button
+                                        onClick={() => setIsCreatingFolder(true)}
+                                        className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
+                                    >
+                                        <FolderFavouriteStar className="w-5 h-5" />
+                                        Nova Pasta
+                                    </button>
+                                </Tooltip>
                             </>
                         )}
                         {view === 'contacts' && (
                             <>
-                                <button
-                                    onClick={handleExportCSV}
-                                    disabled={contacts.length === 0}
-                                    className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border disabled:opacity-50"
-                                >
-                                    <ShareCircle className="w-5 h-5 text-primary" />
-                                    Exportar CSV
-                                </button>
-                                <button
-                                    onClick={() => setIsImporting(true)}
-                                    className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border"
-                                >
-                                    <MagicStick className="w-5 h-5 text-primary" />
-                                    Importar Lista
-                                </button>
-                                <button
-                                    onClick={() => setIsCreatingContact(true)}
-                                    className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
-                                >
-                                    <UserCircle className="w-5 h-5" />
-                                    Novo Contato
-                                </button>
+                                <Tooltip content="Baixar todos os contatos desta pasta em CSV">
+                                    <button
+                                        onClick={handleExportCSV}
+                                        disabled={contacts.length === 0}
+                                        className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border disabled:opacity-50"
+                                    >
+                                        <ShareCircle className="w-5 h-5 text-primary" />
+                                        Exportar CSV
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Importar contatos de PDF, CSV ou Excel">
+                                    <button
+                                        onClick={() => setIsImporting(true)}
+                                        className="px-6 py-3 bg-accent text-accent-foreground font-bold rounded-2xl hover:bg-accent/80 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap border border-border"
+                                    >
+                                        <MagicStick className="w-5 h-5 text-primary" />
+                                        Importar Lista
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Adicionar contato manualmente">
+                                    <button
+                                        onClick={() => setIsCreatingContact(true)}
+                                        className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
+                                    >
+                                        <UserCircle className="w-5 h-5" />
+                                        Novo Contato
+                                    </button>
+                                </Tooltip>
                             </>
                         )}
                         <div className="relative w-full group">

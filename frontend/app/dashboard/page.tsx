@@ -7,7 +7,7 @@ import { QRCodeModal } from '@/components/dashboard/QRCodeModal';
 import { QuotaWidget } from '@/components/dashboard/QuotaWidget';
 import { WhatsAppStatusWidget } from '@/components/dashboard/WhatsAppStatusWidget';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
-
+import { Tooltip } from '@/components/ui/Tooltip';
 import { InputModal } from '@/components/modals/InputModal';
 import Link from 'next/link';
 
@@ -198,12 +198,16 @@ export default function DashboardPage() {
                         Gerencie seus leads, campanhas e automações em um único lugar. O ZapBroker evoluiu para ser o seu centro de comando.
                     </p>
                     <div className="flex gap-3 mt-6">
-                        <Link href="/dashboard/campaigns/" className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
-                            <Plus className="w-5 h-5" /> Nova Campanha
-                        </Link>
-                        <button className="px-6 py-2.5 bg-accent text-accent-foreground font-bold rounded-xl border border-border hover:bg-accent/80 transition-all">
-                            Ajuda
-                        </button>
+                        <Tooltip content="Crie uma nova campanha de WhatsApp para seus leads">
+                            <Link href="/dashboard/campaigns/" className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
+                                <Plus className="w-5 h-5" /> Nova Campanha
+                            </Link>
+                        </Tooltip>
+                        <Tooltip content="Acesse tutoriais e documentação do sistema">
+                            <button className="px-6 py-2.5 bg-accent text-accent-foreground font-bold rounded-xl border border-border hover:bg-accent/80 transition-all">
+                                Ajuda
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>
             </header>
@@ -230,34 +234,42 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Leads Card */}
-                <div data-tour="stats-leads" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
-                    <div className="flex justify-between items-start z-10">
-                        <div className="bg-emerald-500/10 p-3 rounded-xl">
-                            <Users className="w-6 h-6 text-emerald-500" />
+                <Tooltip content="Quantidade total de contatos importados no sistema">
+                    <div data-tour="stats-leads" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
+                        <div className="flex justify-between items-start z-10">
+                            <div className="bg-emerald-500/10 p-3 rounded-xl">
+                                <Users className="w-6 h-6 text-emerald-500" />
+                            </div>
+                            <Tooltip content="Crescimento em relação ao período anterior" side="left">
+                                <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">+100%</span>
+                            </Tooltip>
                         </div>
-                        <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">+100%</span>
+                        <div className="z-10">
+                            <h3 className="text-3xl font-bold text-foreground">{stats.leads}</h3>
+                            <p className="text-sm text-muted-foreground font-medium">Total de Leads</p>
+                        </div>
+                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
                     </div>
-                    <div className="z-10">
-                        <h3 className="text-3xl font-bold text-foreground">{stats.leads}</h3>
-                        <p className="text-sm text-muted-foreground font-medium">Total de Leads</p>
-                    </div>
-                    <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
-                </div>
+                </Tooltip>
 
                 {/* Campaigns Card */}
-                <div data-tour="stats-campaigns" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
-                    <div className="flex justify-between items-start z-10">
-                        <div className="bg-purple-500/10 p-3 rounded-xl">
-                            <Send className="w-6 h-6 text-purple-500" />
+                <Tooltip content="Número de campanhas criadas e enviadas">
+                    <div data-tour="stats-campaigns" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
+                        <div className="flex justify-between items-start z-10">
+                            <div className="bg-purple-500/10 p-3 rounded-xl">
+                                <Send className="w-6 h-6 text-purple-500" />
+                            </div>
+                            <Tooltip content="Respostas recebidas hoje" side="left">
+                                <span className="text-xs font-bold text-purple-500 bg-purple-500/10 px-2 py-1 rounded-full">+{stats.responses} hoje</span>
+                            </Tooltip>
                         </div>
-                        <span className="text-xs font-bold text-purple-500 bg-purple-500/10 px-2 py-1 rounded-full">+{stats.responses} hoje</span>
+                        <div className="z-10">
+                            <h3 className="text-3xl font-bold text-foreground">{stats.campaigns}</h3>
+                            <p className="text-sm text-muted-foreground font-medium">Campanhas Enviadas</p>
+                        </div>
+                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors" />
                     </div>
-                    <div className="z-10">
-                        <h3 className="text-3xl font-bold text-foreground">{stats.campaigns}</h3>
-                        <p className="text-sm text-muted-foreground font-medium">Campanhas Enviadas</p>
-                    </div>
-                    <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors" />
-                </div>
+                </Tooltip>
             </div>
 
             {/* Recent Section - "New Drops" Style */}
