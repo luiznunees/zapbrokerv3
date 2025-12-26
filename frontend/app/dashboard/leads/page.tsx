@@ -668,11 +668,10 @@ export default function LeadsPage() {
                 </motion.div>
             )}
 
+
             <LeadImporterModal
                 isOpen={isImporting}
                 onClose={() => setIsImporting(false)}
-                targetListId={selectedList?.id}
-                targetListName={selectedList?.name}
                 onSuccess={() => {
                     fetchLists() // Always refresh lists
                     if (selectedList) {
