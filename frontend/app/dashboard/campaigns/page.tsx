@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import { ArrowRight, ArrowLeft, CheckCircle2, Rocket, Upload, FileText, Users, Settings2, Folder, Plus, X, Shuffle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HelpBadge } from '@/components/ui/HelpBadge'
+import { AntiBanWarningModal } from '@/components/modals/AntiBanWarningModal'
 
 export default function NewCampaignPage() {
     const [currentStep, setCurrentStep] = useState(1);
@@ -27,6 +28,8 @@ export default function NewCampaignPage() {
     const [instances, setInstances] = useState<any[]>([]);
     const [contactLists, setContactLists] = useState<any[]>([]);
     const [selectedInstanceId, setSelectedInstanceId] = useState('');
+    const [showAntiBanWarning, setShowAntiBanWarning] = useState(false);
+    const [pendingSubmit, setPendingSubmit] = useState(false);
 
     useEffect(() => {
         // Fetch Instances
@@ -49,9 +52,35 @@ export default function NewCampaignPage() {
     const nextStep = () => setCurrentStep(prev => prev + 1);
     const prevStep = () => setCurrentStep(prev => prev - 1);
 
-    async function handleSubmit() {
+    // Check if settings are risky
+    const checkRiskySettings = () => {
+        const { delaySeconds, batchSize, batchDelaySeconds } = formData;
+
+        // Configurações arriscadas
+        if (delaySeconds < 5 || batchSize > 50 || batchDelaySeconds < 60) {
+            return true;
+        }
+
+        return false;
+    };
+
+    // Get total contacts count
+    const getTotalContacts = () => {
+        const selectedList = contactLists.find(list => list.id === formData.contactListId);
+        return selectedList?.contact_count || 0;
+    };
+
+    async function handleSubmit(skipWarning = false) {
+        // Check for risky settings first
+        if (!skipWarning && checkRiskySettings()) {
+            setPendingSubmit(true);
+            setShowAntiBanWarning(true);
+            return;
+        }
+
         setLoading(true);
         setStatus(null);
+        setPendingSubmit(false);
 
         try {
             // 1. Get Selected Instance
@@ -429,6 +458,23 @@ export default function NewCampaignPage() {
                     )}
                 </div>
             </div>
+
+            {/* Anti-Ban Warning Modal */}
+            <AntiBanWarningModal
+                isOpen={showAntiBanWarning}
+                onClose={() => {
+                    setShowAntiBanWarning(false);
+                    setPendingSubmit(false);
+                }}
+                onConfirm={() => {
+                    setShowAntiBanWarning(false);
+                    handleSubmit(true); // Skip warning check
+                }}
+                delaySeconds={formData.delaySeconds}
+                batchSize={formData.batchSize}
+                batchDelaySeconds={formData.batchDelaySeconds}
+                totalContacts={getTotalContacts()}
+            />
         </div>
     )
 }
