@@ -25,7 +25,6 @@ export default function NewCampaignPage() {
     });
     const [messageVariations, setMessageVariations] = useState<string[]>(['']);
     const [sequentialMode, setSequentialMode] = useState(false);
-    const [messageBlocks, setMessageBlocks] = useState<string[]>(['']);
     const [blockDelay, setBlockDelay] = useState(5);
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [instances, setInstances] = useState<any[]>([]);
@@ -108,24 +107,12 @@ export default function NewCampaignPage() {
                 throw new Error("Adicione pelo menos uma variação de mensagem.");
             }
 
-            // 3.5. Validate Sequential Blocks if enabled
-            if (sequentialMode) {
-                const validBlocks = messageBlocks.filter(b => b.trim().length > 0);
-                if (validBlocks.length === 0) {
-                    throw new Error("Adicione pelo menos um bloco de mensagem no modo sequencial.");
-                }
-            }
-
             // 4. Create Campaign
             const campaignData = new FormData();
             campaignData.append('name', formData.name);
             campaignData.append('messageVariations', JSON.stringify(validVariations));
             campaignData.append('sequentialMode', sequentialMode.toString());
-            if (sequentialMode) {
-                const validBlocks = messageBlocks.filter(b => b.trim().length > 0);
-                campaignData.append('messageBlocks', JSON.stringify(validBlocks));
-                campaignData.append('blockDelay', blockDelay.toString());
-            }
+            campaignData.append('blockDelay', blockDelay.toString());
             campaignData.append('contactListId', formData.contactListId);
             campaignData.append('instanceId', connectedInstance.id);
             campaignData.append('delaySeconds', formData.delaySeconds.toString());
@@ -389,21 +376,21 @@ export default function NewCampaignPage() {
                                 </div>
                             </div>
 
-                            {/* Sequential Message Blocks */}
+                            {/* Sequential Message Mode - Intelligent Auto-Split */}
                             <div className="border-t border-border pt-6 space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <div>
-                                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                                    <div className="flex-1">
+                                        <label className="text-sm font-medium text-foreground flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={sequentialMode}
                                                 onChange={(e) => setSequentialMode(e.target.checked)}
                                                 className="w-4 h-4 rounded border-border"
                                             />
-                                            Modo Sequencial (Mensagens Picotadas)
+                                            Modo Sequencial (Quebra Automática)
                                         </label>
                                         <p className="text-xs text-muted-foreground mt-1 ml-6">
-                                            📨 Envie a mensagem em blocos separados com delay entre eles (mais natural e humano)
+                                            📨 O sistema quebrará automaticamente suas mensagens em blocos naturais (mais humano e evita bloqueio)
                                         </p>
                                     </div>
                                 </div>
@@ -428,59 +415,30 @@ export default function NewCampaignPage() {
                                             </div>
                                         </div>
 
-                                        {messageBlocks.map((block, index) => (
-                                            <div key={index} className="relative border border-border rounded-xl p-4 bg-background/50">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-bold text-muted-foreground">Bloco {index + 1}</span>
-                                                        {index > 0 && (
-                                                            <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                                                                ⏱️ +{blockDelay}s após bloco {index}
-                                                            </span>
-                                                        )}
+                                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
+                                            <p className="font-medium text-blue-700 dark:text-blue-400 mb-2 text-sm">✨ Como funciona:</p>
+                                            <ul className="text-xs text-muted-foreground space-y-1.5 ml-4">
+                                                <li>• O sistema detecta parágrafos nas suas mensagens</li>
+                                                <li>• Quebra automaticamente em blocos naturais</li>
+                                                <li>• Envia cada bloco com {blockDelay}s de intervalo</li>
+                                                <li>• Simula uma conversa real no WhatsApp</li>
+                                            </ul>
+                                            <div className="mt-3 p-3 bg-background/50 rounded border border-border">
+                                                <p className="text-[10px] font-bold text-muted-foreground mb-1">Exemplo de quebra:</p>
+                                                <div className="space-y-2">
+                                                    <div className="text-[10px] text-foreground/80">
+                                                        <span className="font-bold text-blue-600">Bloco 1:</span> "Olá {'{nome}'}! Tudo bem?"
                                                     </div>
-                                                    {messageBlocks.length > 1 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const newBlocks = messageBlocks.filter((_, i) => i !== index)
-                                                                setMessageBlocks(newBlocks)
-                                                            }}
-                                                            className="p-1 hover:bg-red-500/10 text-red-500 rounded transition-colors"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    )}
+                                                    <div className="text-[10px] text-muted-foreground">⏱️ +{blockDelay}s</div>
+                                                    <div className="text-[10px] text-foreground/80">
+                                                        <span className="font-bold text-blue-600">Bloco 2:</span> "Vi que você procura imóvel..."
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground">⏱️ +{blockDelay}s</div>
+                                                    <div className="text-[10px] text-foreground/80">
+                                                        <span className="font-bold text-blue-600">Bloco 3:</span> "Tenho opções incríveis!"
+                                                    </div>
                                                 </div>
-                                                <textarea
-                                                    value={block}
-                                                    onChange={(e) => {
-                                                        const newBlocks = [...messageBlocks]
-                                                        newBlocks[index] = e.target.value
-                                                        setMessageBlocks(newBlocks)
-                                                    }}
-                                                    rows={3}
-                                                    placeholder={index === 0 ? "Olá {nome}! Tudo bem?" : "Continue a mensagem..."}
-                                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary outline-none resize-none text-sm"
-                                                ></textarea>
-                                                <p className="text-xs text-muted-foreground text-right mt-1">{block.length} caracteres</p>
                                             </div>
-                                        ))}
-
-                                        {messageBlocks.length < 5 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setMessageBlocks([...messageBlocks, ''])}
-                                                className="w-full py-3 border-2 border-dashed border-border rounded-xl hover:border-blue-500 hover:bg-blue-500/5 transition-all flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-blue-600"
-                                            >
-                                                <Plus className="w-4 h-4" />
-                                                Adicionar Bloco
-                                            </button>
-                                        )}
-
-                                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-xs text-muted-foreground">
-                                            <p className="font-medium text-blue-700 dark:text-blue-400 mb-1">✨ Como funciona:</p>
-                                            <p>O sistema enviará cada bloco separadamente com {blockDelay}s de intervalo, simulando uma conversa natural. Perfeito para mensagens longas!</p>
                                         </div>
                                     </div>
                                 )}

@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
-    const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay } = job.data;
+    const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay, sequentialMode, blockDelay } = job.data;
 
     console.log(`[CampaignWorker] Processing job ${job.id} for campaign ${campaignId}, contact ${contactId}`);
 
@@ -68,11 +68,60 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     // Replace variables in message
     let finalMessage = selectedMessage;
     if (finalMessage) {
-        finalMessage = finalMessage.replace(/{nome}/g, contactName);
+        finalMessage = finalMessage.replace(/{nome}/gi, contactName);
     }
 
-    let result: any;
-    if (mediaType === 'text' || !mediaUrl) {
+    // 📨 SEQUENTIAL MODE: Auto-split message into intelligent blocks
+    if (sequentialMode && finalMessage) {
+        console.log(`[CampaignWorker] Sequential mode enabled. Auto-splitting message...`);
+
+        // Intelligent message splitting
+        const blocks: string[] = [];
+
+        // First, try to split by double line breaks (paragraphs)
+        const paragraphs = finalMessage.split(/\n\n+/).filter(p => p.trim().length > 0);
+
+        if (paragraphs.length > 1) {
+            // Use paragraphs as blocks
+            blocks.push(...paragraphs.map(p => p.trim()));
+        } else {
+            // If no paragraphs, split by single line breaks
+            const lines = finalMessage.split(/\n/).filter(l => l.trim().length > 0);
+
+            if (lines.length > 1) {
+                blocks.push(...lines.map(l => l.trim()));
+            } else {
+                // If still one block, check if message is too long (>300 chars)
+                if (finalMessage.length > 300) {
+                    // Split by sentences
+                    const sentences = finalMessage.match(/[^.!?]+[.!?]+/g) || [finalMessage];
+                    blocks.push(...sentences.map(s => s.trim()));
+                } else {
+                    // Message is short, send as single block
+                    blocks.push(finalMessage);
+                }
+            }
+        }
+
+        console.log(`[CampaignWorker] Message split into ${blocks.length} blocks`);
+
+        // Send each block with delay
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i];
+            console.log(`[CampaignWorker] Sending block ${i + 1}/${blocks.length} to ${contactName}`);
+
+            await evolutionService.sendText(targetInstanceName, phone, block);
+
+            // Wait before sending next block (except for last block)
+            if (i < blocks.length - 1) {
+                console.log(`[CampaignWorker] Waiting ${blockDelay}s before next block...`);
+                await new Promise(resolve => setTimeout(resolve, blockDelay * 1000));
+            }
+        }
+
+        console.log(`[CampaignWorker] All ${blocks.length} blocks sent successfully to ${contactName}`);
+    } else {
+        // 📧 STANDARD MODE: Send single message
         console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
         result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
         console.log(`[CampaignWorker] TEXT Sent successfully`);
