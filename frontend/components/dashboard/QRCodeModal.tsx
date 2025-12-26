@@ -99,6 +99,30 @@ export function QRCodeModal({ isOpen, onClose, qrCode, isLoading, onRetry }: QRC
                         )}
                     </div>
 
+                    {/* Chip Warning Disclaimer */}
+                    <div className="px-6 pb-4">
+                        <div className="bg-yellow-500/10 border-2 border-yellow-500/50 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center mt-0.5">
+                                    <span className="text-white text-sm font-bold">!</span>
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="font-bold text-sm text-yellow-700 dark:text-yellow-400 mb-1">
+                                        ⚠️ Aviso Importante sobre o Chip
+                                    </p>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        <strong>Use apenas chips aquecidos ou já utilizados.</strong> Chips novos têm maior chance de bloqueio pelo WhatsApp.
+                                        Não nos responsabilizamos por bloqueios em chips novos ou não aquecidos.
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                                        💡 <strong>Dica:</strong> Antes de conectar, use o chip normalmente por alguns dias,
+                                        enviando mensagens para contatos reais e recebendo respostas.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="p-4 bg-accent/30 text-center border-t border-border">
                         <p className="text-xs text-muted-foreground">
                             A conexão é criptografada e segura.
