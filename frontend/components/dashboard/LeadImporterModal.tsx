@@ -45,11 +45,18 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, ta
                 const response = await api.contacts.importPdf(formData)
                 result = { listName: response.list.name, count: response.count }
             } else {
-                // CSV Import
+                // CSV or Excel Import
                 if (!targetListId) {
-                    throw new Error("Selecione uma pasta para importar o CSV.")
+                    throw new Error("Selecione uma pasta para importar o CSV/Excel.")
                 }
-                const response = await api.contacts.import(targetListId, formData)
+
+                // Check if file is Excel
+                const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+                const response = isExcel
+                    ? await api.contacts.importExcel(targetListId, formData)
+                    : await api.contacts.import(targetListId, formData)
+
                 result = { listName: targetListName, count: response.count }
             }
 
@@ -134,34 +141,60 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess, targetListId, ta
 
                     {/* Disclaimer / Template */}
                     {mode === 'pdf' ? (
-                        <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex gap-3 items-start">
-                            <InfoCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400">Importante</h4>
-                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                    A extração automática não é 100% precisa. Ela depende da formatação do PDF original.
-                                    Sempre revise os dados na pasta criada antes de iniciar campanhas.
-                                </p>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-center justify-between">
-                            <div className="flex gap-3 items-start">
+                        <div className="space-y-4 mb-6">
+                            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400">Use nosso modelo</h4>
+                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400">Para que serve?</h4>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                        Para garantir que seus contatos sejam importados corretamente, use nossa planilha modelo.
+                                        Ideal para <b>listagens de condomínios</b>, <b>documentos de proprietários</b>,
+                                        relatórios de imobiliárias ou qualquer PDF com contatos.
+                                        O sistema extrairá automaticamente nomes e telefones do documento.
                                     </p>
                                 </div>
                             </div>
-                            <button
-                                onClick={downloadTemplate}
-                                className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap"
-                            >
-                                <FileDownload className="w-4 h-4" />
-                                Baixar Modelo
-                            </button>
+                            <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex gap-3 items-start">
+                                <InfoCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400">Importante</h4>
+                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                        A extração automática não é 100% precisa. Ela depende da formatação do PDF original.
+                                        Sempre revise os dados na pasta criada antes de iniciar campanhas.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 mb-6">
+                            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
+                                <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 mb-1">Para que serve?</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                                        Ideal para <b>planilhas de contatos</b>, listas exportadas de outros sistemas (CRM, Excel, Google Sheets)
+                                        ou qualquer arquivo CSV/Excel com nomes e telefones organizados.
+                                    </p>
+                                    <button
+                                        onClick={downloadTemplate}
+                                        className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                                    >
+                                        <FileDownload className="w-4 h-4" />
+                                        Baixar Modelo CSV
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex gap-3 items-start">
+                                <InfoCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-green-600 dark:text-green-400">Como preparar seu arquivo</h4>
+                                    <ul className="text-xs text-muted-foreground mt-2 leading-relaxed space-y-1 list-disc list-inside">
+                                        <li>Use as colunas <b>"nome"</b> e <b>"telefone"</b></li>
+                                        <li>Telefones devem estar no formato: <b>5511999998888</b> (com DDI e DDD)</li>
+                                        <li>Aceita arquivos <b>.csv</b> e <b>.xlsx</b> (Excel)</li>
+                                        <li>Baixe nosso modelo para garantir o formato correto</li>
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     )}
 

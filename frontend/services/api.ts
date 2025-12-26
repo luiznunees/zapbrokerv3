@@ -92,6 +92,10 @@ export const api = {
             method: 'POST',
             body: formData
         }),
+        importExcel: (listId: string, formData: FormData) => fetchAPI(`/contact-lists/${listId}/import-excel`, {
+            method: 'POST',
+            body: formData
+        }),
         // CRUD for individual contacts
         getAll: (filters?: { listId?: string }) => {
             const params = new URLSearchParams();

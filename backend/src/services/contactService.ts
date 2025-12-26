@@ -186,6 +186,60 @@ export const importContactsFromCsv = async (userId: string, listId: string, file
     });
 };
 
+export const importContactsFromExcel = async (userId: string, listId: string, filePath: string) => {
+    const XLSX = require('xlsx');
+
+    // Verify list ownership
+    const { data: list } = await supabase
+        .from('contact_lists')
+        .select('id')
+        .eq('id', listId)
+        .eq('user_id', userId)
+        .single();
+
+    if (!list) throw new Error('Contact list not found or access denied');
+
+    try {
+        // Read Excel file
+        const workbook = XLSX.readFile(filePath);
+        const sheetName = workbook.SheetNames[0]; // Get first sheet
+        const worksheet = workbook.Sheets[sheetName];
+
+        // Convert to JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Process contacts
+        const contacts = jsonData.map((row: any) => {
+            // Find name and phone regardless of case or slight variations
+            const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('name') || k.toLowerCase().includes('nome'));
+            const phoneKey = Object.keys(row).find(k => k.toLowerCase().includes('phone') || k.toLowerCase().includes('tel') || k.toLowerCase().includes('cel'));
+
+            return {
+                list_id: listId,
+                name: (nameKey ? row[nameKey] : row.name || row.Name || 'Sem Nome').toString().trim(),
+                phone: (phoneKey ? row[phoneKey] : row.phone || row.Phone || '').toString().replace(/\D/g, '').trim()
+            };
+        }).filter((c: any) => c.phone); // Filter out empty phones
+
+        if (contacts.length > 0) {
+            const { error } = await supabase
+                .from('contacts')
+                .insert(contacts);
+
+            if (error) throw new Error(error.message);
+        }
+
+        // Clean up file
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        return { count: contacts.length };
+    } catch (error: any) {
+        // Clean up file on error
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        throw new Error('Falha ao processar arquivo Excel: ' + error.message);
+    }
+};
+
 export const getChats = async (userId: string) => {
     // Fetch contacts that have interactions (status != 'New' or last_interaction_at is not null)
     // We might want to filter by user_id if contacts belong to user (via list)
