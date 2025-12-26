@@ -8,6 +8,7 @@ import { QuotaWidget } from '@/components/dashboard/QuotaWidget';
 import { WhatsAppStatusWidget } from '@/components/dashboard/WhatsAppStatusWidget';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { HelpBadge } from '@/components/ui/HelpBadge';
 import { InputModal } from '@/components/modals/InputModal';
 import Link from 'next/link';
 
@@ -190,9 +191,10 @@ export default function DashboardPage() {
             {/* Header Section */}
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-foreground tracking-tight leading-tight">
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-foreground tracking-tight leading-tight flex items-center gap-3">
                         Seu Hub de<br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">Automação Imobiliária.</span>
+                        <HelpBadge />
                     </h1>
                     <p className="text-muted-foreground mt-4 text-lg max-w-xl leading-relaxed">
                         Gerencie seus leads, campanhas e automações em um único lugar. O ZapBroker evoluiu para ser o seu centro de comando.

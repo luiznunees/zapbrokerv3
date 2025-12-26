@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { api } from '@/services/api'
 import { ArrowRight, ArrowLeft, CheckCircle2, Rocket, Upload, FileText, Users, Settings2, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { HelpBadge } from '@/components/ui/HelpBadge'
 
 export default function NewCampaignPage() {
     const [currentStep, setCurrentStep] = useState(1);
@@ -123,7 +124,10 @@ export default function NewCampaignPage() {
     return (
         <div className="max-w-4xl mx-auto pb-20">
             <div className="mb-8 text-center">
-                <h1 className="text-3xl font-bold text-foreground mb-2">Nova Campanha</h1>
+                <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center justify-center gap-3">
+                    Nova Campanha
+                    <HelpBadge size="sm" />
+                </h1>
                 <p className="text-muted-foreground">Crie seu disparo em massa em 3 passos simples.</p>
             </div>
 

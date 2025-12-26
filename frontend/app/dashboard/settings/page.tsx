@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { PixQRCodeModal } from '@/components/payment/PixQRCodeModal'
 import { useSearchParams } from 'next/navigation'
+import { HelpBadge } from '@/components/ui/HelpBadge'
 
 const PLANS = [
     {
@@ -248,7 +249,10 @@ export default function SettingsPage() {
 
     return (
         <div className="p-6 max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold text-foreground mb-6">Configurações</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
+                Configurações
+                <HelpBadge size="sm" />
+            </h1>
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-2 mb-8 border-b border-border overflow-x-auto">

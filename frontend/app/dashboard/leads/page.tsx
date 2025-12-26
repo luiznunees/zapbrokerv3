@@ -17,6 +17,7 @@ import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { HelpBadge } from '@/components/ui/HelpBadge'
 
 type ContactList = {
     id: string
@@ -414,8 +415,9 @@ export default function LeadsPage() {
                             </Tooltip>
                         )}
                         <div>
-                            <h1 className="text-3xl font-black tracking-tight text-foreground">
+                            <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
                                 {view === 'folders' ? 'Minhas Pastas' : selectedList?.name}
+                                <HelpBadge size="sm" />
                             </h1>
                             <p className="text-muted-foreground font-medium">
                                 {view === 'folders'
