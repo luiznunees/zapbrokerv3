@@ -14,7 +14,8 @@ export const createCampaign = async (
     mediaType: string = 'text',
     mediaUrl?: string,
     sequentialMode: boolean = false,
-    blockDelay: number = 5
+    blockDelay: number = 5,
+    excludedContactIds: string[] = []
 ) => {
     // 0. Verify Ownership of List and Instance
     const { data: list } = await supabase
@@ -36,15 +37,38 @@ export const createCampaign = async (
     if (!instance) throw new Error('WhatsApp instance not found or access denied');
 
     // 1. Fetch Contacts Count
-    const { count, error: countError } = await supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('list_id', contactListId);
+    // If we have exclusions, we need to be careful. The "count" from DB is total.
+    // Ideally, we should fetch IDs and filter if there are exclusions, BUT for large lists that's heavy.
+    // However, since we need to fetch all contacts later anyway to create messages, the Quota Service check 
+    // at this stage is a preliminary check. 
 
-    if (countError) throw new Error(countError.message);
-    const totalContacts = count || 0;
+    // Let's refine:
+    let totalContacts = 0;
 
-    if (totalContacts === 0) throw new Error('A lista de contatos selecionada está vazia.');
+    if (excludedContactIds && excludedContactIds.length > 0) {
+        // If exclusions exist, we might as well fetch all IDs now to get accurate count
+        const { data: allIds, error: countError } = await supabase
+            .from('contacts')
+            .select('id')
+            .eq('list_id', contactListId);
+
+        if (countError) throw new Error(countError.message);
+
+        // Filter
+        const validIds = allIds.filter(c => !excludedContactIds.includes(c.id));
+        totalContacts = validIds.length;
+    } else {
+        // Fast path: Just get count
+        const { count, error: countError } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('list_id', contactListId);
+
+        if (countError) throw new Error(countError.message);
+        totalContacts = count || 0;
+    }
+
+    if (totalContacts === 0) throw new Error('A lista de contatos selecionada está vazia (ou todos os contatos foram excluídos).');
 
     // 2. Fetch User Plan for Quota
     const { data: user } = await supabase
@@ -92,7 +116,7 @@ export const createCampaign = async (
     await QuotaService.consumeQuota(userId, planId, totalContacts, campaign.id);
 
     // 6. Fetch Contacts
-    const { data: contacts, error: contactsError } = await supabase
+    const { data: allContacts, error: contactsError } = await supabase
         .from('contacts')
         .select('id, phone')
         .eq('list_id', contactListId);
@@ -100,6 +124,11 @@ export const createCampaign = async (
     if (contactsError) {
         throw new Error(contactsError.message);
     }
+
+    // Filter out excluded contacts
+    const contacts = (excludedContactIds && excludedContactIds.length > 0)
+        ? allContacts.filter(c => !excludedContactIds.includes(c.id))
+        : allContacts;
 
     // 7. Create Messages
     const messages = contacts.map(contact => ({

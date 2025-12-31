@@ -45,14 +45,16 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         phone = '55' + phone; // Add Brazil DDI if missing
     }
 
-    // Delay handling - Force Number conversion and logging
-    const delaySeconds = Number(delay);
-    if (!isNaN(delaySeconds) && delaySeconds > 0) {
-        console.log(`[CampaignWorker] Waiting ${delaySeconds}s before sending to ${phone}...`);
-        await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
-    } else {
-        console.warn(`[CampaignWorker] Invalid or zero delay: ${delay} (parsed: ${delaySeconds}). Skipping wait.`);
-    }
+    // 🕰️ ANTI-BAN: RANDOM DELAY (JITTER)
+    // Instead of fixed 5s, we vary it by +/- 30% to look human
+    const baseDelay = Number(delay) || 5;
+    // Random factor between 0.7 and 1.3
+    const jitterFactor = 0.7 + Math.random() * 0.6;
+    let finalDelay = Math.floor(baseDelay * jitterFactor);
+    if (finalDelay < 2) finalDelay = 2; // Min 2s safety
+
+    console.log(`[CampaignWorker] Anti-Ban Jitter: Base ${baseDelay}s -> Randomized ${finalDelay}s. Waiting...`);
+    await new Promise(resolve => setTimeout(resolve, finalDelay * 1000));
 
     // Send Message
     // NOTE: instanceId here is the Database ID, but Evolution needs the instance Name (evolution_id)
@@ -99,7 +101,55 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     if (sequentialMode && finalMessage) {
         console.log(`[CampaignWorker] Sequential mode enabled. Auto-splitting message...`);
 
-        // Intelligent message splitting
+        // 1. Send Media First if exists
+        // (Copied and adapted from standard mode logic)
+        if (mediaType === 'image' && mediaUrl) {
+            let mediaData = mediaUrl;
+            let mimetype = 'image/jpeg';
+
+            // Local file processing
+            if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
+                try {
+                    const filename = mediaUrl.split('/').pop();
+                    const filePath = path.join(process.cwd(), 'uploads', filename);
+                    console.log(`[CampaignWorker] Local image detected. Reading from: ${filePath}`);
+
+                    if (fs.existsSync(filePath)) {
+                        const fileBuffer = fs.readFileSync(filePath);
+                        const extension = path.extname(filePath).toLowerCase().replace('.', '');
+                        mimetype = extension === 'png' ? 'image/png' : 'image/jpeg';
+                        mediaData = fileBuffer.toString('base64');
+                        console.log(`[CampaignWorker] Image converted to pure base64 successfully (mimetype: ${mimetype})`);
+                    } else {
+                        console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
+                    }
+                } catch (err: any) {
+                    console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
+                }
+            }
+
+            // 👻 Ghost Action for Media
+            console.log(`[CampaignWorker] Ghost Action (Sequential): Uploading media simulation...`);
+            await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Send Image alone (without caption, since caption is split below)
+            // Or should we send it with the first block? standard is to split text. 
+            // We'll send image first, then text blocks.
+            const mediaResult = await evolutionService.sendImage(targetInstanceName, phone, {
+                media: mediaData,
+                caption: '', // No caption on image, text follows sequentially
+                mimetype: mimetype,
+                filename: 'image.jpg'
+            });
+            result = mediaResult; // Capture ID for status update
+
+            // Wait after sending image before starting text blocks
+            console.log(`[CampaignWorker] Image sent. Waiting ${blockDelay}s before starting text blocks...`);
+            await new Promise(resolve => setTimeout(resolve, blockDelay * 1000));
+        }
+
+        // 2. Intelligent message splitting
         const blocks: string[] = [];
 
         // First, try to split by double line breaks (paragraphs)
@@ -134,6 +184,14 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             const block = blocks[i];
             console.log(`[CampaignWorker] Sending block ${i + 1}/${blocks.length} to ${contactName}`);
 
+            // 👻 ANTI-BAN: GHOST TYPING FOR BLOCKS
+            // Simulate typing for each block
+            const typingTime = Math.min(Math.max(block.length * 50, 2000), 10000); // 50ms/char, min 2s, max 10s
+            console.log(`[CampaignWorker] Ghost Typing (Sequential): ${typingTime}ms for ${block.length} chars...`);
+
+            await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
+            await new Promise(resolve => setTimeout(resolve, typingTime));
+
             await evolutionService.sendText(targetInstanceName, phone, block);
 
             // Wait before sending next block (except for last block)
@@ -144,10 +202,20 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         }
 
         console.log(`[CampaignWorker] All ${blocks.length} blocks sent successfully to ${contactName}`);
-        result = { success: true }; // Dummy result for sequential mode
+
+        // If result wasn't set by media, set dummy success (or use last block ID if needed)
+        if (!result) result = { success: true };
     } else {
         // 📧 STANDARD MODE: Send message based on media type
         if (mediaType === 'text' || !mediaUrl) {
+
+            // 👻 ANTI-BAN: GHOST TYPING
+            const typingTime = Math.min(Math.max(finalMessage.length * 50, 2000), 15000); // 50ms/char, min 2s, max 15s
+            console.log(`[CampaignWorker] Ghost Typing: ${typingTime}ms for ${finalMessage.length} chars...`);
+
+            await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
+            await new Promise(resolve => setTimeout(resolve, typingTime));
+
             console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
             result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
             console.log(`[CampaignWorker] TEXT Sent successfully`);
@@ -176,6 +244,11 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
                     console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
                 }
             }
+
+            // 👻 ANTI-BAN: GHOST RECORDING/TYPING FOR MEDIA
+            console.log(`[CampaignWorker] Ghost Action: Uploading media simulation...`);
+            await evolutionService.sendPresence(targetInstanceName, phone, 'composing'); // Or 'recording' if audio
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Fixed 3s for media upload sim
 
             result = await evolutionService.sendImage(targetInstanceName, phone, {
                 media: mediaData,

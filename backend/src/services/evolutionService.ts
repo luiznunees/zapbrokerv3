@@ -142,3 +142,21 @@ export const fetchProfile = async (instanceName: string, number: string) => {
         return null;
     }
 };
+
+export const sendPresence = async (instanceName: string, number: string, presence: 'composing' | 'recording' | 'available' | 'unavailable') => {
+    try {
+        const payload = {
+            number: number.replace(/\D/g, ''),
+            presence: presence,
+            delay: 1200 // Optional delay handled by Evolution
+        };
+
+        // Evolution v2 endpoint for presence
+        const response = await api.post(`/chat/sendPresence/${instanceName}`, payload);
+        return response.data;
+    } catch (error: any) {
+        // Presence errors are non-critical, just log warning
+        console.warn('Warning: Failed to set presence:', error.response?.data || error.message);
+        return null;
+    }
+};

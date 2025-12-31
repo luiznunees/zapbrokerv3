@@ -13,13 +13,22 @@ export const create = async (req: AuthRequest, res: Response) => {
 
         // Zod Validation
         const validatedData = createCampaignSchema.parse(req.body);
-        const { name, messageVariations, contactListId, instanceId, delaySeconds, batchSize, batchDelaySeconds, mediaType, sequentialMode, blockDelay } = validatedData;
+        const { name, messageVariations, contactListId, instanceId, delaySeconds, batchSize, batchDelaySeconds, mediaType, sequentialMode, blockDelay, excludedContactIds } = validatedData;
         const scheduledAt = req.body.scheduledAt;
 
         let mediaUrl = undefined;
         if (req.file) {
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            // Use 'localhost' to ensure the worker detects it as a local file for Base64 conversion
             mediaUrl = `${baseUrl}/uploads/${req.file.filename}`;
+            console.log(`[CampaignCreate] File received: ${req.file.originalname} (${req.file.size} bytes) -> ${mediaUrl}`);
+        } else {
+            console.log('[CampaignCreate] No file received via Multer.');
+            if (mediaType === 'image' || mediaType === 'video' || mediaType === 'audio' || mediaType === 'document') {
+                console.warn('[CampaignCreate] Warning: MediaType is %s but no file was uploaded.', mediaType);
+                // Optional: We could throw an error here to force users to upload a file
+                // throw new Error(`É obrigatório fazer upload do arquivo para mensagens do tipo ${mediaType}`);
+            }
         }
 
         console.log('[CampaignCreate] Calling Service...');
@@ -36,7 +45,8 @@ export const create = async (req: AuthRequest, res: Response) => {
             mediaType,
             mediaUrl,
             sequentialMode,
-            blockDelay
+            blockDelay,
+            excludedContactIds
         );
         console.log('[CampaignCreate] Service Success:', result.id);
 

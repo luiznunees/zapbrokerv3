@@ -13,53 +13,81 @@ import * as emailService from '../services/emailService';
 export const register = async (req: Request, res: Response) => {
     try {
         console.log('Register Request Body:', req.body);
-        const { name, email, password } = req.body;
+        const { name, email, password, inviteCode } = req.body;
 
         if (!email || !password) {
             throw new Error('Email and password are required');
         }
 
-        // 1. Create User via Admin API (prevents default email if auto-confirm is off, or we just ignore Supabase email)
-        // Actually, to use `generateLink`, we often need the user to exist first.
-        // We use `signUp` but with a trick: if we have SMTP disabled in Supabase, we can use the returned token?
-        // OR we use Admin API to createUser { email, password, email_confirm: false }
+        // 0. Validate Invite if present
+        let inviteData = null;
+        if (inviteCode) {
+            const { data: invite, error: inviteError } = await supabase
+                .from('admin_invites')
+                .select('*')
+                .eq('code', inviteCode)
+                .eq('is_used', false)
+                .single();
 
-        // Let's use authService which wraps supabase.
-        // We need updates in authService.ts OR just do it here for specific control.
-        // For safety/speed, let's do it here, assuming `supabase` has admin rights (service role).
+            if (inviteError || !invite) {
+                throw new Error('Código de convite inválido ou já utilizado.');
+            }
+            inviteData = invite;
+        }
+
+        // 1. Create User via Admin API
+        // If invited, we auto-confirm the email!
+        const emailConfirm = !!inviteData;
 
         const { data: user, error } = await supabase.auth.admin.createUser({
             email,
             password,
             user_metadata: { nome: name },
-            email_confirm: false // User is NOT confirmed yet
+            email_confirm: emailConfirm
         });
 
         if (error) throw error;
         if (!user.user) throw new Error('Failed to create user');
 
-        // 2. Generate Confirmation Link
+        // 1.1 Process Invite (Mark as used and Create Subscription)
+        if (inviteData && user.user) {
+            // Mark invite as used
+            await supabase
+                .from('admin_invites')
+                .update({ is_used: true, used_by: user.user.id })
+                .eq('id', inviteData.id);
+
+            // Create Subscription
+            await supabase
+                .from('subscriptions')
+                .insert([{
+                    user_id: user.user.id,
+                    plan_id: inviteData.plan_id,
+                    status: 'active',
+                    start_date: new Date(),
+                    next_billing_date: new Date(new Date().setFullYear(new Date().getFullYear() + 100)) // 100 years for invited plans (lifetime/freemium)
+                }]);
+
+            return res.status(201).json({
+                user: user.user,
+                message: 'Conta criada com sucesso via convite! Login liberado.'
+            });
+        }
+
+        // 2. Standard Flow: Generate Confirmation Link (if not invited)
         const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
             type: 'signup',
             email: email,
-            password: password, // Sometimes required depending on flow, or we use 'magiclink'
+            password: password,
         });
-
-        // 'signup' link usage usually requires the user to start signup. 
-        // If createUser was used, we might need 'invite' or 'magiclink'? 
-        // Actually, generateLink type 'signup' returns a confirmation url for a user signing up.
-        // If user already created via admin, we might need verify_email type? "signup" works for unconfirmed users.
 
         if (linkError) throw linkError;
 
         const confirmationUrl = linkData.properties?.action_link || linkData.properties?.email_otp || '';
-        // action_link is the full URL.
 
         if (!confirmationUrl) {
-            console.warn('No confirmation URL generated. Is the backend configured with Service Role?');
-            // Fallback: Just return success, maybe Supabase sent it if we failed to control it?
+            console.warn('No confirmation URL generated. Service Role might be missing.');
         } else {
-            // 3. Send via Resend
             await emailService.sendConfirmationEmail(email, confirmationUrl);
         }
 

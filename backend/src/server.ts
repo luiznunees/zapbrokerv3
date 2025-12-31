@@ -68,6 +68,9 @@ app.use('/webhooks', webhookRoutes);
 import quotaRoutes from './routes/quotaRoutes';
 app.use('/quotas', quotaRoutes);
 
+import adminRoutes from './routes/adminRoutes';
+app.use('/admin', adminRoutes);
+
 import { startProcessor } from './services/campaignProcessor';
 startProcessor();
 

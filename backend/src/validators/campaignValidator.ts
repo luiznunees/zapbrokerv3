@@ -22,5 +22,15 @@ export const createCampaignSchema = z.object({
     delaySeconds: z.coerce.number().min(1, 'Delay deve ser pelo menos 1 segundo'),
     batchSize: z.coerce.number().min(1, 'Lote deve ser pelo menos 1'),
     batchDelaySeconds: z.coerce.number().min(1, 'Pausa do lote deve ser pelo menos 1 segundo'),
-    mediaType: z.enum(['text', 'image', 'video', 'audio', 'document']).optional().default('text')
+    mediaType: z.enum(['text', 'image', 'video', 'audio', 'document']).optional().default('text'),
+    excludedContactIds: z.string().transform((str) => {
+        try {
+            if (!str || str === 'undefined' || str === 'null') return [];
+            const parsed = JSON.parse(str);
+            if (!Array.isArray(parsed)) return [];
+            return parsed;
+        } catch (e) {
+            return [];
+        }
+    }).optional().default([])
 });

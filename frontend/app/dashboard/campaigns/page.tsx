@@ -19,8 +19,10 @@ import {
     FileText,
     Zap,
     Info,
-    Smartphone
+    Smartphone,
+    Filter
 } from 'lucide-react'
+import { ContactExclusionModal } from '@/components/modals/ContactExclusionModal'
 import { cn } from '@/lib/utils'
 import { api } from '../../../services/api'
 import { Button } from '@/components/ui/button'
@@ -87,16 +89,24 @@ export default function CampaignsPage() {
     const [messageVariations, setMessageVariations] = useState<string[]>([''])
     const [mediaFile, setMediaFile] = useState<File | null>(null)
 
+    // Contact Exclusion State
+    const [showExclusionModal, setShowExclusionModal] = useState(false)
+    const [excludedContactIds, setExcludedContactIds] = useState<string[]>([])
+
     // Load initial data
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [instancesRes, listsRes] = await Promise.all([
-                    api.get('/whatsapp/instances'),
-                    api.get('/contacts/lists')
+                const [instancesData, listsData] = await Promise.all([
+                    api.get('/instances'),
+                    api.get('/contact-lists')
                 ])
-                setInstances(instancesRes.data.filter((i: WhatsAppInstance) => i.status === 'connected'))
-                setContactLists(listsRes.data)
+                // Ensure we handle both array and { data: array } formats just in case
+                const instances = Array.isArray(instancesData) ? instancesData : (instancesData.data || [])
+                const lists = Array.isArray(listsData) ? listsData : (listsData.data || [])
+
+                setInstances(instances.filter((i: WhatsAppInstance) => i.status === 'connected'))
+                setContactLists(lists)
             } catch (error) {
                 console.error('Error loading data:', error)
                 setStatus({
@@ -157,12 +167,34 @@ export default function CampaignsPage() {
             const payload = new FormData()
 
             // Append basic fields
-            Object.entries(formData).forEach(([key, value]) => {
-                payload.append(key, String(value))
-            })
+            payload.append('name', formData.name)
+            payload.append('instanceId', formData.instanceId)
+            payload.append('contactListId', formData.contactListId)
+            payload.append('messageType', formData.messageType)
+            payload.append('sequentialMode', String(formData.sequentialMode))
 
-            // Append messages
-            payload.append('messages', JSON.stringify(messageVariations.filter(m => m.trim())))
+            // Map frontend fields to backend expectations
+            // Frontend has min/max delay, Backend expects single 'delaySeconds' base
+            // We use the average as the base delay
+            const avgDelay = Math.floor((Number(formData.minDelay) + Number(formData.maxDelay)) / 2);
+            payload.append('delaySeconds', String(avgDelay));
+
+            payload.append('batchSize', String(formData.batchSize));
+            payload.append('batchDelaySeconds', String(formData.batchDelay)); // batchDelay -> batchDelaySeconds
+            payload.append('blockDelay', String(formData.sequentialBlockDelay)); // sequentialBlockDelay -> blockDelay
+
+            // Optional scheduledAt
+            if (formData.scheduledAt) {
+                payload.append('scheduledAt', formData.scheduledAt);
+            }
+
+            // Append messages (backend expects messageVariations, mapping for safety)
+            const variations = messageVariations.filter(m => m.trim())
+            payload.append('messageVariations', JSON.stringify(variations))
+            payload.append('messages', JSON.stringify(variations)) // Keeping legacy just in case
+
+            // Append excluded contacts
+            payload.append('excludedContactIds', JSON.stringify(excludedContactIds))
 
             // Append media if exists
             if (mediaFile) {
@@ -625,7 +657,8 @@ export default function CampaignsPage() {
                         </div>
                     )}
 
-                    {/* STEP 6: PÚBLICO (AUDIENCE) */}\n                    {currentStep === 6 && (
+                    {/* STEP 6: PÚBLICO (AUDIENCE) */}
+                    {currentStep === 6 && (
                         <div className="space-y-6 animate-in slide-in-from-right-8 fade-in duration-300">
                             <div className="text-center space-y-2 mb-8">
                                 <h3 className="text-xl font-bold">Quais contatos receberão?</h3>
@@ -672,6 +705,28 @@ export default function CampaignsPage() {
                                                 <Badge key={i} variant="outline" className="text-[10px] h-5">{tag}</Badge>
                                             ))}
                                         </div>
+
+                                        {
+                                            formData.contactListId === list.id && (
+                                                <div className="mt-4 pt-4 border-t border-dashed border-primary/30">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setShowExclusionModal(true)
+                                                        }}
+                                                        className="w-full gap-2 text-primary hover:bg-primary/10"
+                                                    >
+                                                        <Filter className="w-3 h-3" />
+                                                        {excludedContactIds.length > 0
+                                                            ? `${excludedContactIds.length} contatos excluídos`
+                                                            : 'Revisar / Excluir Contatos'
+                                                        }
+                                                    </Button>
+                                                </div>
+                                            )
+                                        }
                                     </div>
                                 ))}
 
@@ -738,6 +793,15 @@ export default function CampaignsPage() {
                 isOpen={showAntiBanModal}
                 onClose={() => setShowAntiBanModal(false)}
             />
-        </div>
+
+            {/* Contact Exclusion Modal */}
+            <ContactExclusionModal
+                isOpen={showExclusionModal}
+                onClose={() => setShowExclusionModal(false)}
+                listId={formData.contactListId}
+                initialExcludedIds={excludedContactIds}
+                onSave={setExcludedContactIds}
+            />
+        </div >
     )
 }

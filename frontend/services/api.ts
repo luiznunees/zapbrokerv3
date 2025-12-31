@@ -143,4 +143,38 @@ export const api = {
         getSubscriptionStatus: (subscriptionId: string) =>
             fetchAPI(`/payments/subscription/${subscriptionId}`),
     },
+    admin: {
+        stats: () => fetchAPI('/admin/stats'),
+        getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
+        banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
+        createInvite: (planId: string) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId }) }),
+        logs: () => fetchAPI('/admin/logs'),
+    },
+    // Generic methods to support legacy/direct usage (e.g. api.get('/...'))
+    get: (endpoint: string, options?: RequestInit) => fetchAPI(endpoint, { ...options, method: 'GET' }),
+    post: (endpoint: string, body: any, options: RequestInit = {}) => {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        return fetchAPI(endpoint, {
+            ...options,
+            method: 'POST',
+            body: isFormData ? body : JSON.stringify(body)
+        });
+    },
+    put: (endpoint: string, body: any, options: RequestInit = {}) => {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        return fetchAPI(endpoint, {
+            ...options,
+            method: 'PUT',
+            body: isFormData ? body : JSON.stringify(body)
+        });
+    },
+    delete: (endpoint: string, options?: RequestInit) => fetchAPI(endpoint, { ...options, method: 'DELETE' }),
+    patch: (endpoint: string, body: any, options: RequestInit = {}) => {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        return fetchAPI(endpoint, {
+            ...options,
+            method: 'PATCH',
+            body: isFormData ? body : JSON.stringify(body)
+        });
+    },
 };

@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import { campaignQueue } from '../queues/campaignQueue';
 
 const BATCH_SIZE = 50; // Can process more now as we just enqueue
-const INTERVAL_MS = 10000; // Check every 10 seconds
+const INTERVAL_MS = 5000; // Check every 5 seconds
 
 let isProcessing = false;
 
@@ -63,7 +63,7 @@ const processQueue = async () => {
         });
 
         if (validMessages.length === 0) {
-            // console.log('[CampaignProcessor] No active messages to process (others are paused/invalid).');
+            console.log(`[CampaignProcessor] Fetched ${messages.length} messages, but all were Paused/Invalid. Ignoring.`);
             isProcessing = false;
             return;
         }
