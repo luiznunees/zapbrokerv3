@@ -9,6 +9,7 @@ import { AppError } from '../utils/AppError';
 // If it's the anon client, this will fail. We assume the user has configured SERVICE_ROLE in backend.
 
 import * as emailService from '../services/emailService';
+import * as eventLogService from '../services/eventLogService';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -50,6 +51,14 @@ export const register = async (req: Request, res: Response) => {
 
         if (error) throw error;
         if (!user.user) throw new Error('Failed to create user');
+
+        eventLogService.logEvent({
+            type: 'auth.new_signup',
+            severity: 'info',
+            message: `Novo cadastro: ${email}${inviteData ? ' (via convite)' : planId ? ` (plano ${planId})` : ''}`,
+            userId: user.user.id,
+            metadata: { email, planId: planId || null, viaInvite: !!inviteData },
+        });
 
         // 1.1 Process Invite (Mark as used and Create Subscription)
         if (inviteData && user.user) {
@@ -122,6 +131,11 @@ export const login = async (req: Request, res: Response) => {
         res.status(200).json(result);
     } catch (error: any) {
         console.error('Login error:', error.message);
+        eventLogService.logEvent({
+            type: 'auth.login_failed',
+            severity: 'warn',
+            message: `Tentativa de login falhou para ${req.body?.email || 'email desconhecido'}`,
+        });
         res.status(401).json({ error: 'Email ou senha inválidos.' });
     }
 };

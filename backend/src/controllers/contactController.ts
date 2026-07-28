@@ -16,7 +16,10 @@ export const createList = async (req: AuthRequest, res: Response) => {
 export const getLists = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const result = await contactService.getLists(userId);
+        const withCounts = req.query.withCounts === '1' || req.query.withCounts === 'true';
+        const result = withCounts
+            ? await contactService.getListsWithCounts(userId)
+            : await contactService.getLists(userId);
         res.status(200).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -113,11 +116,11 @@ export const getAllContacts = async (req: AuthRequest, res: Response) => {
 export const createContact = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const { name, phone, categoriaId, tags } = req.body;
+        const { name, phone, listId: bodyListId, categoriaId, tags } = req.body;
 
         // If no list provided, try to find a default list or create one?
-        // For now, let's assume listId (categoriaId) is required or we pick the first one.
-        let listId = categoriaId;
+        // For now, let's assume listId is required or we pick the first one.
+        let listId = bodyListId || categoriaId;
 
         if (!listId) {
             const lists = await contactService.getLists(userId);

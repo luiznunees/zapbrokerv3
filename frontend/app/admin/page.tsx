@@ -79,10 +79,14 @@ export default function AdminDashboardPage() {
                         <CardTitle className="text-zinc-100">Alertas do Sistema</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {stats?.activeErrors > 0 ? (
+                        {(stats?.activeErrors > 0 || stats?.recentCriticalEvents > 0) ? (
                             <div className="bg-red-500/10 text-red-400 p-4 rounded-lg flex items-center gap-2">
                                 <AlertTriangle className="w-5 h-5" />
-                                <span>{stats.activeErrors} instâncias estão com erro de conexão!</span>
+                                <span>
+                                    {stats.activeErrors > 0 && `${stats.activeErrors} instância(s) com erro de conexão`}
+                                    {stats.activeErrors > 0 && stats.recentCriticalEvents > 0 && ' — '}
+                                    {stats.recentCriticalEvents > 0 && `${stats.recentCriticalEvents} evento(s) crítico(s) nas últimas 24h`}
+                                </span>
                             </div>
                         ) : (
                             <div className="text-emerald-500 flex items-center gap-2">
