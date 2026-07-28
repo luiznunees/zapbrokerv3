@@ -131,10 +131,18 @@ export const login = async (req: Request, res: Response) => {
         res.status(200).json(result);
     } catch (error: any) {
         console.error('Login error:', error.message);
+        // Login falhou, mas se o email pertencer a um usuário real (só a senha errou),
+        // ainda dá pra identificar quem tentou — logEvent enriquece com nome/email a partir do userId.
+        const attemptedEmail = req.body?.email;
+        const { data: existingUser } = attemptedEmail
+            ? await supabase.from('users').select('id').eq('email', attemptedEmail).maybeSingle()
+            : { data: null };
         eventLogService.logEvent({
             type: 'auth.login_failed',
             severity: 'warn',
-            message: `Tentativa de login falhou para ${req.body?.email || 'email desconhecido'}`,
+            message: `Tentativa de login falhou para ${attemptedEmail || 'email desconhecido'}`,
+            userId: existingUser?.id,
+            metadata: { attemptedEmail: attemptedEmail || null },
         });
         res.status(401).json({ error: 'Email ou senha inválidos.' });
     }

@@ -56,6 +56,39 @@ update admin_invites set plan_id = 'starter' where plan_id = 'prod_01j4WfgzmZjZW
 update admin_invites set plan_id = 'pro' where plan_id = 'prod_Uqr4bMTSyUYQuSwBdX4JTsmz';
 `;
 
+const SYSTEM_EVENTS_SQL = `
+create table if not exists system_events (
+    id uuid primary key default gen_random_uuid(),
+    type text not null,
+    severity text not null default 'info',
+    message text not null,
+    user_id uuid references users(id) on delete set null,
+    metadata jsonb,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_system_events_created_at on system_events(created_at desc);
+create index if not exists idx_system_events_severity on system_events(severity);
+`;
+
+const AI_COST_EVENTS_SQL = `
+create table if not exists ai_cost_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  session_id uuid references agent_sessions(id) on delete set null,
+  provider text not null,
+  model text not null,
+  input_tokens integer not null default 0,
+  output_tokens integer not null default 0,
+  cost_usd numeric(12,6) not null default 0,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_ai_cost_events_user_id on ai_cost_events(user_id);
+create index if not exists idx_ai_cost_events_created_at on ai_cost_events(created_at);
+alter table ai_cost_events enable row level security;
+`;
+
 const USER_MEMORY_SQL = `
 create table if not exists agent_user_memory (
   user_id uuid primary key references users(id) on delete cascade,
@@ -163,6 +196,30 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao renomear plan_id:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: SYSTEM_EVENTS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar system_events automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: backend/migrations/system_events.sql');
+    } else {
+      console.log('[Migrations] Tabela system_events verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar system_events:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: AI_COST_EVENTS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar ai_cost_events automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: backend/fix_ai_cost_events.sql');
+    } else {
+      console.log('[Migrations] Tabela ai_cost_events verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar ai_cost_events:', err.message);
   }
 
   try {

@@ -329,10 +329,12 @@ campaignWorker.on('failed', async (job, err) => {
             })
             .eq('id', job.data.id);
 
+        const { data: campaignRow } = await supabase.from('campaigns').select('user_id').eq('id', job.data.campaignId).maybeSingle();
         eventLogService.logEvent({
             type: 'campaign.message_failed',
             severity: 'warn',
             message: `Mensagem da campanha ${job.data.campaignId} falhou definitivamente após ${maxAttempts} tentativas: ${err.message}`,
+            userId: campaignRow?.user_id,
             metadata: { campaignId: job.data.campaignId, messageId: job.data.id },
         });
     }

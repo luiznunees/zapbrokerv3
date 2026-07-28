@@ -141,10 +141,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`Subscription ${subscriptionId} cancelled via AbacatePay webhook.`);
+                const { data: subRow } = await supabase.from('subscriptions').select('user_id').eq('id', subscriptionId).maybeSingle();
                 eventLogService.logEvent({
                     type: 'payment.cancelled',
                     severity: 'warn',
                     message: `Assinatura ${subscriptionId} cancelada via webhook AbacatePay`,
+                    userId: subRow?.user_id,
                     metadata: { subscriptionId },
                 });
             }
@@ -188,10 +190,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`Checkout ${paymentExternalId} paid — subscription ${subscriptionId} activated/renewed.`);
+                const { data: subRow } = await supabase.from('subscriptions').select('user_id').eq('id', subscriptionId).maybeSingle();
                 eventLogService.logEvent({
                     type: 'payment.confirmed',
                     severity: 'info',
                     message: `Pagamento confirmado (checkout) — assinatura ${subscriptionId}`,
+                    userId: subRow?.user_id,
                     metadata: { subscriptionId, paymentExternalId },
                 });
             }
@@ -234,10 +238,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`PIX ${paymentExternalId} paid — subscription ${subscriptionId} activated/renewed.`);
+                const { data: subRow } = await supabase.from('subscriptions').select('user_id').eq('id', subscriptionId).maybeSingle();
                 eventLogService.logEvent({
                     type: 'payment.confirmed',
                     severity: 'info',
                     message: `Pagamento PIX confirmado — assinatura ${subscriptionId}`,
+                    userId: subRow?.user_id,
                     metadata: { subscriptionId, paymentExternalId },
                 });
             }
