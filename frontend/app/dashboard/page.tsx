@@ -1,357 +1,998 @@
-"use client";
+"use client"
 
-import { ArrowUpRight, Users, MessageSquare, CheckCircle, Send, Plus, BarChart2, Play, Pause } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
-import { api } from '@/services/api';
-import { QRCodeModal } from '@/components/dashboard/QRCodeModal';
-import { QuotaWidget } from '@/components/dashboard/QuotaWidget';
-import { WhatsAppStatusWidget } from '@/components/dashboard/WhatsAppStatusWidget';
-import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
-import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip';
-import { HelpBadge } from '@/components/ui/HelpBadge';
-import { InputModal } from '@/components/modals/InputModal';
-import Link from 'next/link';
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { AnimatedAIChat, type AttachType } from "@/components/ui/animated-ai-chat"
+import { BrandLoader } from "@/components/ui/BrandLoader"
+import { LeadImporterModal } from "@/components/dashboard/LeadImporterModal"
+import {
+  Bot, Send, Users, Target, Import, Phone, Rocket,
+  Sparkles, TrendingUp, Wifi, AlertCircle, Plus, PanelLeft
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { api } from "@/services/api"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { motion, AnimatePresence } from "framer-motion"
+import { ChatHistory, type ChatSession } from "@/components/dashboard/ChatHistory"
+import { ChatWhatsAppQR, type WhatsAppQrStatus } from "@/components/dashboard/ChatWhatsAppQR"
+import { CampaignDraftPanel, type CampaignDraft } from "@/components/dashboard/CampaignDraftPanel"
+import { ChatListPicker } from "@/components/dashboard/ChatListPicker"
+import { ChatFileUpload } from "@/components/dashboard/ChatFileUpload"
+import { ChatTimingConfirm, type TimingValues } from "@/components/dashboard/ChatTimingConfirm"
+import { ChatSchedulePicker } from "@/components/dashboard/ChatSchedulePicker"
+import { ChatInstancePicker } from "@/components/dashboard/ChatInstancePicker"
+import { ChatMessageVariationsEditor } from "@/components/dashboard/ChatMessageVariationsEditor"
+import { ChatCampaignSummaryConfirm } from "@/components/dashboard/ChatCampaignSummaryConfirm"
+import { ChatAntiBanWarningConfirm } from "@/components/dashboard/ChatAntiBanWarningConfirm"
+import { ChatDuplicateCampaignConfirm } from "@/components/dashboard/ChatDuplicateCampaignConfirm"
+import { ChatQuotaConfirm } from "@/components/dashboard/ChatQuotaConfirm"
+import { ChatFollowUpScheduler } from "@/components/dashboard/ChatFollowUpScheduler"
+import { ChatLeadPicker } from "@/components/dashboard/ChatLeadPicker"
+import { ChatContactExclusionPicker } from "@/components/dashboard/ChatContactExclusionPicker"
+import { useDashboard } from "@/contexts/dashboard-context"
+import { useUser } from "@/contexts/user-context"
+
+type Action = {
+  label: string
+  type: string
+  data?: any
+}
+
+type WhatsAppQrState = {
+  instanceId: string
+  qrCode: string | null
+  status: WhatsAppQrStatus
+}
+
+type AgentComponent = {
+  type: "list_picker" | "file_upload" | "timing_confirm" | "schedule_picker" | "instance_picker"
+    | "message_editor" | "campaign_summary" | "antiban_warning" | "duplicate_campaign_confirm"
+    | "quota_confirm" | "followup_scheduler" | "lead_picker" | "contact_exclusion"
+  purpose?: string
+}
+
+type Message = {
+  id: string
+  role: "user" | "agent"
+  content: string
+  actions?: Action[]
+  whatsapp?: WhatsAppQrState
+  component?: AgentComponent
+  timestamp: Date
+}
+
+type PendingAttachment = {
+  name: string
+  url: string
+  mediaType: string
+}
+
+type SuggestionCard = {
+  icon: string
+  title: string
+  desc: string
+  action: string
+}
+
+const ICON_MAP: Record<string, React.ReactNode> = {
+  rocket: <Rocket className="size-5" />,
+  upload: <Import className="size-5" />,
+  wifi: <Wifi className="size-5" />,
+  target: <Target className="size-5" />,
+  trending: <TrendingUp className="size-5" />,
+  alert: <AlertCircle className="size-5" />,
+  send: <Send className="size-5" />,
+}
+
+const FALLBACK_SUGGESTIONS: SuggestionCard[] = [
+  { icon: "wifi", title: "Conectar WhatsApp", desc: "Vincule seu número à plataforma", action: "connect_whatsapp" },
+  { icon: "upload", title: "Importar contatos", desc: "Adicione leads à sua base", action: "import_leads" },
+  { icon: "rocket", title: "Criar campanha", desc: "Comece um disparo para seus leads", action: "start_dispatch" },
+]
+
+// Ações de sugestão que já sabem o que fazer sem precisar perguntar pro LLM
+const DIRECT_ACTIONS = new Set(["connect_whatsapp", "import_leads"])
+const WHATSAPP_QR_TIMEOUT_MS = 30_000
+const WHATSAPP_POLL_INTERVAL_MS = 3_000
+
+const ATTACH_ACCEPT: Record<Exclude<AttachType, "contacts">, string> = {
+  files: ".pdf,.doc,.docx,.xlsx,.xls,.csv,.txt",
+  media: "image/*,video/*",
+  audio: "audio/*",
+}
+
+const WELCOME_TITLE = "Como posso ajudar hoje?"
 
 export default function DashboardPage() {
-    const [stats, setStats] = useState({
-        leads: '0',
-        campaigns: '0',
-        deliveryRate: '0%',
-        responses: '0'
-    });
-    const [instanceStatus, setInstanceStatus] = useState<string>('disconnected');
-    const [loading, setLoading] = useState(true);
-    const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
-    const [showInstanceNameModal, setShowInstanceNameModal] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useUser()
+  const [stats, setStats] = useState({ leads: 0, campaigns: 0, remaining: 0, stalledLeads: 0 })
+  const [suggestionCards, setSuggestionCards] = useState<SuggestionCard[]>(FALLBACK_SUGGESTIONS)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const recentCampaigns: any[] = []
+  const { sidebarOpen, setSidebarOpen, newChatTrigger } = useDashboard()
+  const router = useRouter()
+  const [isNewChatAnimating, setIsNewChatAnimating] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
+  const [isLeadImporterOpen, setIsLeadImporterOpen] = useState(false)
+  const [currentDraft, setCurrentDraft] = useState<CampaignDraft | null>(null)
+  const [isConfirmingCampaign, setIsConfirmingCampaign] = useState(false)
 
-    // QR Code Modal State
-    const [isQRModalOpen, setIsQRModalOpen] = useState(false);
-    const [qrCode, setQrCode] = useState<string | null>(null);
-    const [qrLoading, setQrLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const whatsappPollersRef = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+  // Guard síncrono contra Enter segurado/repetido: setIsLoading(true) só reflete no
+  // estado depois de um re-render, então vários keydown antes disso passariam pelo
+  // "isLoading" antigo e disparariam a mesma mensagem várias vezes. Um ref é síncrono.
+  const isSendingRef = useRef(false)
+  const filesInputRef = useRef<HTMLInputElement>(null)
+  const mediaInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
 
-    // Polling for connection status when modal is open
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
+  useEffect(() => {
+    return () => {
+      Object.values(whatsappPollersRef.current).forEach(clearInterval)
+    }
+  }, [])
 
-        if (isQRModalOpen && !instanceStatus.includes('connected')) {
-            interval = setInterval(async () => {
-                try {
-                    const instances = await api.instances.list().catch(() => []);
-                    const connected = instances.find((i: any) => i.status === 'open' || i.status === 'connected');
+  useEffect(() => {
+    const loadInitial = async () => {
+      try {
+        const [countData, campaignsData, quotaData, sessionData, stalledData] =
+          await Promise.all([
+            api.contacts.getCount().catch(() => ({ count: 0 })),
+            api.campaigns.list().catch(() => []),
+            api.quotas.current().catch(() => ({ remainingMessages: 0 })),
+            api.sessions.list().catch(() => []),
+            api.campaigns.getStalledCount().catch(() => ({ count: 0 })),
+          ])
 
-                    if (connected) {
-                        setInstanceStatus('connected');
-                        setIsQRModalOpen(false);
-                        clearInterval(interval);
-                    }
-                } catch (err) {
-                    console.error('Polling error', err);
-                }
-            }, 3000);
+        setStats({
+          leads: countData.count || 0,
+          campaigns: campaignsData.length || 0,
+          remaining: quotaData.remainingMessages || 0,
+          stalledLeads: stalledData.count || 0,
+        })
+        setSessions(sessionData || [])
+
+        if (!sessionData || sessionData.length === 0) {
+          try {
+            const session = await api.sessions.create()
+            setSessions([session])
+            setCurrentSessionId(session.id)
+          } catch {
+            console.error("Failed to create initial session")
+          }
+        } else {
+          setCurrentSessionId(sessionData[0].id)
+          await loadSessionMessages(sessionData[0].id)
         }
+      } catch {
+        console.error("Failed to load initial data")
+      } finally {
+        setPageLoading(false)
+      }
+    }
+    loadInitial()
 
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isQRModalOpen, instanceStatus]);
+    const landingIntent = sessionStorage.getItem("landingChatIntent")
+    if (landingIntent) {
+      sessionStorage.removeItem("landingChatIntent")
+      setInput(landingIntent)
+    }
+  }, [])
 
-    useEffect(() => {
-        // Debounce to avoid multiple simultaneous calls (React StrictMode)
-        const timer = setTimeout(() => {
-            fetchDashboardData();
-        }, 1500)
-
-        return () => clearTimeout(timer)
-    }, []);
-
-    const fetchDashboardData = async () => {
-        try {
-            setLoading(true);
-            // Fetch Instances to check connection
-            const instances = await api.instances.list().catch(() => []);
-            const connectedInstance = instances.find((i: any) => i.status === 'connected' || i.status === 'open');
-            const anyInstance = instances[0];
-
-            if (connectedInstance) {
-                setInstanceStatus('connected');
-            } else if (anyInstance) {
-                setInstanceStatus('disconnected');
-            } else {
-                setInstanceStatus('no_instance');
-            }
-
-            // Fetch Campaigns
-            const campaigns = await api.campaigns.list().catch(() => []);
-            setRecentCampaigns(campaigns.slice(0, 5));
-
-            // Fetch Leads Count
-            const { count: leadCount } = await api.contacts.getCount().catch(() => ({ count: 0 }));
-
-            // Fetch Today's Campaigns for the badge
-            const today = new Date().toLocaleDateString();
-            const campaignsToday = campaigns.filter((c: any) => new Date(c.created_at).toLocaleDateString() === today).length;
-
-            // Calculate simple stats
-            setStats({
-                leads: leadCount.toLocaleString(),
-                campaigns: campaigns.length.toString(),
-                deliveryRate: '100%', // Placeholder for now
-                responses: campaignsToday.toString()
-            });
-        } catch (error) {
-            console.error("Failed to fetch dashboard data", error);
-        } finally {
-            setLoading(false);
-        }
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const cacheKey = `suggestions_${today}`
+    const cached = localStorage.getItem(cacheKey)
+    if (cached) {
+      try { setSuggestionCards(JSON.parse(cached)); return } catch {}
     }
 
-    const handleConnect = async () => {
-        setIsQRModalOpen(true);
-        setQrLoading(true);
-        setQrCode(null);
+    setSuggestionsLoading(true)
+    api.agent.suggestions()
+      .then((res: any) => {
+        const cards: SuggestionCard[] = res?.suggestions || FALLBACK_SUGGESTIONS
+        setSuggestionCards(cards)
+        localStorage.setItem(cacheKey, JSON.stringify(cards))
+      })
+      .catch(() => setSuggestionCards(FALLBACK_SUGGESTIONS))
+      .finally(() => setSuggestionsLoading(false))
+  }, [stats.leads, stats.campaigns])
 
-        try {
-            let instances = await api.instances.list().catch(() => []);
-            let instanceId = instances[0]?.id;
+  useEffect(() => {
+    const viewport = messagesEndRef.current?.closest(
+      "[data-radix-scroll-area-viewport]"
+    ) as HTMLElement | null
+    if (!viewport) return
 
-            if (!instanceId) {
-                // Show modal to ask for instance name
-                setShowInstanceNameModal(true);
-                setQrLoading(false);
-                return;
-            }
+    // Only auto-scroll if the user is already near the bottom — otherwise,
+    // scrolling up to read history shouldn't get yanked back down on every
+    // streamed token update.
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+    if (distanceFromBottom < 150) {
+      viewport.scrollTop = viewport.scrollHeight
+    }
+  }, [messages])
 
-            const data = await connectToInstance(instanceId);
+  useEffect(() => {
+    if (newChatTrigger > 0) handleNewSession()
+  }, [newChatTrigger])
 
-            if (data.base64) {
-                setQrCode(data.base64);
-            } else {
-                console.error("QR Code not found in response", data);
-            }
+  const loadSessionMessages = async (sessionId: string) => {
+    try {
+      const data = await api.sessions.getMessages(sessionId)
+      const msgs: Message[] = (data || []).map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        actions: m.metadata?.actions || undefined,
+        timestamp: new Date(m.created_at),
+      }))
+      setMessages(msgs)
+    } catch {
+      console.error("Failed to load session messages")
+    }
+  }
 
-        } catch (error) {
-            console.error("Failed to connect", error);
-            setIsQRModalOpen(false);
-        } finally {
-            setQrLoading(false);
+  const handleNewSession = useCallback(async () => {
+    setIsNewChatAnimating(true)
+    setSidebarOpen(true)
+
+    await new Promise((r) => setTimeout(r, 150))
+
+    setMessages([])
+    setCurrentSessionId(null)
+    setCurrentDraft(null)
+
+    await new Promise((r) => setTimeout(r, 200))
+
+    try {
+      const session = await api.sessions.create()
+      setSessions((prev) => [session, ...prev])
+      setCurrentSessionId(session.id)
+    } catch {
+      console.error("Failed to create session")
+    }
+
+    setIsNewChatAnimating(false)
+  }, [setSidebarOpen])
+
+  const handleSelectSession = async (session: ChatSession) => {
+    setCurrentSessionId(session.id)
+    setMessages([])
+    setCurrentDraft(null)
+    await loadSessionMessages(session.id)
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false)
+    }
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await api.sessions.delete(sessionId)
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null)
+        setMessages([])
+        setCurrentDraft(null)
+      }
+    } catch {
+      console.error("Failed to delete session")
+    }
+  }
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading || !currentSessionId || isSendingRef.current) return
+    isSendingRef.current = true
+
+    const messageText = input.trim()
+    const attachmentNote = pendingAttachment
+      ? `\n\n[Anexo disponível: ${pendingAttachment.name} (${pendingAttachment.mediaType}) em ${pendingAttachment.url}]`
+      : ""
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: messageText,
+      timestamp: new Date(),
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsLoading(true)
+
+    const agentMessageId = `agent-${Date.now()}`
+
+    try {
+      setMessages((prev) => [
+        ...prev,
+        { id: agentMessageId, role: "agent", content: "", timestamp: new Date() },
+      ])
+
+      const response = await api.agent.chatStream(
+        messageText + attachmentNote,
+        currentSessionId,
+        (token: string) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === agentMessageId ? { ...m, content: m.content + token } : m))
+          )
+        },
+        () => {
+          // O modelo narrou algo antes de decidir chamar uma ferramenta — descarta esse
+          // texto intermediário (não é a resposta final) e recomeça limpo.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === agentMessageId ? { ...m, content: "" } : m))
+          )
         }
-    };
+      )
 
-    const connectToInstance = async (instanceId: string) => {
-        try {
-            const data = await api.instances.connect(instanceId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === agentMessageId
+            ? {
+                ...m,
+                content: response.reply || response.message || m.content || "OK!",
+                actions: response.actions,
+                component: response.component ?? undefined,
+              }
+            : m
+        )
+      )
+      setCurrentDraft(response.draft ?? null)
+      if (pendingAttachment) setPendingAttachment(null)
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== agentMessageId))
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: "Desculpe, tive um problema ao processar sua mensagem. Pode tentar de novo?",
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+      isSendingRef.current = false
+    }
+  }
 
-            if (data.base64) {
-                setQrCode(data.base64);
-            } else {
-                console.error("QR Code not found in response", data);
-            }
-            return data;
-        } catch (error) {
-            console.error("Failed to connect to instance", error);
-            throw error;
+  const stopWhatsAppPolling = (messageId: string) => {
+    const interval = whatsappPollersRef.current[messageId]
+    if (interval) {
+      clearInterval(interval)
+      delete whatsappPollersRef.current[messageId]
+    }
+  }
+
+  const updateWhatsAppState = (messageId: string, patch: Partial<WhatsAppQrState>) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId && m.whatsapp ? { ...m, whatsapp: { ...m.whatsapp, ...patch } } : m))
+    )
+  }
+
+  const startWhatsAppPolling = (messageId: string, instanceId: string) => {
+    stopWhatsAppPolling(messageId)
+    const startedAt = Date.now()
+
+    whatsappPollersRef.current[messageId] = setInterval(async () => {
+      if (Date.now() - startedAt > WHATSAPP_QR_TIMEOUT_MS) {
+        stopWhatsAppPolling(messageId)
+        updateWhatsAppState(messageId, { status: "expired" })
+        return
+      }
+      try {
+        const instances = await api.instances.list()
+        const instance = instances.find((i: any) => i.id === instanceId)
+        if (instance?.status === "connected") {
+          stopWhatsAppPolling(messageId)
+          updateWhatsAppState(messageId, { status: "connected" })
         }
-    };
+      } catch {
+        // silencioso — tenta de novo no próximo tick
+      }
+    }, WHATSAPP_POLL_INTERVAL_MS)
+  }
 
-    const handleInstanceNameSubmit = async (instanceName: string) => {
-        try {
-            setQrLoading(true);
-            setIsQRModalOpen(true); // Open QR modal
-            const newInstance = await api.instances.create(instanceName);
-            await connectToInstance(newInstance.id);
-        } catch (error) {
-            console.error("Failed to create instance", error);
-            setIsQRModalOpen(false);
-        } finally {
-            setQrLoading(false);
+  const regenerateWhatsAppQr = async (messageId: string, instanceId: string) => {
+    try {
+      const data = await api.instances.connect(instanceId)
+      updateWhatsAppState(messageId, { qrCode: data.base64 || null, status: "connecting" })
+      startWhatsAppPolling(messageId, instanceId)
+    } catch {
+      updateWhatsAppState(messageId, { status: "expired" })
+    }
+  }
+
+  const handleSelectAttachType = (type: AttachType) => {
+    if (type === "contacts") {
+      setIsLeadImporterOpen(true)
+      return
+    }
+    if (type === "files") filesInputRef.current?.click()
+    if (type === "media") mediaInputRef.current?.click()
+    if (type === "audio") audioInputRef.current?.click()
+  }
+
+  const handleConfirmCampaign = () => {
+    if (!currentSessionId) return
+    handleAction({ type: "confirm_campaign", data: { sessionId: currentSessionId }, label: "Confirmar e disparar" })
+  }
+
+  const handleSelectDraftList = (list: { id: string; name: string; leadCount: number }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_list", data: { sessionId: currentSessionId, contactListId: list.id }, label: list.name })
+  }
+
+  const handleDraftMediaUploaded = (file: { url: string; mediaType: string; name: string }) => {
+    if (!currentSessionId) return
+    handleAction({
+      type: "set_draft_media",
+      data: { sessionId: currentSessionId, mediaUrl: file.url, mediaType: file.mediaType },
+      label: "Anexar mídia",
+    })
+  }
+
+  const handleRemoveDraftMedia = () => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_media", data: { sessionId: currentSessionId, mediaUrl: null }, label: "Remover mídia" })
+  }
+
+  const handleConfirmDraftTiming = (values: TimingValues) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_timing", data: { sessionId: currentSessionId, ...values }, label: "Confirmar timing" })
+  }
+
+  const handleConfirmDraftSchedule = (values: { scheduledAt: string | null }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_schedule", data: { sessionId: currentSessionId, ...values }, label: "Confirmar agendamento" })
+  }
+
+  const handleConfirmDraftInstances = (values: { instanceIds: string[]; instanceNames: string[] }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_instances", data: { sessionId: currentSessionId, ...values }, label: values.instanceNames.join(" + ") })
+  }
+
+  const handleConfirmDraftMessages = (values: { messageVariations: string[] }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_messages", data: { sessionId: currentSessionId, ...values }, label: "Salvar mensagens" })
+  }
+
+  const handleAcknowledgeAntiBan = () => {
+    if (!currentSessionId) return
+    handleAction({ type: "acknowledge_antiban_warning", data: { sessionId: currentSessionId }, label: "Continuar assim mesmo" })
+  }
+
+  const handleAcknowledgeQuota = () => {
+    if (!currentSessionId) return
+    handleAction({ type: "acknowledge_quota_warning", data: { sessionId: currentSessionId }, label: "Continuar mesmo assim" })
+  }
+
+  const handleApplyDuplicatedCampaign = (values: { sourceName: string; pendingDraft: any }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "apply_duplicated_campaign", data: { sessionId: currentSessionId, ...values }, label: "Usar como base" })
+  }
+
+  const handleCancelDuplicatedCampaign = () => {
+    if (!currentSessionId) return
+    handleAction({ type: "cancel_duplicated_campaign", data: { sessionId: currentSessionId }, label: "Cancelar" })
+  }
+
+  const handleConfirmExclusions = (values: { excludedContactIds: string[] }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "set_draft_exclusions", data: { sessionId: currentSessionId, ...values }, label: "Salvar exclusões" })
+  }
+
+  const handleCreateFollowUp = (values: { contactIds: string[]; message: string; scheduledAt: string | null }) => {
+    if (!currentSessionId) return
+    handleAction({ type: "create_followup", data: { sessionId: currentSessionId, ...values }, label: "Criar follow-up" })
+  }
+
+  const handleSelectLead = async (lead: { id: string; name: string; phone: string }) => {
+    if (!currentSessionId) return
+    const userMsg: Message = { id: `user-${Date.now()}`, role: "user", content: `Esse aqui: ${lead.name}`, timestamp: new Date() }
+    setMessages((prev) => [...prev, userMsg])
+    setIsLoading(true)
+    try {
+      const response = await api.agent.chat(`Esse aqui: ${lead.name} (${lead.phone})`, currentSessionId)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: response.reply || response.message || "OK!",
+          actions: response.actions,
+          component: response.component ?? undefined,
+          timestamp: new Date(),
+        },
+      ])
+      setCurrentDraft(response.draft ?? null)
+    } catch {
+      // erro silencioso — usuário pode tentar de novo digitando
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+
+    setIsUploadingAttachment(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const data = await api.uploads.media(formData)
+      setPendingAttachment({ name: data.filename || file.name, url: data.url, mediaType: data.mediaType })
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: "Não consegui anexar esse arquivo. Verifique o tipo/tamanho (máx. 16MB) e tente de novo.",
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setIsUploadingAttachment(false)
+    }
+  }
+
+  const handleAction = async (action: Action) => {
+    const isConfirmCampaign = action.type === "confirm_campaign"
+    if (isConfirmCampaign) setIsConfirmingCampaign(true)
+    setIsLoading(true)
+    try {
+      const response = await api.agent.execute(action.type, action.data)
+
+      const resultMessage: Message = {
+        id: `agent-${Date.now()}`,
+        role: "agent",
+        content: response.message || response.text || "Pronto! Feito.",
+        actions: response.result?.actions?.length ? response.result.actions : undefined,
+        component: response.result?.component ?? undefined,
+        timestamp: new Date(),
+      }
+
+      if (response.result?.type === "whatsapp_qr") {
+        resultMessage.whatsapp = {
+          instanceId: response.result.instanceId,
+          qrCode: response.result.qrCode || null,
+          status: response.result.alreadyConnected ? "connected" : "connecting",
         }
-    };
+      }
 
+      setMessages((prev) => [...prev, resultMessage])
+
+      if (resultMessage.whatsapp && resultMessage.whatsapp.status === "connecting") {
+        startWhatsAppPolling(resultMessage.id, resultMessage.whatsapp.instanceId)
+      }
+
+      if (isConfirmCampaign && response.success) {
+        setCurrentDraft(null)
+      } else if (response.result?.draft) {
+        setCurrentDraft(response.result.draft)
+      }
+
+      const redirect = response.result?.redirect
+      if (redirect && !resultMessage.whatsapp) {
+        setTimeout(() => router.push(redirect), 800)
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: "Ops, não consegui executar essa ação. Vamos tentar de novo?",
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+      if (isConfirmCampaign) setIsConfirmingCampaign(false)
+    }
+  }
+
+  const handleSuggestionClick = async (card: SuggestionCard) => {
+    await handleNewSession()
+    await new Promise((r) => setTimeout(r, 400))
+
+    const msg: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: card.title,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, msg])
+
+    if (DIRECT_ACTIONS.has(card.action)) {
+      await handleAction({ type: card.action, data: undefined, label: card.title })
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await api.agent.chat(card.title, currentSessionId!)
+      const agentMessage: Message = {
+        id: `agent-${Date.now()}`,
+        role: "agent",
+        content: response.reply || response.message || "OK!",
+        actions: response.actions,
+        component: response.component ?? undefined,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, agentMessage])
+      setCurrentDraft(response.draft ?? null)
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: "Desculpe, tive um problema. Pode tentar de novo?",
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    if (!name) return "U"
+    return name
+      .split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
+  }
+
+  const userName = user?.nome || user?.name || "Corretor"
+  const showWelcome = !currentSessionId || (messages.length === 0 && !isLoading)
+
+  if (pageLoading) {
     return (
-        <div className="space-y-10 pb-20">
-            <QRCodeModal
-                isOpen={isQRModalOpen}
-                onClose={() => { setIsQRModalOpen(false); fetchDashboardData(); }}
-                qrCode={qrCode}
-                isLoading={qrLoading}
-                onRetry={handleConnect}
-            />
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <BrandLoader size="md" />
+      </div>
+    )
+  }
 
+  return (
+    <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
+      {/* Mobile-only header: new chat / history toggle (hidden on lg, where NavRail has these) */}
+      <div className="flex lg:hidden items-center justify-end gap-2 pb-3">
+        <button
+          onClick={handleNewSession}
+          title="Novo Chat"
+          className="flex items-center justify-center size-9 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
+        >
+          <Plus className="size-5" />
+        </button>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          title="Histórico"
+          className={cn(
+            "flex items-center justify-center size-9 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all",
+            sidebarOpen && "text-zinc-600 bg-zinc-100"
+          )}
+        >
+          <PanelLeft className="size-5" />
+        </button>
+      </div>
 
-            <InputModal
-                isOpen={showInstanceNameModal}
-                onClose={() => setShowInstanceNameModal(false)}
-                onConfirm={handleInstanceNameSubmit}
-                title="Nome da Instância"
-                description="Escolha um nome para identificar sua instância do WhatsApp"
-                placeholder="Ex: WhatsApp Vendas"
-                defaultValue="Minha Instância"
-            />
-
-            {/* Header Section */}
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-foreground tracking-tight leading-tight flex items-center gap-3">
-                        Seu Hub de<br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">Automação Imobiliária.</span>
-                        <HelpBadge />
-                    </h1>
-                    <p className="text-muted-foreground mt-4 text-lg max-w-xl leading-relaxed">
-                        Gerencie seus leads, campanhas e automações em um único lugar. O ZapBroker evoluiu para ser o seu centro de comando.
-                    </p>
-                    <div className="flex gap-3 mt-6">
-                        <Tooltip content="Crie uma nova campanha de WhatsApp para seus leads">
-                            <Link href="/dashboard/campaigns/" className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2">
-                                <Plus className="w-5 h-5" /> Nova Campanha
-                            </Link>
-                        </Tooltip>
-                        <Tooltip content="Acesse tutoriais e documentação do sistema">
-                            <button className="px-6 py-2.5 bg-accent text-accent-foreground font-bold rounded-xl border border-border hover:bg-accent/80 transition-all">
-                                Ajuda
-                            </button>
-                        </Tooltip>
-                    </div>
-                </div>
-            </header>
-
-            {/* Onboarding Checklist */}
-            <div data-tour="onboarding-checklist">
-                <OnboardingChecklist />
-            </div>
-
-            {/* Main Stats Grid - Feature Cards Style */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                {/* WhatsApp Status Card (Big) */}
-                <div className="col-span-1 md:col-span-2 xl:col-span-2 row-span-2">
-                    <div data-tour="whatsapp-status" className="h-full">
-                        <WhatsAppStatusWidget />
-                    </div>
-                </div>
-
-                {/* Quota Widget */}
-                <div className="xl:col-span-2">
-                    <div data-tour="quota-widget" className="h-full">
-                        <QuotaWidget />
-                    </div>
-                </div>
-
-                {/* Leads Card */}
-                <Tooltip content="Quantidade total de contatos importados no sistema">
-                    <div data-tour="stats-leads" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
-                        <div className="flex justify-between items-start z-10">
-                            <div className="bg-emerald-500/10 p-3 rounded-xl">
-                                <Users className="w-6 h-6 text-emerald-500" />
-                            </div>
-                            <Tooltip content="Crescimento em relação ao período anterior" side="left">
-                                <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">+100%</span>
-                            </Tooltip>
-                        </div>
-                        <div className="z-10">
-                            <h3 className="text-3xl font-bold text-foreground">{stats.leads}</h3>
-                            <p className="text-sm text-muted-foreground font-medium">Total de Leads</p>
-                        </div>
-                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
-                    </div>
-                </Tooltip>
-
-                {/* Campaigns Card */}
-                <Tooltip content="Número de campanhas criadas e enviadas">
-                    <div data-tour="stats-campaigns" className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden h-full min-h-[180px] flex flex-col justify-between">
-                        <div className="flex justify-between items-start z-10">
-                            <div className="bg-purple-500/10 p-3 rounded-xl">
-                                <Send className="w-6 h-6 text-purple-500" />
-                            </div>
-                            <Tooltip content="Respostas recebidas hoje" side="left">
-                                <span className="text-xs font-bold text-purple-500 bg-purple-500/10 px-2 py-1 rounded-full">+{stats.responses} hoje</span>
-                            </Tooltip>
-                        </div>
-                        <div className="z-10">
-                            <h3 className="text-3xl font-bold text-foreground">{stats.campaigns}</h3>
-                            <p className="text-sm text-muted-foreground font-medium">Campanhas Enviadas</p>
-                        </div>
-                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors" />
-                    </div>
-                </Tooltip>
-            </div>
-
-            {/* Recent Section - "New Drops" Style */}
-            <div>
-                <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
-                    <BarChart2 className="w-5 h-5 text-primary" /> Atividade Recente
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Campaigns List as Cards */}
-                    {recentCampaigns.length > 0 ? (
-                        recentCampaigns.map((camp) => (
-                            <Link
-                                key={camp.id}
-                                href={`/dashboard/campaigns/${camp.id}`}
-                                className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-all shadow-sm hover:shadow-xl hover:-translate-y-1 block h-full"
-                            >
-                                <div className="aspect-video bg-gradient-to-br from-primary/5 to-purple-500/5 relative p-6 flex flex-col justify-center items-center text-center">
-                                    <div className="w-16 h-16 rounded-2xl bg-background shadow-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                        <span className="text-2xl font-bold text-primary">{camp.name.charAt(0).toUpperCase()}</span>
-                                    </div>
-                                    <h4 className="font-bold text-foreground text-lg group-hover:text-primary transition-colors">{camp.name}</h4>
-                                    <p className="text-xs text-muted-foreground mt-1">{new Date(camp.created_at).toLocaleDateString()}</p>
-                                </div>
-                                <div className="p-4 border-t border-border bg-card/50 flex justify-between items-center">
-                                    <span className={cn(
-                                        "text-xs font-bold px-2 py-1 rounded-full uppercase",
-                                        camp.status === 'COMPLETED' ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                                            camp.status === 'FAILED' ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                                                camp.status === 'PAUSED' ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                                                    "bg-accent text-muted-foreground"
-                                    )}>
-                                        {camp.status === 'PAUSED' ? 'Pausada' : camp.status}
-                                    </span>
-
-                                    <div className="flex items-center gap-2">
-                                        {/* Pause/Resume Controls */}
-                                        {(camp.status === 'PENDING' || camp.status === 'RUNNING' || camp.status === 'PAUSED') && (
-                                            <button
-                                                onClick={async (e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    try {
-                                                        if (camp.status === 'PAUSED') {
-                                                            await api.campaigns.resume(camp.id);
-                                                        } else {
-                                                            await api.campaigns.pause(camp.id);
-                                                        }
-                                                        fetchDashboardData();
-                                                    } catch (err) {
-                                                        console.error('Failed to toggle pause', err);
-                                                    }
-                                                }}
-                                                className={cn(
-                                                    "p-1.5 rounded-full transition-colors z-20 hover:bg-background/80",
-                                                    camp.status === 'PAUSED'
-                                                        ? "text-green-500 hover:text-green-600 bg-green-100 dark:bg-green-900/20"
-                                                        : "text-yellow-500 hover:text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20"
-                                                )}
-                                                title={camp.status === 'PAUSED' ? "Retomar Campanha" : "Pausar Campanha"}
-                                            >
-                                                {camp.status === 'PAUSED' ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
-                                            </button>
-                                        )}
-
-                                        <div className="flex items-center gap-1 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-                                            Ver detalhes <ArrowUpRight className="w-3 h-3" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))
-                    ) : (
-                        <div className="col-span-full py-12 text-center border-2 border-dashed border-border rounded-3xl bg-accent/20">
-                            <p className="text-muted-foreground">Nenhuma campanha recente.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
+      {/* Chat history: side column on lg+, drawer overlay below lg */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            key="mobile-history-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="lg:hidden fixed inset-0 bg-black/40 z-40"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+      <div
+        className={cn(
+          "transition-all duration-300 ease-out overflow-hidden shrink-0",
+          "fixed inset-y-0 left-0 z-50 lg:static lg:z-auto",
+          sidebarOpen ? "w-[260px] opacity-100" : "w-0 opacity-0"
+        )}
+      >
+        <div className="w-[260px] h-full py-1 pr-1 pl-1 lg:pl-0">
+          <ChatHistory
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            onSelect={(session) => { handleSelectSession(session); setSidebarOpen(false) }}
+            onNew={handleNewSession}
+            onDelete={handleDeleteSession}
+            isNewChatAnimating={isNewChatAnimating}
+          />
         </div>
-    );
+      </div>
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+
+        <AnimatePresence mode="wait">
+          {showWelcome ? (
+            <motion.div
+              key="welcome"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col items-center justify-center px-4 py-12"
+            >
+              <div className="w-full max-w-[768px] mx-auto text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-primary text-xs font-medium mb-6">
+                  <Sparkles className="size-3.5" />
+                  Assistente ZapBroker
+                </div>
+
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-2">
+                  {WELCOME_TITLE}
+                </h1>
+                <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto">
+                  {stats.leads > 0
+                    ? `Você tem ${stats.leads} leads e ${stats.campaigns} campanhas. O que vamos fazer hoje?`
+                    : "Comece importando seus contatos para enviar mensagens automáticas."}
+                </p>
+
+                {suggestionCards.length > 0 && (
+                  <div className="flex flex-nowrap justify-center gap-3 max-w-2xl mx-auto overflow-x-auto">
+                    {suggestionCards.map((card, i) => (
+                      <motion.button
+                        key={i}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05, duration: 0.2 }}
+                        whileHover={{ y: -2 }}
+                        onClick={() => handleSuggestionClick(card)}
+                        disabled={isNewChatAnimating}
+                        className="group flex flex-1 basis-0 min-w-[160px] flex-col items-start gap-1.5 p-4 rounded-2xl glass-card text-left text-sm border border-transparent transition-all duration-200 hover:border-primary/40 hover:bg-white/[0.06] hover:shadow-lg hover:shadow-primary/10 disabled:opacity-50"
+                      >
+                        <span className="text-primary mb-1 transition-transform duration-200 group-hover:scale-110">{ICON_MAP[card.icon] ?? <Bot className="size-5" />}</span>
+                        <span className="font-medium text-foreground">{card.title}</span>
+                        <span className="text-xs text-muted-foreground">{card.desc}</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="chat"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <ScrollArea className="flex-1 px-4 py-4">
+                <div className="max-w-[768px] mx-auto space-y-6">
+                  <AnimatePresence initial={false}>
+                    {messages.map((msg) => (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className={cn(
+                          "flex gap-4",
+                          msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "size-9 rounded-2xl flex items-center justify-center shrink-0 mt-0.5",
+                            msg.role === "agent"
+                              ? "bg-gradient-to-br from-purple-500/80 to-blue-500/80 shadow-lg shadow-purple-500/20"
+                              : "bg-primary shadow-lg shadow-primary/20"
+                          )}
+                        >
+                          {msg.role === "agent" ? (
+                            <Bot className="size-4 text-white" />
+                          ) : (
+                            <span className="text-xs font-bold text-white">
+                              {getInitials(userName)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={cn(
+                          "space-y-3 max-w-[85%]",
+                          msg.role === "user" ? "items-end" : "items-start"
+                        )}>
+                          <div
+                            className={cn(
+                              "px-4 py-3 text-sm leading-relaxed",
+                              msg.role === "user"
+                                ? "bg-primary text-primary-foreground rounded-3xl rounded-tr-sm shadow-lg shadow-primary/20"
+                                : "glass rounded-3xl rounded-tl-sm text-accent-foreground"
+                            )}
+                          >
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+
+                          {msg.whatsapp && (
+                            <ChatWhatsAppQR
+                              qrCode={msg.whatsapp.qrCode}
+                              status={msg.whatsapp.status}
+                              onRegenerate={() => regenerateWhatsAppQr(msg.id, msg.whatsapp!.instanceId)}
+                            />
+                          )}
+
+                          {msg.component?.type === "list_picker" && (
+                            <ChatListPicker onSelect={handleSelectDraftList} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "file_upload" && (
+                            <ChatFileUpload onUploaded={handleDraftMediaUploaded} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "timing_confirm" && (
+                            <ChatTimingConfirm purpose={msg.component.purpose} onConfirm={handleConfirmDraftTiming} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "schedule_picker" && (
+                            <ChatSchedulePicker purpose={msg.component.purpose} onConfirm={handleConfirmDraftSchedule} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "instance_picker" && (
+                            <ChatInstancePicker onConfirm={handleConfirmDraftInstances} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "message_editor" && (
+                            <ChatMessageVariationsEditor purpose={msg.component.purpose} onConfirm={handleConfirmDraftMessages} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "campaign_summary" && (
+                            <ChatCampaignSummaryConfirm
+                              purpose={msg.component.purpose}
+                              onConfirm={handleConfirmCampaign}
+                              disabled={isLoading}
+                              isConfirming={isConfirmingCampaign}
+                            />
+                          )}
+
+                          {msg.component?.type === "antiban_warning" && (
+                            <ChatAntiBanWarningConfirm purpose={msg.component.purpose} onConfirm={handleAcknowledgeAntiBan} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "quota_confirm" && (
+                            <ChatQuotaConfirm purpose={msg.component.purpose} onConfirm={handleAcknowledgeQuota} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "duplicate_campaign_confirm" && (
+                            <ChatDuplicateCampaignConfirm
+                              purpose={msg.component.purpose}
+                              onConfirm={handleApplyDuplicatedCampaign}
+                              onCancel={handleCancelDuplicatedCampaign}
+                              disabled={isLoading}
+                            />
+                          )}
+
+                          {msg.component?.type === "contact_exclusion" && (
+                            <ChatContactExclusionPicker purpose={msg.component.purpose} onConfirm={handleConfirmExclusions} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "followup_scheduler" && (
+                            <ChatFollowUpScheduler purpose={msg.component.purpose} onConfirm={handleCreateFollowUp} disabled={isLoading} />
+                          )}
+
+                          {msg.component?.type === "lead_picker" && (
+                            <ChatLeadPicker purpose={msg.component.purpose} onSelect={handleSelectLead} disabled={isLoading} />
+                          )}
+
+                          {msg.actions && msg.actions.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {msg.actions.map((action, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => handleAction(action)}
+                                  disabled={isLoading}
+                                  className="px-4 py-1.5 text-xs font-medium rounded-full glass text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                                >
+                                  {action.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {isLoading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex gap-4"
+                    >
+                      <div className="size-9 rounded-2xl bg-gradient-to-br from-purple-500/80 to-blue-500/80 shadow-lg shadow-purple-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <Bot className="size-4 text-white" />
+                      </div>
+                      <div className="glass rounded-3xl rounded-tl-sm px-4 py-3">
+                        <div className="flex gap-1.5">
+                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="sticky bottom-0 px-4 pb-4 pt-2 bg-gradient-to-t from-zinc-50 via-zinc-50/95 to-transparent backdrop-blur-md">
+          <div className="max-w-[768px] mx-auto">
+            <AnimatedAIChat
+              value={input}
+              onChange={(v) => setInput(v)}
+              onSend={sendMessage}
+              onSelectAttachType={handleSelectAttachType}
+              attachment={pendingAttachment}
+              onRemoveAttachment={() => setPendingAttachment(null)}
+              placeholder={
+                isUploadingAttachment
+                  ? "Enviando anexo..."
+                  : currentSessionId
+                  ? "Envie uma mensagem..."
+                  : "Crie uma nova conversa para começar..."
+              }
+              disabled={!currentSessionId}
+              isLoading={isLoading}
+            />
+            <p className="text-center text-[11px] text-muted-foreground/50 mt-2">
+              O ZapBroker pode cometer erros. Verifique informações importantes.
+            </p>
+          </div>
+        </div>
+
+        <input ref={filesInputRef} type="file" accept={ATTACH_ACCEPT.files} onChange={handleFileSelected} className="hidden" />
+        <input ref={mediaInputRef} type="file" accept={ATTACH_ACCEPT.media} onChange={handleFileSelected} className="hidden" />
+        <input ref={audioInputRef} type="file" accept={ATTACH_ACCEPT.audio} onChange={handleFileSelected} className="hidden" />
+
+        <LeadImporterModal
+          isOpen={isLeadImporterOpen}
+          onClose={() => setIsLeadImporterOpen(false)}
+          onSuccess={() => setIsLeadImporterOpen(false)}
+        />
+      </div>
+
+      {currentDraft && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 bg-black/40 z-40"
+            onClick={() => setCurrentDraft(null)}
+          />
+          <CampaignDraftPanel
+            draft={currentDraft}
+            onConfirm={handleConfirmCampaign}
+            onRemoveMedia={currentDraft.mediaUrl ? handleRemoveDraftMedia : undefined}
+            isConfirming={isConfirmingCampaign}
+          />
+        </>
+      )}
+    </div>
+  )
 }

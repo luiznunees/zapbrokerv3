@@ -96,11 +96,15 @@ export const sendText = async (instanceName: string, chatId: string, text: strin
     }
 };
 
-export const sendImage = async (instanceName: string, chatId: string, file: { media: string, caption?: string, mimetype: string, filename: string }) => {
+export const sendMedia = async (
+    instanceName: string,
+    chatId: string,
+    file: { media: string, caption?: string, mimetype: string, filename: string, mediatype: 'image' | 'video' | 'audio' | 'document' }
+) => {
     try {
         const payload = {
             number: chatId.replace('@c.us', ''),
-            mediatype: "image",
+            mediatype: file.mediatype,
             mimetype: file.mimetype,
             caption: file.caption || "",
             media: file.media,
@@ -110,9 +114,13 @@ export const sendImage = async (instanceName: string, chatId: string, file: { me
         const response = await api.post(`/message/sendMedia/${instanceName}`, payload);
         return response.data;
     } catch (error: any) {
-        console.error('Error sending image via Evolution:', JSON.stringify(error.response?.data || error.message, null, 2));
-        throw new Error('Failed to send image');
+        console.error(`Error sending ${file.mediatype} via Evolution:`, JSON.stringify(error.response?.data || error.message, null, 2));
+        throw new Error(`Failed to send ${file.mediatype}`);
     }
+};
+
+export const sendImage = async (instanceName: string, chatId: string, file: { media: string, caption?: string, mimetype: string, filename: string }) => {
+    return sendMedia(instanceName, chatId, { ...file, mediatype: 'image' });
 };
 
 export const logoutSession = async (instanceName: string) => {
