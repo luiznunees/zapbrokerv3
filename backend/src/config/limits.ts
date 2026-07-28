@@ -1,19 +1,19 @@
-export const PLAN_LIMITS: Record<string, { maxInstances: number; maxMonthlyMessages: number }> = {
-    'prod_ZxwseRQWbKLxHKsnfcUCMfYc': { // Basic
-        maxInstances: 1,
-        maxMonthlyMessages: 50
-    },
-    'prod_n6CMApuNhHqPCUrL2JmHyWbz': { // Plus
+export const PLAN_LIMITS: Record<string, { maxInstances: number; maxMonthlyCampaigns: number; maxLeads: number }> = {
+    'starter': { // Starter — R$39/mês (recorrente)
         maxInstances: 2,
-        maxMonthlyMessages: 125
+        maxMonthlyCampaigns: 5,
+        maxLeads: 500
     },
-    'prod_AXPStPBEeB5xrpubKyWB6EnY': { // Pro
+    'pro': { // Pro — R$79/mês (recorrente) — disparos liberados
         maxInstances: 5,
-        maxMonthlyMessages: 250
+        maxMonthlyCampaigns: Infinity,
+        maxLeads: Infinity
     }
 };
 
+// Aplicado quando o usuário não tem assinatura ativa (sem plano contratado)
 export const DEFAULT_LIMITS = {
     maxInstances: 0,
-    maxMonthlyMessages: 0
+    maxMonthlyCampaigns: 0,
+    maxLeads: 0
 };

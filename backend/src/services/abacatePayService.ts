@@ -1,106 +1,209 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
 
-dotenv.config();
-
-const ABACATE_PAY_URL = 'https://api.abacatepay.com/v1';
+const ABACATE_PAY_URL = 'https://api.abacatepay.com/v2';
 const ABACATE_PAY_KEY = process.env.ABACATE_PAY_KEY;
 
 if (!ABACATE_PAY_KEY) {
-    console.warn('ABACATE_PAY_KEY is missing in .env');
+    console.warn('ABACATE_PAY_KEY not configured — AbacatePay payments disabled');
 }
 
 const api = axios.create({
     baseURL: ABACATE_PAY_URL,
     headers: {
-        'Authorization': `Bearer ${ABACATE_PAY_KEY}`,
+        Authorization: `Bearer ${ABACATE_PAY_KEY}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
-    }
+        Accept: 'application/json',
+    },
 });
 
-interface CustomerData {
-    name: string;
-    cellphone: string;
-    email: string;
-    taxId: string; // CPF/CNPJ
-}
-
-export const createCustomer = async (data: CustomerData) => {
-    try {
-        const response = await api.post('/customer/create', data);
-        return response.data.data;
-    } catch (error: any) {
-        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-        console.error('Error creating AbacatePay customer:', detail);
-        throw new Error(`Failed to create AbacatePay customer: ${detail}`);
-    }
+// Our internal plan_id (config/plans.ts, stored in subscriptions.plan_id) points to AbacatePay
+// products that were registered with cycle: 'MONTHLY'. A product with a cycle set forces
+// checkout to require PIX Automático (disabled for this store) even through the one-time
+// /checkouts/create endpoint — confirmed by testing directly against the API. These cycle-less
+// twin products (already registered in the account) are what actually works for one-time PIX;
+// map to them here only, at the AbacatePay boundary, so the internal plan_id scheme elsewhere
+// (DB, frontend, limits) doesn't need to change.
+const ABACATE_ONE_TIME_PRODUCT_ID: Record<string, string> = {
+    'starter': 'prod_UAhRp6NYDMawr42F5mxcBwYZ', // ZapBroker - Starter
+    'pro': 'prod_tBdEdYtwcHJEbdDcXYPG3TkZ', // ZapBroker - Pro
 };
 
-interface PixData {
-    amount: number; // in cents
-    description?: string;
-    customer: CustomerData;
-    metadata?: any;
+// ============================================================
+// Transparent checkout (PIX QR code rendered on our own site — no redirect to AbacatePay)
+// ============================================================
+
+interface CreatePixChargeParams {
+    subscriptionId: string;
+    userId: string;
+    amount: number;
+    customer: {
+        name: string;
+        email: string;
+        cellphone: string;
+        taxId: string;
+    };
 }
 
-export const createPixQrCode = async (data: PixData) => {
-    try {
-        const sanitizedTaxId = data.customer.taxId.replace(/\D/g, '');
-        const sanitizedPhone = data.customer.cellphone.replace(/\D/g, '');
+export async function createPixCharge(
+    params: CreatePixChargeParams
+): Promise<{ id: string; brCode: string; brCodeBase64: string; expiresAt: string }> {
+    if (!ABACATE_PAY_KEY) throw new Error('AbacatePay not configured');
 
-        if (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14) {
-            throw new Error('Invalid CPF/CNPJ length. Must be 11 or 14 digits.');
-        }
+    const taxId = params.customer.taxId.replace(/\D/g, '');
+    if (taxId.length !== 11 && taxId.length !== 14) {
+        throw new Error('CPF/CNPJ inválido: deve conter 11 ou 14 dígitos');
+    }
+    const cellphone = params.customer.cellphone.replace(/\D/g, '');
 
-        const payload = {
-            amount: data.amount,
-            description: data.description,
+    const payload = {
+        method: 'PIX',
+        data: {
+            amount: params.amount,
+            externalId: params.subscriptionId,
             customer: {
-                ...data.customer,
-                taxId: sanitizedTaxId,
-                cellphone: sanitizedPhone
+                name: params.customer.name,
+                email: params.customer.email,
+                cellphone,
+                taxId,
             },
-            metadata: data.metadata,
-            expiresIn: 3600 // 1 hour
-        };
+            metadata: {
+                subscription_id: params.subscriptionId,
+                user_id: params.userId,
+            },
+        },
+    };
 
-        const response = await api.post('/pixQrCode/create', payload);
-        return response.data.data;
-    } catch (error: any) {
-        console.error('Error creating PIX QR Code:', error.response?.data || error.message);
-        if (error.response?.data) {
-            console.error('AbacatePay Error Details:', JSON.stringify(error.response.data, null, 2));
-        }
-        throw new Error(`Failed to create PIX QR Code: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
-};
-export const createBillingSession = async (data: {
-    frequency: 'ONE_TIME' | 'MULTIPLE_PAYMENTS',
-    methods: string[],
-    products: Array<{
-        externalId: string,
-        name: string,
-        quantity: number,
-        price: number
-    }>,
-    returnUrl: string,
-    completionUrl: string,
-    customerId?: string,
-    customer?: {
-        name?: string,
-        cellphone?: string,
-        email: string,
-        taxId?: string
-    },
-    metadata?: any
-}) => {
     try {
-        const response = await api.post('/billing/create', data);
-        return response.data.data;
+        const response = await api.post('/transparents/create', payload);
+        const data = response.data.data;
+        return { id: data.id, brCode: data.brCode, brCodeBase64: data.brCodeBase64, expiresAt: data.expiresAt };
     } catch (error: any) {
         const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-        console.error('Error creating AbacatePay billing session:', detail);
-        throw new Error(`Failed to create billing session: ${detail}`);
+        console.error('Error creating AbacatePay PIX charge:', detail);
+        throw new Error(`Failed to create PIX charge: ${detail}`);
     }
-};
+}
+
+// ============================================================
+// One-time billing (legacy — used by existing pending payments)
+// ============================================================
+
+interface CreateBillingParams {
+    subscriptionId: string;
+    userId: string;
+    planId: string;
+    customer: {
+        name: string;
+        email: string;
+        cellphone: string;
+        taxId: string;
+    };
+}
+
+export async function createBilling(
+    params: CreateBillingParams,
+    methods: Array<'PIX' | 'CARD'> = ['PIX']
+): Promise<{ id: string; url: string }> {
+    if (!ABACATE_PAY_KEY) throw new Error('AbacatePay not configured');
+
+    const taxId = params.customer.taxId.replace(/\D/g, '');
+    if (taxId.length !== 11 && taxId.length !== 14) {
+        throw new Error('CPF/CNPJ inválido: deve conter 11 ou 14 dígitos');
+    }
+    const cellphone = params.customer.cellphone.replace(/\D/g, '');
+    const abacateProductId = ABACATE_ONE_TIME_PRODUCT_ID[params.planId] || params.planId;
+
+    const payload = {
+        items: [{ id: abacateProductId, quantity: 1 }],
+        methods,
+        returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/upgrade`,
+        completionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?checkout=success`,
+        customer: {
+            name: params.customer.name,
+            email: params.customer.email,
+            cellphone,
+            taxId,
+        },
+        externalId: params.subscriptionId,
+        metadata: {
+            subscription_id: params.subscriptionId,
+            user_id: params.userId,
+        },
+    };
+
+    try {
+        const response = await api.post('/checkouts/create', payload);
+        return { id: response.data.data.id, url: response.data.data.url };
+    } catch (error: any) {
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error creating AbacatePay billing:', detail);
+        throw new Error(`Failed to create billing: ${detail}`);
+    }
+}
+
+// ============================================================
+// Recurring subscription (PIX recorrente)
+// ============================================================
+
+interface CreateSubscriptionParams {
+    subscriptionId: string;
+    userId: string;
+    planId: string;
+    customer: {
+        name: string;
+        email: string;
+        cellphone: string;
+        taxId: string;
+    };
+}
+
+export async function createSubscriptionCheckout(
+    params: CreateSubscriptionParams
+): Promise<{ id: string; url: string }> {
+    if (!ABACATE_PAY_KEY) throw new Error('AbacatePay not configured');
+
+    const taxId = params.customer.taxId.replace(/\D/g, '');
+    if (taxId.length !== 11 && taxId.length !== 14) {
+        throw new Error('CPF/CNPJ inválido: deve conter 11 ou 14 dígitos');
+    }
+    const cellphone = params.customer.cellphone.replace(/\D/g, '');
+
+    const payload = {
+        items: [{ id: params.planId, quantity: 1 }],
+        methods: ['PIX'],
+        returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/upgrade`,
+        completionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?checkout=success`,
+        customer: {
+            name: params.customer.name,
+            email: params.customer.email,
+            cellphone,
+            taxId,
+        },
+        externalId: params.subscriptionId,
+        metadata: {
+            subscription_id: params.subscriptionId,
+            user_id: params.userId,
+        },
+    };
+
+    try {
+        const response = await api.post('/subscriptions/create', payload);
+        return { id: response.data.data.id, url: response.data.data.url };
+    } catch (error: any) {
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error creating AbacatePay subscription:', detail);
+        throw new Error(`Failed to create subscription: ${detail}`);
+    }
+}
+
+export async function cancelAbacateSubscription(abacateSubscriptionId: string): Promise<void> {
+    if (!ABACATE_PAY_KEY) throw new Error('AbacatePay not configured');
+
+    try {
+        await api.post('/subscriptions/cancel', { id: abacateSubscriptionId });
+    } catch (error: any) {
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error cancelling AbacatePay subscription:', detail);
+        throw new Error(`Failed to cancel subscription: ${detail}`);
+    }
+}

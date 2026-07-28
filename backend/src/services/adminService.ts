@@ -1,5 +1,12 @@
 import { supabase } from '../config/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { getCostSummary } from './costService';
+import { USD_TO_BRL } from '../config/aiPricing';
+
+const PLAN_LABELS: Record<string, string> = {
+    'starter': 'Starter',
+    'pro': 'Pro',
+};
 
 export const getSystemStats = async () => {
     // 1. Total Users
@@ -118,4 +125,63 @@ export const getSystemLogs = async () => {
         timestamp: i.updated_at,
         source: 'Instance Monitor'
     }));
+};
+
+// Faturamento, custo de IA e lucro estimado num período. Datas em ISO (YYYY-MM-DD).
+export const getFinanceOverview = async (startDate: string, endDate: string) => {
+    const { data: payments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount, status, metadata, created_at, subscription_id, subscriptions(plan_id)')
+        .eq('status', 'PAID')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
+
+    if (paymentsError) throw new Error(paymentsError.message);
+
+    const paidPayments = payments || [];
+    const revenueCents = paidPayments.reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+
+    const revenueByPlan: Record<string, number> = {};
+    for (const p of paidPayments as any[]) {
+        const planId = p.subscriptions?.plan_id;
+        const label = PLAN_LABELS[planId] || planId || 'Desconhecido';
+        revenueByPlan[label] = (revenueByPlan[label] || 0) + (p.amount || 0);
+    }
+
+    const costSummary = await getCostSummary(startDate, endDate);
+    const costBRL = costSummary.totalCostUsd * USD_TO_BRL;
+    const revenueBRL = revenueCents / 100;
+    const profitBRL = revenueBRL - costBRL;
+
+    // Anexa nome/email nos top usuários de custo, pra ficar legível no painel
+    const topUserIds = costSummary.topUsers.map(u => u.userId).filter(Boolean);
+    let topUsersWithNames: Array<{ userId: string; name: string; email: string; costUsd: number; costBRL: number }> = [];
+    if (topUserIds.length > 0) {
+        const { data: users } = await supabase.from('users').select('id, name, email').in('id', topUserIds);
+        topUsersWithNames = costSummary.topUsers.map(u => {
+            const user = users?.find((usr: any) => usr.id === u.userId);
+            return { userId: u.userId, name: user?.name || 'Desconhecido', email: user?.email || '', costUsd: u.costUsd, costBRL: u.costUsd * USD_TO_BRL };
+        });
+    }
+
+    return {
+        period: { startDate, endDate },
+        revenue: {
+            totalBRL: revenueBRL,
+            paymentCount: paidPayments.length,
+            byPlan: Object.fromEntries(Object.entries(revenueByPlan).map(([k, v]) => [k, v / 100])),
+        },
+        cost: {
+            totalUsd: costSummary.totalCostUsd,
+            totalBRL: costBRL,
+            aiCallCount: costSummary.eventCount,
+            byProvider: costSummary.byProvider,
+            topUsers: topUsersWithNames,
+        },
+        profit: {
+            totalBRL: profitBRL,
+            marginPct: revenueBRL > 0 ? (profitBRL / revenueBRL) * 100 : 0,
+        },
+        exchangeRateUsed: USD_TO_BRL,
+    };
 };

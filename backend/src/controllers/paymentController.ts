@@ -1,85 +1,84 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { supabase } from '../config/supabase';
-import * as abacatePayService from '../services/abacatePayService';
+import * as billingService from '../services/billingService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
+import { PLANS } from '../config/plans';
 
-const PLANS: any = {
-    'prod_AXPStPBEeB5xrpubKyWB6EnY': { name: 'ZapBroker - Pro', price: 11900 },
-    'prod_n6CMApuNhHqPCUrL2JmHyWbz': { name: 'ZapBroker - Plus', price: 6900 },
-    'prod_ZxwseRQWbKLxHKsnfcUCMfYc': { name: 'ZapBroker - Básico', price: 2900 }
-};
+// AbacatePay errors come back as raw API JSON — never show that to the end user.
+// Map the cases we know about to plain-language messages; anything unrecognized
+// falls back to a generic "try again or contact support" message.
+function friendlyBillingError(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes('taxid') || lower.includes('cpf') || lower.includes('cnpj')) {
+        return 'CPF ou CNPJ inválido. Verifique os números digitados e tente novamente.';
+    }
+    if (lower.includes('cellphone') || lower.includes('phone')) {
+        return 'Número de celular inválido. Verifique e tente novamente.';
+    }
+    if (lower.includes('email')) {
+        return 'Email inválido. Verifique e tente novamente.';
+    }
+    return 'Não foi possível gerar o pagamento agora. Tente novamente em instantes ou fale com o suporte.';
+}
 
 export const createSubscription = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
-    const { planId } = req.body;
+    const { planId, cpf, cellphone } = req.body;
 
     if (!userId) throw new AppError('User not authenticated', 401);
     if (!PLANS[planId]) throw new AppError('Invalid plan ID', 400);
-
-    const user = req.user;
-    if (!user) throw new AppError('User not authenticated', 401);
-    if (!PLANS[planId]) throw new AppError('Invalid plan ID', 400);
+    if (!cpf || !cellphone) throw new AppError('CPF e telefone são obrigatórios para pagamento via PIX', 400);
 
     const plan = PLANS[planId];
+    const user = req.user;
 
-    // 1. Create Subscription Record (Pending)
     const { data: subscription, error: subError } = await supabase
         .from('subscriptions')
         .insert({
             user_id: userId,
             plan_id: planId,
-            status: 'pending_payment'
+            status: 'pending_payment',
+            pix_cpf: cpf,
+            pix_cellphone: cellphone,
         })
         .select()
         .single();
 
     if (subError) throw new AppError('Database Error: ' + subError.message, 500);
 
-    // 2. Create Billing Session (Hosted Checkout)
     try {
-        const session = await abacatePayService.createBillingSession({
-            frequency: 'ONE_TIME',
-            methods: ['PIX'],
-            products: [{
-                // IMPORTANT: We use subscription.id here so we can identify the payment in the webhook
-                externalId: subscription.id,
-                name: plan.name,
-                price: plan.price,
-                quantity: 1
-            }],
-            returnUrl: `${process.env.FRONTEND_URL || 'https://zapbroker.dev'}/dashboard`,
-            completionUrl: `${process.env.FRONTEND_URL || 'https://zapbroker.dev'}/dashboard/success`,
-            // Omit customer object to allow user to fill everything manually at checkout
-            metadata: {
-                subscription_id: subscription.id
-            }
+        // AbacatePay has no recurring PIX today — every cycle (this first payment included)
+        // is a one-time checkout; the monthly billing job generates the same kind of checkout
+        // for renewals via billingService.generateBillingCheckout.
+        const { brCode, brCodeBase64, expiresAt } = await billingService.generateBillingCheckout({
+            subscriptionId: subscription.id,
+            userId,
+            planId,
+            amount: plan.price,
+            customer: {
+                name: user.nome || user.email,
+                email: user.email,
+                cellphone,
+                taxId: cpf,
+            },
         });
-
-        // 3. Create Payment Record (Pending)
-        await supabase
-            .from('payments')
-            .insert({
-                user_id: userId,
-                subscription_id: subscription.id,
-                external_id: session.id,
-                amount: plan.price,
-                status: 'PENDING',
-                method: 'PIX',
-                metadata: {
-                    billing_url: session.url,
-                    billing_id: session.id
-                }
-            });
 
         res.status(201).json({
             subscriptionId: subscription.id,
-            checkoutUrl: session.url
+            brCode,
+            brCodeBase64,
+            expiresAt,
         });
-
     } catch (error: any) {
-        console.error('Billing Session failure:', error.message);
-        throw new AppError(error.message, 500);
+        console.error('AbacatePay billing failure:', error.message);
+
+        // The subscription row above was only a placeholder for the checkout we just failed
+        // to create — leaving it as 'pending_payment' would orphan it in the database and
+        // could confuse a retry later, so clean it up before reporting the error.
+        await supabase.from('subscriptions').delete().eq('id', subscription.id);
+
+        throw new AppError(friendlyBillingError(error.message), 502);
     }
 };
 
@@ -89,7 +88,7 @@ export const getSubscriptionStatus = async (req: AuthRequest, res: Response) => 
 
     const { data: subscription, error } = await supabase
         .from('subscriptions')
-        .select('status')
+        .select('status, trial_ends_at, pending_checkout_brcode, pending_checkout_qrcode, pending_checkout_expires_at')
         .eq('id', id)
         .eq('user_id', userId)
         .single();
@@ -98,5 +97,41 @@ export const getSubscriptionStatus = async (req: AuthRequest, res: Response) => 
         throw new AppError('Subscription not found', 404);
     }
 
-    res.json({ status: subscription.status });
+    res.json({
+        status: subscription.status,
+        trial_ends_at: subscription.trial_ends_at,
+        brCode: subscription.pending_checkout_brcode,
+        brCodeBase64: subscription.pending_checkout_qrcode,
+        expiresAt: subscription.pending_checkout_expires_at,
+    });
+};
+
+export const cancelSubscription = async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+
+    const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+
+    if (!sub) throw new AppError('No active subscription found', 404);
+
+    // No gateway-side subscription to cancel in the manual PIX model — each billing cycle is
+    // just a standalone checkout, so cancelling only means we stop generating new ones.
+    await supabase
+        .from('subscriptions')
+        .update({
+            status: 'canceled',
+            pending_checkout_id: null,
+            pending_checkout_url: null,
+            pending_checkout_qrcode: null,
+            pending_checkout_brcode: null,
+            pending_checkout_expires_at: null,
+            updated_at: new Date(),
+        })
+        .eq('id', sub.id);
+
+    res.json({ message: 'Subscription canceled. Access until end of billing period.' });
 };

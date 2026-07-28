@@ -1,129 +1,111 @@
-import { Check, X } from "lucide-react"
+import { Check } from "lucide-react"
 import Link from "next/link"
+import { DoodleArrowDown } from "./Doodle"
 
 const PLANS = [
     {
-        id: "prod_ZxwseRQWbKLxHKsnfcUCMfYc",
-        name: "Básico",
-        price: "29",
-        perMsg: "0,58",
+        id: "starter",
+        name: "Starter",
+        price: "39",
         features: [
-            "50 msgs/semana",
-            "1 conexão WhatsApp",
-            "IA Personalizável",
-            "Sistema Anti-Ban",
-            "Relatórios básicos",
-            "Suporte por email"
-        ],
-        cta: "Começar Teste Grátis",
-        highlight: false
-    },
-    {
-        id: "prod_n6CMApuNhHqPCUrL2JmHyWbz",
-        name: "Plus",
-        price: "69",
-        perMsg: "0,69",
-        features: [
-            "125 msgs/semana",
+            "5 disparos por mês",
+            "500 leads",
             "2 conexões WhatsApp",
-            "Tudo do Básico +",
-            "Analytics avançado",
-            "Templates premium",
-            "Agendamento",
             "Suporte prioritário"
         ],
-        cta: "Começar Teste Grátis",
-        highlight: true
+        cta: "Assinar Starter",
+        featured: false
     },
     {
-        id: "prod_AXPStPBEeB5xrpubKyWB6EnY",
+        id: "pro",
         name: "Pro",
-        price: "119",
-        perMsg: "0,48",
+        price: "79",
         features: [
-            "250 msgs/semana",
+            "Disparos ilimitados",
+            "Leads ilimitados",
             "5 conexões WhatsApp",
-            "Tudo do Plus +",
-            "API Access",
-            "Webhooks",
-            "Suporte VIP",
-            "Gerente de conta"
+            "Suporte VIP"
         ],
-        cta: "Começar Teste Grátis",
-        highlight: false
+        cta: "Assinar Pro",
+        featured: true
     }
 ]
 
 export function Pricing() {
     return (
-        <section id="pricing" className="py-8 bg-secondary/30">
+        <section id="pricing" className="py-10 md:py-14 bg-white">
             <div className="container mx-auto px-4 md:px-6">
-                <div className="text-center max-w-lg mx-auto mb-6">
-                    <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-2">
+                <div className="text-center max-w-lg mx-auto mb-10 relative">
+                    <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-2 text-[#0a0a0a] uppercase">
                         Planos Simples, Sem Pegadinhas
                     </h2>
-                    <p className="text-xs text-muted-foreground">
-                        Escolha o plano ideal para o seu volume de captação. Todos incluem 7 dias grátis para testar.
+                    <p className="text-sm text-[#6f6b76]">
+                        Escolha o plano ideal para o seu volume de captação. Pagamento via PIX, ativação imediata.
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-2 max-w-3xl mx-auto items-start">
+                <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto items-start">
                     {PLANS.map((plan, i) => (
                         <div
                             key={i}
                             className={`
-                                relative p-3 rounded-lg border bg-card transition-all duration-300
-                                ${plan.highlight
-                                    ? 'border-brand-purple-500 shadow-xl shadow-brand-purple-500/10 scale-105 z-10'
-                                    : 'border-border hover:border-brand-purple-500/50 hover:shadow-lg'
+                                relative p-6 rounded-3xl transition-transform hover:-translate-y-1
+                                ${plan.featured
+                                    ? 'bg-[#145c3b] text-white rotate-1'
+                                    : 'bg-[#f6f4f1] text-[#0a0a0a] -rotate-1'
                                 }
                             `}
                         >
-                            {plan.highlight && (
-                                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-brand-purple-500 text-white px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider">
-                                    🏆 Mais Escolhido
-                                </div>
+                            {plan.featured && (
+                                <>
+                                    <div className="absolute -top-3 left-6 bg-[#d4a054] text-[#0a0a0a] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                        Mais Escolhido
+                                    </div>
+                                    <DoodleArrowDown className="hidden md:block absolute -top-10 right-4 w-10 h-10 text-[#d4a054] rotate-[200deg]" />
+                                </>
                             )}
 
-                            <div className="mb-2.5">
-                                <h3 className="text-xs font-bold mb-0.5">{plan.name}</h3>
-                                <div className="flex items-baseline gap-0.5">
-                                    <span className="text-[10px] font-medium text-muted-foreground">R$</span>
-                                    <span className="text-2xl font-bold tracking-tight">{plan.price}</span>
-                                    <span className="text-muted-foreground text-[10px]">/mês</span>
+                            <div className="mb-5">
+                                <h3 className={`text-xs font-black uppercase tracking-wider mb-3 ${plan.featured ? 'text-white/50' : 'text-[#6f6b76]'}`}>
+                                    {plan.name}
+                                </h3>
+                                <div className="flex items-baseline gap-1">
+                                    <span className={`text-sm font-bold ${plan.featured ? 'text-white/50' : 'text-[#6f6b76]'}`}>R$</span>
+                                    <span className="text-4xl font-black tracking-tight">{plan.price}</span>
+                                    <span className={`text-sm ${plan.featured ? 'text-white/50' : 'text-[#6f6b76]'}`}>/mês</span>
                                 </div>
-                                <p className="text-[8px] text-muted-foreground mt-0.5">Mensal (Cotas Semanais)</p>
+                                <p className={`text-xs mt-1 ${plan.featured ? 'text-white/50' : 'text-[#6f6b76]'}`}>Mensal via PIX, cancele quando quiser</p>
                             </div>
 
+                            <ul className="space-y-2.5 mb-6">
+                                {plan.features.map((feature, j) => (
+                                    <li key={j} className="flex items-start gap-2.5 text-sm">
+                                        <Check className={`w-4 h-4 shrink-0 mt-0.5 ${plan.featured ? 'text-[#d4a054]' : 'text-[#0e9f6e]'}`} />
+                                        <span className={plan.featured ? 'text-white/85' : 'text-[#37343e]'}>{feature}</span>
+                                    </li>
+                                ))}
+                            </ul>
+
                             <Link
-                                href={`/login?planId=${plan.id}`}
+                                href={`/signup?planId=${plan.id}`}
                                 className={`
-                                    w-full py-1.5 rounded-md font-bold text-[10px] text-center transition-colors block mb-3
-                                    ${plan.highlight
-                                        ? 'bg-brand-green-500 hover:bg-brand-green-600 text-white shadow-lg shadow-brand-green-500/20'
-                                        : 'border border-brand-purple-500 text-brand-purple-500 hover:bg-brand-purple-50 dark:hover:bg-brand-purple-900/20'
+                                    w-full py-3 rounded-full font-black text-sm text-center transition-colors block
+                                    ${plan.featured
+                                        ? 'bg-[#d4a054] hover:brightness-110 text-[#0a0a0a]'
+                                        : 'bg-[#0a0a0a] hover:bg-[#2a2a2a] text-white'
                                     }
                                 `}
                             >
                                 {plan.cta}
                             </Link>
-
-                            <ul className="space-y-1.5">
-                                {plan.features.map((feature, j) => (
-                                    <li key={j} className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
-                                        <Check className="w-3 h-3 text-brand-green-500 shrink-0" />
-                                        {feature}
-                                    </li>
-                                ))}
-                            </ul>
                         </div>
                     ))}
                 </div>
 
-                <div className="mt-5 flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground text-center">
-                    <span>✓ 7 dias grátis em todos os planos</span>
-                    <span>✓ Sem cartão de crédito</span>
+                <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-[#6f6b76] text-center">
+                    <span>✓ Pagamento via PIX</span>
                     <span>✓ Cancele quando quiser</span>
+                    <span>✓ Suporte rápido</span>
                 </div>
             </div>
         </section>

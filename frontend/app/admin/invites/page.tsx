@@ -58,9 +58,8 @@ export default function AdminInvitesPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="free">Freemium (Grátis)</SelectItem>
-                                <SelectItem value="prod_ZxwseRQWbKLxHKsnfcUCMfYc">Básico</SelectItem>
-                                <SelectItem value="prod_n6CMApuNhHqPCUrL2JmHyWbz">Plus</SelectItem>
-                                <SelectItem value="prod_AXPStPBEeB5xrpubKyWB6EnY">Pro</SelectItem>
+                                <SelectItem value="starter">Starter</SelectItem>
+                                <SelectItem value="pro">Pro</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

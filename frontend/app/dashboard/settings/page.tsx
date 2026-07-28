@@ -1,46 +1,38 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { User, Smartphone, CreditCard, Moon, Sun, Monitor, Loader2, LogOut, Plus, Trash2, RefreshCw, X, Check, Zap, Shield } from 'lucide-react'
+import { User, Smartphone, CreditCard, Loader2, LogOut, Plus, Trash2, RefreshCw, X, Check, Zap, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useTheme } from 'next-themes'
+
 import { api } from '@/services/api'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
-import { PixQRCodeModal } from '@/components/payment/PixQRCodeModal'
 import { useSearchParams } from 'next/navigation'
 import { HelpBadge } from '@/components/ui/HelpBadge'
+import { BrandLoader } from '@/components/ui/BrandLoader'
 
 const PLANS = [
     {
-        id: 'prod_ZxwseRQWbKLxHKsnfcUCMfYc',
-        name: 'Básico',
-        price: 29.00,
-        description: 'Ideal para começar',
-        features: ['50 mensagens/semana', '1 instância WhatsApp', 'IA Personalizável', 'Sistema Anti-Ban', 'Suporte por email']
-    },
-    {
-        id: 'prod_n6CMApuNhHqPCUrL2JmHyWbz',
-        name: 'Plus',
-        price: 69.00,
+        id: 'starter',
+        name: 'Starter',
+        price: 39.00,
         description: 'Mais popular',
         popular: true,
-        features: ['125 mensagens/semana', '2 conexões WhatsApp', 'IA Personalizável', 'Analytics avançado', 'Suporte prioritário']
+        features: ['5 campanhas de disparo por mês', '500 leads', '2 conexões WhatsApp', 'Suporte prioritário']
     },
     {
-        id: 'prod_AXPStPBEeB5xrpubKyWB6EnY',
+        id: 'pro',
         name: 'Pro',
-        price: 119.00,
+        price: 79.00,
         description: 'Para empresas',
-        features: ['250 mensagens/semana', '5 conexões WhatsApp', 'IA Personalizável', 'API Access', 'Suporte VIP']
+        features: ['Disparos liberados (sem limite de campanhas)', 'Leads ilimitados', '5 conexões WhatsApp', 'Suporte VIP']
     }
 ]
 
 export default function SettingsPage() {
-    const { theme, setTheme } = useTheme()
     const searchParams = useSearchParams()
-    const [activeTab, setActiveTab] = useState<'profile' | 'connection' | 'plan' | 'appearance'>('profile')
+    const [activeTab, setActiveTab] = useState<'profile' | 'connection' | 'plan'>('profile')
 
     // Payment State
-    const [selectedPlanId, setSelectedPlanId] = useState(PLANS[1].id)
+    const [selectedPlanId, setSelectedPlanId] = useState(PLANS[0].id)
     const [loadingPayment, setLoadingPayment] = useState(false)
     const [pixData, setPixData] = useState<any>(null)
     const [subscriptionId, setSubscriptionId] = useState<string | null>(null)
@@ -259,7 +251,7 @@ export default function SettingsPage() {
                 {[
                     { id: 'profile', label: 'Perfil', icon: User },
                     { id: 'connection', label: 'Conexão WhatsApp', icon: Smartphone },
-                    { id: 'appearance', label: 'Aparência', icon: Moon },
+
                     { id: 'plan', label: 'Assinatura', icon: CreditCard },
                 ].map((tab) => (
                     <button
@@ -419,8 +411,8 @@ export default function SettingsPage() {
                                     <span className="text-white text-sm font-bold">!</span>
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="font-bold text-red-700 dark:text-red-400 mb-1">Limite do Plano Atingido</h4>
-                                    <p className="text-sm text-red-600 dark:text-red-300">{errorMessage}</p>
+                                    <h4 className="font-bold text-red-700 mb-1">Limite do Plano Atingido</h4>
+                                    <p className="text-sm text-red-600">{errorMessage}</p>
                                     <button
                                         onClick={() => window.location.href = '/dashboard/checkout'}
                                         className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
@@ -438,9 +430,8 @@ export default function SettingsPage() {
                         )}
 
                         {loadingInstances ? (
-                            <div className="flex flex-col items-center justify-center py-12">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-                                <p className="text-muted-foreground">Carregando instâncias...</p>
+                            <div className="py-8">
+                                <BrandLoader size="md" label="Carregando instâncias..." />
                             </div>
                         ) : instances.length === 0 ? (
                             <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
@@ -566,46 +557,6 @@ export default function SettingsPage() {
 
                     </div>
                 )}
-                {activeTab === 'appearance' && (
-                    <div className="max-w-xl space-y-8 animate-in fade-in">
-                        <div>
-                            <h3 className="font-bold text-lg mb-4">Tema da Interface</h3>
-                            <div className="grid grid-cols-3 gap-4">
-                                <button
-                                    onClick={() => setTheme('light')}
-                                    className={cn(
-                                        "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all hover:bg-accent",
-                                        theme === 'light' ? "border-primary bg-primary/5" : "border-border"
-                                    )}
-                                >
-                                    <Sun className="w-8 h-8" />
-                                    <span className="font-medium text-sm">Claro</span>
-                                </button>
-                                <button
-                                    onClick={() => setTheme('dark')}
-                                    className={cn(
-                                        "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all hover:bg-accent",
-                                        theme === 'dark' ? "border-primary bg-primary/5" : "border-border"
-                                    )}
-                                >
-                                    <Moon className="w-8 h-8" />
-                                    <span className="font-medium text-sm">Escuro</span>
-                                </button>
-                                <button
-                                    onClick={() => setTheme('system')}
-                                    className={cn(
-                                        "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all hover:bg-accent",
-                                        theme === 'system' ? "border-primary bg-primary/5" : "border-border"
-                                    )}
-                                >
-                                    <Monitor className="w-8 h-8" />
-                                    <span className="font-medium text-sm">Sistema</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* PLAN TAB */}
                 {activeTab === 'plan' && (
                     <div className="space-y-8 animate-in fade-in">
@@ -616,7 +567,7 @@ export default function SettingsPage() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase border border-primary/20">
-                                    {user?.planName || 'Gratuito / Teste'}
+                                    {user?.planName || 'Nenhum plano ativo'}
                                 </span>
                             </div>
                         </div>
@@ -624,7 +575,7 @@ export default function SettingsPage() {
                         {/* Plan Selection */}
                         <div>
                             <h3 className="text-lg font-bold mb-4">Escolha um Plano</h3>
-                            <div className="grid md:grid-cols-3 gap-4">
+                            <div className="grid md:grid-cols-2 gap-4">
                                 {PLANS.map((plan) => (
                                     <div
                                         key={plan.id}
@@ -646,8 +597,14 @@ export default function SettingsPage() {
                                             <p className="text-sm text-muted-foreground">{plan.description}</p>
                                         </div>
                                         <div className="mb-6">
-                                            <span className="text-3xl font-black">R$ {plan.price.toFixed(2)}</span>
-                                            <span className="text-muted-foreground">/mês</span>
+                                            {plan.price === 0 ? (
+                                                <span className="text-3xl font-black">Grátis</span>
+                                            ) : (
+                                                <>
+                                                    <span className="text-3xl font-black">R$ {plan.price.toFixed(2)}</span>
+                                                    <span className="text-muted-foreground">/mês</span>
+                                                </>
+                                            )}
                                         </div>
                                         <ul className="space-y-2 mb-6">
                                             {plan.features.map((feature, i) => (

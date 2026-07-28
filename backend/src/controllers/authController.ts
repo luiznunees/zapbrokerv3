@@ -12,8 +12,8 @@ import * as emailService from '../services/emailService';
 
 export const register = async (req: Request, res: Response) => {
     try {
-        console.log('Register Request Body:', req.body);
-        const { name, email, password, inviteCode } = req.body;
+        console.log('Register Request Body:', { ...req.body, password: '***' });
+        const { name, email, password, inviteCode, planId } = req.body;
 
         if (!email || !password) {
             throw new Error('Email and password are required');
@@ -36,8 +36,10 @@ export const register = async (req: Request, res: Response) => {
         }
 
         // 1. Create User via Admin API
-        // If invited, we auto-confirm the email!
-        const emailConfirm = !!inviteData;
+        // Auto-confirm the email when invited OR when a plan was chosen: in both cases the
+        // user is about to pay (or already vouched for), so the email-confirmation hop only
+        // adds friction without adding real verification value.
+        const emailConfirm = !!inviteData || !!planId;
 
         const { data: user, error } = await supabase.auth.admin.createUser({
             email,
@@ -74,7 +76,18 @@ export const register = async (req: Request, res: Response) => {
             });
         }
 
-        // 2. Standard Flow: Generate Confirmation Link (if not invited)
+        // 2. Paid signup flow: skip the email confirmation hop entirely — log the user in
+        // immediately so the frontend can send them straight to the PIX checkout.
+        if (planId) {
+            const session = await authService.loginUser(email, password);
+            return res.status(201).json({
+                user: session.user,
+                token: session.token,
+                message: 'Conta criada com sucesso.'
+            });
+        }
+
+        // 3. Standard Flow (no plan chosen): Generate Confirmation Link
         const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
             type: 'signup',
             email: email,
@@ -97,8 +110,8 @@ export const register = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('Register Error Details:', error);
-        res.status(400).json({ error: error.message });
+        console.error('Register Error:', error.message);
+        res.status(400).json({ error: 'Falha ao criar conta. Verifique os dados e tente novamente.' });
     }
 };
 
@@ -109,7 +122,7 @@ export const login = async (req: Request, res: Response) => {
         res.status(200).json(result);
     } catch (error: any) {
         console.error('Login error:', error.message);
-        res.status(401).json({ error: error.message });
+        res.status(401).json({ error: 'Email ou senha inválidos.' });
     }
 };
 
@@ -149,21 +162,19 @@ export const getProfile = async (req: any, res: Response) => {
         // Fetch subscription status and plan info
         const { data: subscription } = await supabase
             .from('subscriptions')
-            .select('status, next_billing_date, plan_id')
+            .select('status, next_billing_date, plan_id, pix_cpf, pix_cellphone')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
-        let subscriptionStatus = 'none';
-        let planName = 'Free Account';
+        let subscriptionStatus = 'free';
+        let planName = 'Free';
 
         if (subscription) {
-            // Get Plan Name from our constant or DB
             const planNames: Record<string, string> = {
-                'prod_AXPStPBEeB5xrpubKyWB6EnY': 'ZapBroker - Pro',
-                'prod_n6CMApuNhHqPCUrL2JmHyWbz': 'ZapBroker - Plus',
-                'prod_ZxwseRQWbKLxHKsnfcUCMfYc': 'ZapBroker - Basico'
+                'pro': 'ZapBroker - Pro',
+                'starter': 'ZapBroker - Starter',
             };
             planName = planNames[subscription.plan_id] || 'ZapBroker Plan';
 
@@ -176,13 +187,20 @@ export const getProfile = async (req: any, res: Response) => {
                     subscriptionStatus = 'expired';
                 }
             } else {
-                subscriptionStatus = subscription.status; // e.g. 'pending_payment'
+                subscriptionStatus = subscription.status;
             }
         }
 
         // Mock tenant for now, but include subscriptionStatus and planName
         res.status(200).json({
-            user: { ...profile, subscriptionStatus, planName },
+            user: {
+                ...profile,
+                subscriptionStatus,
+                planName,
+                planId: subscription?.plan_id || null,
+                pixCpf: subscription?.pix_cpf || null,
+                pixCellphone: subscription?.pix_cellphone || null,
+            },
             tenant: { id: 'default', name: 'Default Tenant' }
         });
     } catch (error: any) {
@@ -212,6 +230,20 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
                 ...currentSteps,
                 email_notifications: updates.email_notifications !== undefined ? updates.email_notifications : currentSteps.email_notifications,
                 quota_alerts: updates.quota_alerts !== undefined ? updates.quota_alerts : currentSteps.quota_alerts
+            };
+        }
+
+        // Contexto do corretor (cidade, quantos chips, pra que usa cada um, interesse em
+        // listagens) — usado pelo agente pra personalizar avisos e sugestões. Guardado dentro
+        // do mesmo onboarding_steps (jsonb), sem precisar de migração.
+        if (updates.broker_context && typeof updates.broker_context === 'object') {
+            const currentSteps = allowedUpdates.onboarding_steps || req.user?.onboarding_steps || {};
+            allowedUpdates.onboarding_steps = {
+                ...currentSteps,
+                broker_context: {
+                    ...(currentSteps.broker_context || {}),
+                    ...updates.broker_context,
+                },
             };
         }
 
