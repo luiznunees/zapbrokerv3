@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, AlertTriangle, MessageSquare, Server } from 'lucide-react'
+import { Users, AlertTriangle, MessageSquare, Server, ArrowRight } from 'lucide-react'
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<any>(null)
@@ -63,9 +64,13 @@ export default function AdminDashboardPage() {
                         <CardTitle className="text-zinc-100">Logs Recentes</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-zinc-500 text-sm">
-                            Funcionalidade de logs em breve...
-                        </div>
+                        <Link
+                            href="/admin/logs"
+                            className="flex items-center justify-between text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+                        >
+                            <span>Ver eventos críticos e instâncias desconectadas</span>
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
                     </CardContent>
                 </Card>
 

@@ -17,7 +17,7 @@ export default function AdminSettingsPage() {
             <Card className="bg-zinc-900 border-zinc-800 opacity-50 pointer-events-none">
                 <CardHeader>
                     <CardTitle className="text-zinc-100">Manutenção & Acesso</CardTitle>
-                    <CardDescription className="text-zinc-500">Controle global de acesso ao sistema (Em Breve).</CardDescription>
+                    <CardDescription className="text-zinc-500">Controle global de acesso ao sistema — planejado, ainda não implementado. Os controles abaixo são apenas ilustrativos.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
