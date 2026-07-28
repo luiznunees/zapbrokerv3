@@ -1,5 +1,4 @@
 import { supabase } from '../config/supabase';
-import * as emailService from './emailService';
 import { sendDiscordAlert } from './discordService';
 
 export type EventSeverity = 'info' | 'warn' | 'error' | 'critical';
@@ -31,11 +30,6 @@ export async function logEvent({ type, severity, message, userId, metadata }: Lo
         }
 
         // Fire-and-forget — nunca bloqueia quem chamou logEvent.
-        if (severity === 'critical') {
-            emailService.sendAdminAlertEmail(type, message).catch(err =>
-                console.error('[EventLogService] Failed to send admin alert email:', err)
-            );
-        }
         if (severity === 'warn' || severity === 'error' || severity === 'critical') {
             sendDiscordAlert({ type, severity, message, metadata }).catch(err =>
                 console.error('[EventLogService] Failed to send Discord alert:', err)
