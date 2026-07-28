@@ -29,6 +29,31 @@ export const getLists = async (userId: string) => {
     return data;
 };
 
+export const getListsWithCounts = async (userId: string): Promise<Array<{ id: string; name: string; leadCount: number }>> => {
+    const { data: lists, error } = await supabase
+        .from('contact_lists')
+        .select('id, name')
+        .eq('user_id', userId);
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    if (!lists || lists.length === 0) return [];
+
+    const withCounts = await Promise.all(
+        lists.map(async (list) => {
+            const { count } = await supabase
+                .from('contacts')
+                .select('*', { count: 'exact', head: true })
+                .eq('list_id', list.id);
+            return { id: list.id, name: list.name, leadCount: count ?? 0 };
+        })
+    );
+
+    return withCounts;
+};
+
 export const addContact = async (userId: string, listId: string, name: string, phone: string) => {
     // Verify list ownership
     const { data: list } = await supabase
@@ -432,6 +457,82 @@ export const updateList = async (userId: string, listId: string, name: string) =
     }
 
     return data;
+};
+
+export const findContacts = async (userId: string, query: string, limit: number = 5) => {
+    const normalizedPhone = query.replace(/\D/g, '');
+    let q = supabase
+        .from('contacts')
+        .select('id, name, phone, status, last_interaction_at, list_id, contact_lists!inner(user_id, name)')
+        .eq('contact_lists.user_id', userId)
+        .limit(limit);
+
+    q = normalizedPhone.length >= 6
+        ? q.ilike('phone', `%${normalizedPhone}%`)
+        : q.ilike('name', `%${query}%`);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        status: c.status,
+        lastInteractionAt: c.last_interaction_at,
+        listName: c.contact_lists?.name,
+    }));
+};
+
+// Agrupa contatos do usuário por telefone normalizado e retorna só os grupos com duplicidade.
+export const findDuplicateContacts = async (userId: string) => {
+    const { data, error } = await supabase
+        .from('contacts')
+        .select('id, name, phone, list_id, created_at, contact_lists!inner(user_id, name)')
+        .eq('contact_lists.user_id', userId);
+
+    if (error) throw new Error(error.message);
+
+    const groups = new Map<string, any[]>();
+    for (const c of data || []) {
+        const key = (c.phone || '').replace(/\D/g, '');
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(c);
+    }
+
+    return Array.from(groups.entries())
+        .filter(([, contacts]) => contacts.length > 1)
+        .map(([phone, contacts]) => ({
+            phone,
+            contacts: contacts
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map((c: any) => ({ id: c.id, name: c.name, listName: c.contact_lists?.name })),
+        }));
+};
+
+// Mantém o contato mais antigo de cada grupo duplicado e apaga os demais.
+// Não recebe IDs do cliente — recalcula os grupos no servidor pra evitar apagar contato errado.
+export const mergeDuplicateContacts = async (userId: string) => {
+    const groups = await findDuplicateContacts(userId);
+    let mergedGroups = 0;
+    let removedContacts = 0;
+
+    for (const group of groups) {
+        const [, ...toRemove] = group.contacts;
+        if (toRemove.length === 0) continue;
+
+        const { error } = await supabase
+            .from('contacts')
+            .delete()
+            .in('id', toRemove.map((c: any) => c.id));
+
+        if (error) throw new Error(error.message);
+        mergedGroups += 1;
+        removedContacts += toRemove.length;
+    }
+
+    return { mergedGroups, removedContacts };
 };
 
 export const getContactsCount = async (userId: string) => {

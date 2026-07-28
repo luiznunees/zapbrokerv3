@@ -19,7 +19,6 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('🔑 Sending request with token to:', endpoint);
     } else {
         console.log('⚠️ No token available for:', endpoint);
     }
@@ -81,6 +80,7 @@ export const api = {
     },
     contacts: {
         list: () => fetchAPI('/contact-lists'),
+        listWithCounts: () => fetchAPI('/contact-lists?withCounts=1'),
         createList: (name: string) => fetchAPI('/contact-lists', { method: 'POST', body: JSON.stringify({ name }) }),
         updateList: (id: string, name: string) => fetchAPI(`/contact-lists/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
         deleteList: (id: string) => fetchAPI(`/contact-lists/${id}`, { method: 'DELETE' }),
@@ -107,8 +107,15 @@ export const api = {
         update: (id: string, data: any) => fetchAPI(`/api/contatos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
         delete: (id: string) => fetchAPI(`/api/contatos/${id}`, { method: 'DELETE' }),
     },
+    uploads: {
+        media: (formData: FormData) => fetchAPI('/uploads/media', {
+            method: 'POST',
+            body: formData
+        }),
+    },
     campaigns: {
         list: () => fetchAPI('/campaigns'),
+        getStalledCount: () => fetchAPI('/campaigns/stalled-count'),
         getDetails: (id: string) => fetchAPI(`/campaigns/${id}`),
         create: (formData: FormData) => fetchAPI('/campaigns', {
             method: 'POST',
@@ -130,15 +137,11 @@ export const api = {
         list: () => fetchAPI('/contact-lists/chats'),
         getMessages: (contactId: string) => fetchAPI(`/contact-lists/${contactId}/messages`),
     },
-    settings: {
-        get: () => fetchAPI('/api/settings'),
-        update: (data: any) => fetchAPI('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
-    },
     payments: {
-        createSubscription: (planId: string, customer: any) =>
+        createSubscription: (planId: string, data?: any) =>
             fetchAPI('/payments/subscribe', {
                 method: 'POST',
-                body: JSON.stringify({ planId, customer })
+                body: JSON.stringify({ planId, ...data })
             }),
         getSubscriptionStatus: (subscriptionId: string) =>
             fetchAPI(`/payments/subscription/${subscriptionId}`),
@@ -148,7 +151,91 @@ export const api = {
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
         createInvite: (planId: string) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId }) }),
-        logs: () => fetchAPI('/admin/logs'),
+        logs: (severity?: string) => {
+            const params = new URLSearchParams()
+            if (severity) params.set('severity', severity)
+            const qs = params.toString()
+            return fetchAPI(`/admin/logs${qs ? `?${qs}` : ''}`)
+        },
+        finance: (startDate?: string, endDate?: string) => {
+            const params = new URLSearchParams()
+            if (startDate) params.set('startDate', startDate)
+            if (endDate) params.set('endDate', endDate)
+            const qs = params.toString()
+            return fetchAPI(`/admin/finance${qs ? `?${qs}` : ''}`)
+        },
+    },
+    sessions: {
+        list: () => fetchAPI('/agent/sessions'),
+        create: (title?: string) => fetchAPI('/agent/sessions', {
+            method: 'POST',
+            body: JSON.stringify({ title })
+        }),
+        delete: (id: string) => fetchAPI(`/agent/sessions/${id}`, { method: 'DELETE' }),
+        getMessages: (id: string) => fetchAPI(`/agent/sessions/${id}/messages`),
+    },
+    agent: {
+        chat: (message: string, sessionId?: string) => fetchAPI('/agent/chat', {
+            method: 'POST',
+            body: JSON.stringify({ message, sessionId })
+        }),
+        chatStream: async (message: string, sessionId: string | undefined, onToken: (token: string) => void, onReset?: () => void): Promise<any> => {
+            const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+            const response = await fetch(`${API_BASE_URL}/agent/chat/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ message, sessionId }),
+            })
+
+            if (!response.ok || !response.body) {
+                throw new Error('Falha ao conectar com o agente.')
+            }
+
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+            let result: any = null
+
+            while (true) {
+                const { value, done } = await reader.read()
+                if (done) break
+                buffer += decoder.decode(value, { stream: true })
+
+                const chunks = buffer.split('\n\n')
+                buffer = chunks.pop() || ''
+
+                for (const chunk of chunks) {
+                    const eventMatch = chunk.match(/^event: (.+)$/m)
+                    const dataMatch = chunk.match(/^data: (.+)$/m)
+                    if (!dataMatch) continue
+
+                    const event = eventMatch?.[1] || 'message'
+                    const data = JSON.parse(dataMatch[1])
+
+                    if (event === 'token') {
+                        onToken(data.token)
+                    } else if (event === 'reset') {
+                        onReset?.()
+                    } else if (event === 'done') {
+                        result = data
+                    } else if (event === 'error') {
+                        throw new Error(data.error || 'Erro no agente.')
+                    }
+                }
+            }
+
+            if (!result) throw new Error('O agente não retornou uma resposta completa.')
+            return result
+        },
+        execute: (actionType: string, data?: any) => fetchAPI('/agent/execute', {
+            method: 'POST',
+            body: JSON.stringify({ actionType, data })
+        }),
+        suggestions: () => fetchAPI('/agent/suggestions'),
     },
     // Generic methods to support legacy/direct usage (e.g. api.get('/...'))
     get: (endpoint: string, options?: RequestInit) => fetchAPI(endpoint, { ...options, method: 'GET' }),

@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import * as evolutionService from './evolutionService';
+import * as eventLogService from './eventLogService';
 
 export const createInstance = async (userId: string, name: string) => {
     // Evolution API: Instance name acts as the ID/Token
@@ -94,6 +95,27 @@ export const getInstances = async (userId: string) => {
                     .from('instances')
                     .update({ status: dbStatus })
                     .eq('id', instance.id);
+
+                // Só interessa reportar quando o número CAI num estado ruim — a saída de
+                // erro/desconectado (voltando a conectar) não é um evento de alerta.
+                if (dbStatus === 'error') {
+                    eventLogService.logEvent({
+                        type: 'whatsapp.error',
+                        severity: 'error',
+                        message: `WhatsApp "${instance.name}" entrou em estado de erro`,
+                        userId,
+                        metadata: { instanceId: instance.id },
+                    });
+                } else if (dbStatus === 'disconnected' && instance.status !== 'disconnected') {
+                    eventLogService.logEvent({
+                        type: 'whatsapp.disconnected',
+                        severity: 'warn',
+                        message: `WhatsApp "${instance.name}" desconectou`,
+                        userId,
+                        metadata: { instanceId: instance.id },
+                    });
+                }
+
                 instance.status = dbStatus;
             }
         } catch (err) {
