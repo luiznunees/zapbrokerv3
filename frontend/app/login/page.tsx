@@ -10,55 +10,55 @@ import { api } from '@/services/api'
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false)
+    const [errorMsg, setErrorMsg] = useState('')
 
     useEffect(() => {
-        // Capture planId from URL and store in localStorage if present
         const urlParams = new URLSearchParams(window.location.search);
         const planId = urlParams.get('planId');
         if (planId) {
             localStorage.setItem('pendingPlanId', planId);
         }
 
-        // If already logged in AND we have a planId, go straight to checkout
         const token = localStorage.getItem('token');
         if (token && planId) {
             localStorage.removeItem('pendingPlanId');
             window.location.href = `/checkout/redirect?planId=${planId}`;
         } else if (token) {
-            // Already logged in but no planId, just go to dashboard
             window.location.href = '/dashboard';
         }
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+    const handleSubmit = async () => {
         setLoading(true)
+        setErrorMsg('')
         try {
-            // Get email and password directly from form implementation below
-            const form = e.target as HTMLFormElement;
-            const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-            const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+            const email = (document.getElementById('email') as HTMLInputElement)?.value;
+            const password = (document.getElementById('password') as HTMLInputElement)?.value;
+
+            if (!email || !password) {
+                setErrorMsg('Preencha email e senha.');
+                setLoading(false)
+                return
+            }
 
             const { token, user } = await import('@/services/api').then(m => m.api.auth.login({ email, password }));
 
             if (token) {
-                console.log('✅ Login successful, saving token:', token.substring(0, 20) + '...');
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
 
-                // Check for pending plan to redirect to checkout
                 const pendingPlanId = localStorage.getItem('pendingPlanId');
                 if (pendingPlanId) {
-                    localStorage.removeItem('pendingPlanId'); // Clear after use
+                    localStorage.removeItem('pendingPlanId');
                     window.location.href = `/checkout/redirect?planId=${pendingPlanId}`;
                 } else {
                     window.location.href = '/dashboard';
                 }
             } else {
-                console.error('❌ No token received from login');
+                setErrorMsg('Token não recebido. Tente novamente.');
             }
         } catch (error: any) {
-            console.error('Login failed:', error);
+            setErrorMsg(error.message || 'Erro ao fazer login. Verifique suas credenciais.');
         } finally {
             setLoading(false)
         }
@@ -99,10 +99,11 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-4">
-                        {/* Email/Password Login - Only in Development */}
-                        {process.env.NODE_ENV === 'development' && (
-                            <>
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Email/Password Login — this is the only way in for anyone who
+                            signed up with email+password (i.e. everyone, since paid signup
+                            never goes through Google), so it must always be visible. */}
+                        <>
+                                <div className="space-y-4">
                                     <div>
                                         <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                                             Email
@@ -129,8 +130,14 @@ export default function LoginPage() {
                                             placeholder="••••••••"
                                         />
                                     </div>
+                                    {errorMsg && (
+                                        <div className="text-red-500 text-sm text-center bg-red-500/10 py-2 px-3 rounded-xl">
+                                            {errorMsg}
+                                        </div>
+                                    )}
                                     <button
-                                        type="submit"
+                                        type="button"
+                                        onClick={handleSubmit}
                                         disabled={loading}
                                         className="w-full px-4 py-3.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
@@ -143,7 +150,7 @@ export default function LoginPage() {
                                             'Entrar com Email'
                                         )}
                                     </button>
-                                </form>
+                                </div>
 
                                 <div className="relative">
                                     <div className="absolute inset-0 flex items-center">
@@ -153,8 +160,7 @@ export default function LoginPage() {
                                         <span className="bg-background px-2 text-muted-foreground">Ou</span>
                                     </div>
                                 </div>
-                            </>
-                        )}
+                        </>
 
                         {/* Google Login - Always visible */}
                         <button

@@ -8,7 +8,7 @@ export default function AnimatedBackground() {
 
             {/* Grid Pattern */}
             <div
-                className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                className="absolute inset-0 opacity-[0.03]"
                 style={{
                     backgroundImage: `linear-gradient(to right, #888 1px, transparent 1px),
                                      linear-gradient(to bottom, #888 1px, transparent 1px)`,
@@ -18,8 +18,8 @@ export default function AnimatedBackground() {
             />
 
             {/* Glowing Orbs */}
-            <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-primary/20 blur-[120px] animate-pulse-slow mix-blend-screen dark:mix-blend-overlay" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-blue-500/10 blur-[120px] animate-pulse-slower mix-blend-screen dark:mix-blend-overlay" />
+            <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-primary/20 blur-[120px] animate-pulse-slow mix-blend-screen" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-blue-500/10 blur-[120px] animate-pulse-slower mix-blend-screen" />
 
             {/* Floating Particles (CSS only) */}
             <div className="absolute inset-0 opacity-20">

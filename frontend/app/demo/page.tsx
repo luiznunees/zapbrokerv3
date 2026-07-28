@@ -25,7 +25,7 @@ export default function DemoPage() {
             <main className="flex-1 pt-24 pb-12 px-4">
                 <div className="container mx-auto max-w-4xl">
                     <div className="text-center mb-10">
-                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-purple-100 dark:bg-brand-purple-900/40 text-brand-purple-600 dark:text-brand-purple-300 text-[10px] font-medium mb-4">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-purple-100 text-brand-purple-600 text-[10px] font-medium mb-4">
                             <PlayCircle className="w-3 h-3" />
                             Demonstração Interativa
                         </div>

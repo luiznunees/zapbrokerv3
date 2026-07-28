@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -85,38 +83,6 @@
   --gradient-hero: linear-gradient(180deg, #FAF5FF 0%, #FFFFFF 100%);
 }
 
-.dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-
-  --card: #18181b;
-  --card-foreground: #fafafa;
-
-  --popover: #09090b;
-  --popover-foreground: #fafafa;
-
-  --primary: #8A5BF5;
-  --primary-foreground: #fafafa;
-
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
-
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-
-  --destructive: #7f1d1d;
-  --destructive-foreground: #fafafa;
-
-  --border: #27272a;
-  --input: #27272a;
-  --ring: #8A5BF5;
-
-  --gradient-hero: linear-gradient(180deg, #18181B 0%, #09090B 100%);
-}
-
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -139,9 +105,49 @@ body {
 }
 
 .glass-nav {
-  background: rgba(var(--background), 0.7);
+  background: color-mix(in srgb, var(--background) 70%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+}
+
+@layer utilities {
+  .glass {
+    background: color-mix(in srgb, var(--card) 50%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+    box-shadow: 0 8px 32px -8px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.03) inset;
+  }
+
+  .glass-dark {
+    background: rgb(15 15 20 / 0.6);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgb(255 255 255 / 0.06);
+    box-shadow: 0 8px 32px -8px rgb(0 0 0 / 0.3), 0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  }
+
+  .glass-floating {
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid color-mix(in srgb, var(--border) 20%, transparent);
+    box-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.15), 0 0 0 1px rgb(255 255 255 / 0.04) inset;
+  }
+
+  .glass-card {
+    background: color-mix(in srgb, var(--card) 75%, transparent);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    border: 1px solid color-mix(in srgb, var(--border) 15%, transparent);
+    box-shadow: 0 4px 24px -8px rgb(0 0 0 / 0.1);
+    transition: box-shadow 0.2s, border-color 0.2s;
+  }
+
+  .glass-card:hover {
+    border-color: color-mix(in srgb, var(--border) 40%, transparent);
+    box-shadow: 0 8px 32px -8px rgb(0 0 0 / 0.18);
+  }
 }
 
 .grid-pattern {
@@ -152,8 +158,3 @@ body {
   opacity: 0.2;
 }
 
-.dark .grid-pattern {
-  opacity: 0.2;
-  background-image: linear-gradient(to right, #52525b 1px, transparent 1px),
-    linear-gradient(to bottom, #52525b 1px, transparent 1px);
-}

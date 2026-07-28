@@ -2,9 +2,8 @@ import { Header } from "@/components/landing/Header"
 import { Hero } from "@/components/landing/Hero"
 import { Stats } from "@/components/landing/Stats"
 import { Features } from "@/components/landing/Features"
-import { MockupSection } from "@/components/landing/MockupSection"
+import { AgentShowcase } from "@/components/landing/AgentShowcase"
 import { Pricing } from "@/components/landing/Pricing"
-import { Testimonials } from "@/components/landing/Testimonials"
 import { FAQ } from "@/components/landing/FAQ"
 import { Footer, CTA } from "@/components/landing/Footer"
 
@@ -17,9 +16,8 @@ export default function LandingPage() {
           <Hero />
           <Stats />
           <Features />
-          <MockupSection />
+          <AgentShowcase />
           <Pricing />
-          <Testimonials />
           <FAQ />
           <CTA />
         </main>

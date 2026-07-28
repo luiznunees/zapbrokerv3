@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { BrandLoader } from '@/components/ui/BrandLoader'
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const router = useRouter()
@@ -19,11 +20,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }, [router])
 
     if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
-        )
+        return <BrandLoader size="lg" fullScreen />
     }
 
     if (!isAuthenticated) {

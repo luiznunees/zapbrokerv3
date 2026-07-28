@@ -6,7 +6,7 @@ import { Plus, Minus } from "lucide-react"
 const QUESTIONS = [
     {
         q: "O ZapBroker é seguro? Vou ser banido?",
-        a: "A segurança é nossa prioridade. Nosso sistema utiliza intervalos de tempo inteligentes e variáveis dinâmicas para simular o comportamento humano, minimizando drasticamente o risco de banimentos quando usado dentro das boas práticas."
+        a: "Você conecta seu próprio número via QR Code, do mesmo jeito que conecta no WhatsApp Web. Recomendamos seguir as boas práticas de envio (não disparar volumes muito grandes de uma vez) pra reduzir o risco de bloqueio pela própria Meta."
     },
     {
         q: "Preciso de conhecimento técnico?",
@@ -18,11 +18,11 @@ const QUESTIONS = [
     },
     {
         q: "Funciona no meu celular?",
-        a: "O ZapBroker é uma plataforma web responsiva. Você configura as campanhas pelo navegador (PC ou Celular) e o sistema faz os envios na nuvem, mesmo com seu celular desligado."
+        a: "Sim. O painel é web responsivo — funciona no navegador do PC ou do celular. E o agente te avisa direto no seu WhatsApp quando um disparo termina ou um lead some, então você não precisa ficar de olho no painel o tempo todo."
     },
     {
         q: "A IA realmente personaliza as mensagens?",
-        a: "Sim. Nossa IA analisa o perfil do lead (nome, cidade, histórico) e cria mensagens únicas para cada contato, aumentando muito a taxa de resposta."
+        a: "Sim. O agente guarda o histórico de cada lead — se já perguntou preço, pediu fotos, visitou — e usa isso pra ajudar você a escrever mensagens e lembretes sob medida pra cada um."
     }
 ]
 
@@ -30,34 +30,34 @@ export function FAQ() {
     const [openIndex, setOpenIndex] = useState<number | null>(0)
 
     return (
-        <section id="faq" className="py-8 bg-card/50">
+        <section id="faq" className="py-10 md:py-14 bg-white">
             <div className="container mx-auto px-4 md:px-6 max-w-xl">
-                <div className="text-center mb-6">
-                    <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-2">
+                <div className="text-center mb-8">
+                    <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-2 text-[#0a0a0a] uppercase">
                         Dúvidas Frequentes
                     </h2>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                     {QUESTIONS.map((item, i) => (
                         <div
                             key={i}
-                            className="border border-border rounded-lg bg-card overflow-hidden transition-all duration-200"
+                            className="rounded-2xl bg-[#f6f4f1] overflow-hidden transition-all duration-200"
                         >
                             <button
                                 onClick={() => setOpenIndex(prev => prev === i ? null : i)}
-                                className="w-full flex items-center justify-between p-3 text-left"
+                                className="w-full flex items-center justify-between p-4 text-left"
                             >
-                                <span className="font-bold text-sm">{item.q}</span>
+                                <span className="font-bold text-sm text-[#0a0a0a]">{item.q}</span>
                                 {openIndex === i ? (
-                                    <Minus className="w-3 h-3 text-brand-purple-500" />
+                                    <Minus className="w-3.5 h-3.5 text-[#145c3b] shrink-0 ml-3" />
                                 ) : (
-                                    <Plus className="w-3 h-3 text-muted-foreground" />
+                                    <Plus className="w-3.5 h-3.5 text-[#6f6b76] shrink-0 ml-3" />
                                 )}
                             </button>
 
                             {openIndex === i && (
-                                <div className="px-3 pb-3 text-muted-foreground text-xs leading-relaxed animate-in slide-in-from-top-2">
+                                <div className="px-4 pb-4 text-[#6f6b76] text-sm leading-relaxed animate-in slide-in-from-top-2">
                                     {item.a}
                                 </div>
                             )}

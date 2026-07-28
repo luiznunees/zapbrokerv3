@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  ...(process.env.NODE_ENV === 'production' ? { output: "standalone" } : {}),
+  allowedDevOrigins: ['192.168.0.242'],
 };
 
 export default nextConfig;

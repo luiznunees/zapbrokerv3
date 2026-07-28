@@ -28,31 +28,31 @@ const TESTIMONIALS = [
 
 export function Testimonials() {
     return (
-        <section className="py-8 bg-background">
+        <section className="py-10 md:py-14 bg-[#f6f4f1]">
             <div className="container mx-auto px-4 md:px-6">
-                <div className="text-center max-w-lg mx-auto mb-6">
-                    <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-2">
+                <div className="text-center max-w-lg mx-auto mb-10">
+                    <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-2 text-[#0a0a0a] uppercase">
                         Histórias Reais de Sucesso
                     </h2>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-[#6f6b76]">
                         Corretores que multiplicaram suas captações com automação.
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-2 lg:gap-3 max-w-3xl mx-auto">
+                <div className="grid md:grid-cols-2 gap-3 lg:gap-4 max-w-3xl mx-auto">
                     {TESTIMONIALS.map((t, i) => (
-                        <div key={i} className="bg-card border border-border p-3 rounded-lg relative overflow-hidden group hover:border-brand-purple-500/30 transition-all">
-                            <Quote className="absolute top-2 right-2 w-5 h-5 text-brand-purple-100 dark:text-brand-purple-900/20 transform rotate-12" />
+                        <div key={i} className={`bg-white p-5 rounded-3xl relative overflow-hidden group hover:-translate-y-1 transition-all ${i % 2 === 0 ? 'md:rotate-1' : 'md:-rotate-1'} hover:rotate-0`}>
+                            <Quote className="absolute top-3 right-3 w-6 h-6 text-[#e4e1dc] transform rotate-12" />
 
-                            <div className="flex gap-0.5 mb-2">
-                                {[1, 2, 3, 4, 5].map(star => <Star key={star} className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />)}
+                            <div className="flex gap-0.5 mb-2.5">
+                                {[1, 2, 3, 4, 5].map(star => <Star key={star} className="w-3 h-3 fill-[#145c3b] text-[#145c3b]" />)}
                             </div>
 
-                            <p className="text-xs font-medium italic mb-2.5 leading-relaxed relative z-10 text-foreground/90">"{t.quote}"</p>
+                            <p className="text-sm font-medium italic mb-3 leading-relaxed relative z-10 text-[#37343e]">"{t.quote}"</p>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2.5">
                                 {t.image ? (
-                                    <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-brand-purple-200 dark:border-brand-purple-800 shadow-md relative">
+                                    <div className="w-9 h-9 rounded-full overflow-hidden shadow-sm relative">
                                         <Image
                                             src={t.image}
                                             alt={t.author}
@@ -61,13 +61,13 @@ export function Testimonials() {
                                         />
                                     </div>
                                 ) : (
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-purple-400 to-brand-blue flex items-center justify-center font-bold text-white text-xs shadow-md">
+                                    <div className="w-9 h-9 rounded-full bg-[#145c3b] flex items-center justify-center font-black text-[#d4a054] text-xs">
                                         {t.author.charAt(0)}
                                     </div>
                                 )}
                                 <div>
-                                    <h4 className="font-bold text-[10px] text-foreground">{t.author}</h4>
-                                    <p className="text-[8px] text-muted-foreground">{t.role}</p>
+                                    <h4 className="font-black text-xs text-[#0a0a0a]">{t.author}</h4>
+                                    <p className="text-[11px] text-[#6f6b76]">{t.role}</p>
                                 </div>
                             </div>
                         </div>
