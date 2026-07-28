@@ -10,6 +10,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
+    const reqStart = Date.now();
     console.log(`[AuthMiddleware] 🔍 ${req.method} ${req.path} - Token present: ${!!token}`);
 
     if (!token) {
@@ -17,14 +18,16 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         return res.sendStatus(401);
     }
 
+    const getUserStart = Date.now();
     const { data: { user }, error } = await supabaseAnon.auth.getUser(token);
+    console.log(`[AuthMiddleware] ⏱️ getUser took ${Date.now() - getUserStart}ms for ${req.method} ${req.path}`);
 
     if (error || !user) {
         console.error(`[AuthMiddleware] 🚫 Token verification failed for ${req.method} ${req.path}:`, error?.message || 'No user found');
         return res.sendStatus(403);
     }
 
-    console.log(`[AuthMiddleware] ✅ Auth successful for ${req.method} ${req.path} - User: ${user.email}`);
+    console.log(`[AuthMiddleware] ✅ Auth successful for ${req.method} ${req.path} (${Date.now() - reqStart}ms so far)`);
     req.user = user;
 
     // Sync user to public.users table
@@ -139,5 +142,6 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         console.error('Error in user sync:', syncError);
     }
 
+    console.log(`[AuthMiddleware] 🏁 Total middleware time for ${req.method} ${req.path}: ${Date.now() - reqStart}ms`);
     next();
 };

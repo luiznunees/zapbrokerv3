@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -12,13 +11,14 @@ if (!supabaseUrl || (!supabaseServiceKey && !supabaseAnonKey)) {
   throw new Error('Missing Supabase URL or Keys in environment variables');
 }
 
+// Usa o fetch nativo do Node (undici) em vez de node-fetch v2 — mais robusto
+// sob requisições concorrentes (node-fetch v2 tinha travamentos esporádicos
+// no Windows sob carga paralela).
+
 // Client with Service Role (Admin)
 export const supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey!, {
   auth: {
     persistSession: false
-  },
-  global: {
-    fetch: fetch as any
   }
 });
 
@@ -26,8 +26,5 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey || supabase
 export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey || supabaseServiceKey!, {
   auth: {
     persistSession: false
-  },
-  global: {
-    fetch: fetch as any
   }
 });
