@@ -9,12 +9,21 @@ import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 import { logAiCost } from './costService';
 import { logEvent } from './eventLogService';
 
+// Provedor principal: créditos pré-pagos (compra um bloco, vai consumindo, sem cobrança
+// recorrente) — resolve tanto o limite de tokens/minuto da Groq grátis quanto a necessidade
+// de cartão internacional (OpenRouter aceita qualquer cartão usado só na hora de recarregar).
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+// Fallback 1: Groq (tier grátis, sujeito a rate limit de 12k TPM) — mantido como camada
+// extra, não custa nada deixar configurado mesmo com o OpenRouter como principal.
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Fallback: quando o Groq falha (rate limit, instabilidade, etc.), o agente cai
-// pro Gemini automaticamente em vez de devolver "tive um problema" pro usuário.
+// Fallback 2 (última linha): quando OpenRouter e Groq falham, o agente cai pro Gemini
+// automaticamente em vez de devolver "tive um problema" pro usuário.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const geminiClient = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
@@ -411,7 +420,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'check_instance_rate_limit',
-      description: 'Verifica o volume de mensagens enviadas por um número de WhatsApp nas últimas 24h e avisa se o ritmo está arriscado (risco de bloqueio pelo WhatsApp). Use quando o usuário perguntar se pode disparar mais, ou antes de confirmar um disparo grande no mesmo número que já enviou muito recentemente.',
+      description: 'Verifica o volume de mensagens enviadas por um número de WhatsApp nas últimas 24h (risco de bloqueio) E os dados de aquecimento: há quantos dias o número conectou pela primeira vez, o volume diário recomendado pra essa idade, e se ainda está no período de cooldown de 24h pós-conexão. Use quando o usuário perguntar se pode disparar mais, antes de confirmar um disparo grande, ou logo depois de um número recém-conectado.',
       parameters: {
         type: 'object',
         properties: {
@@ -532,9 +541,11 @@ function computeSmartDefaults(messageVariations: string[] | undefined, leadCount
   const hasMultipleParagraphs = (text.match(/\n\s*\n/g)?.length ?? 0) >= 1;
   const sequentialMode = text.length > 200 || hasMultipleParagraphs;
 
-  let delaySeconds = 5;
-  if ((leadCount ?? 0) > 200) delaySeconds = 8;
-  else if ((leadCount ?? 0) > 50) delaySeconds = 6;
+  // Mínimo de 60s entre mensagens (recomendação de fornecedores de chip aquecido pra
+  // reduzir risco de bloqueio) — quanto maior a lista, mais delay pra durar o dia todo.
+  let delaySeconds = 60;
+  if ((leadCount ?? 0) > 200) delaySeconds = 90;
+  else if ((leadCount ?? 0) > 50) delaySeconds = 75;
 
   return { sequentialMode, blockDelay: 5, delaySeconds };
 }
@@ -752,9 +763,14 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - suggest_disconnect_whatsapp: quando o usuário pedir explicitamente pra desconectar um número.
 - check_quota_status / estimate_campaign_quota_impact: use pra responder sobre cota disponível, e chame estimate_campaign_quota_impact antes de sugerir confirmar um disparo se o usuário parecer preocupado com o limite do plano.
 - find_duplicate_contacts / suggest_merge_duplicate_contacts: se o usuário perguntar sobre duplicados, chame find_duplicate_contacts primeiro; só ofereça o botão de mesclar (suggest_merge_duplicate_contacts) se realmente houver duplicados.
-- check_instance_rate_limit: use antes de confirmar um disparo grande, ou se o usuário perguntar se está seguro mandar mais mensagens por aquele número.
+- check_instance_rate_limit: use antes de confirmar um disparo grande, se o usuário perguntar se está seguro mandar mais mensagens por aquele número, ou logo após um número ser conectado (também traz dado de aquecimento — ver abaixo).
 
 AVISO PROATIVO DE RISCO (chip único): se o CONTEXTO DO CORRETOR indicar que ele só usa 1 número de WhatsApp e o disparo em andamento for de volume alto (ou check_instance_rate_limit retornar risco "moderado" ou "alto"), avise proativamente ANTES de confirmar o disparo — sem que ele precise perguntar — que dividir o envio entre 2 números reduz bastante o risco de bloqueio, e chame suggest_connect_whatsapp oferecendo conectar um segundo número. Se ele já tiver 2+ números conectados e a lista for grande, pergunte se quer dividir o disparo entre os números conectados em vez de mandar tudo por um só.
+
+AQUECIMENTO DE CHIP (recomendação, NUNCA bloqueio — o corretor sempre pode seguir em frente mesmo se você avisar): chame check_instance_rate_limit e olhe os campos inCooldown, recommendedDailyLimit e daysSinceConnected antes de ajudar a montar um disparo grande num número recém-conectado.
+- Se inCooldown vier true (número conectado há menos de 24h): desaconselhe fortemente disparar por esse número agora — explique que o ideal é esperar completar 24h desde a conexão pra reduzir risco de bloqueio, mesmo que seja só pra testar. Deixe claro que é uma recomendação forte, não uma trava do sistema.
+- Se o volume pretendido no rascunho for maior que o recommendedDailyLimit retornado (quando ele não vier nulo): avise que está acima do recomendado pra idade daquele número, e sugira reduzir a lista, dividir entre os números conectados (ver AVISO PROATIVO DE RISCO acima), ou esperar mais alguns dias antes de ir com tudo.
+- recommendedDailyLimit ou daysSinceConnected nulos significam chip já maduro ou sem dado de conexão — não há necessidade de avisar sobre aquecimento nesses casos.
 
 PRIORIDADE DA CONVERSA: se o usuário fizer uma pergunta ou comentário que não seja sobre o rascunho de disparo em andamento (dúvida de vendas, pergunta sobre um lead, bate-papo, qualquer coisa fora do fluxo), RESPONDA ISSO PRIMEIRO, de forma direta e completa — mesmo que exista um disparo em andamento. Só depois de responder, se fizer sentido, retome o disparo com uma frase curta tipo "quer continuar de onde paramos no disparo?". Nunca ignore a pergunta do usuário pra insistir no que falta no rascunho — isso é o erro mais irritante que você pode cometer.
 
@@ -1028,7 +1044,7 @@ async function executeTool(
   args: any,
   state: ToolState,
   lists: Array<{ id: string; name: string; leadCount: number }>,
-  instances: Array<{ id: string; name: string; status: string }>,
+  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null }>,
   campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }>,
   stalledCount: number
 ): Promise<any> {
@@ -1278,9 +1294,16 @@ async function executeTool(
         : instances.find(i => i.id === state.draft?.instanceId);
       if (!target) return { message: 'Não encontrei esse WhatsApp — informe o nome ou defina o número no disparo primeiro.' };
 
-      const { sentLast24h } = await campaignService.getInstanceSendVolume(userId, target.id);
-      const risk = sentLast24h > 300 ? 'alto' : sentLast24h > 120 ? 'moderado' : 'baixo';
-      return { instanceName: target.name, sentLast24h, risk };
+      const warmup = await campaignService.getWarmupInfo(userId, target.id, target.connected_at ?? null);
+      const risk = warmup.sentLast24h > 300 ? 'alto' : warmup.sentLast24h > 120 ? 'moderado' : 'baixo';
+      return {
+        instanceName: target.name,
+        sentLast24h: warmup.sentLast24h,
+        risk,
+        daysSinceConnected: warmup.daysSinceConnected,
+        recommendedDailyLimit: warmup.recommendedDailyLimit,
+        inCooldown: warmup.inCooldown,
+      };
     }
 
     default:
@@ -1414,36 +1437,49 @@ async function callLLM(
   workingMessages: any[],
   onToken?: (token: string) => void
 ): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number }; provider: string; model: string }> {
+  if (OPENROUTER_API_KEY) {
+    try {
+      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken);
+      return { ...result, provider: 'openrouter', model: OPENROUTER_MODEL };
+    } catch (error: any) {
+      console.warn('[AgentService] OpenRouter falhou, tentando próximo provedor:', error.message);
+    }
+  }
+
   if (GROQ_API_KEY) {
     try {
-      const result = await callGroqCompletion(workingMessages, onToken);
+      const result = await callOpenAiCompatibleCompletion(GROQ_API_URL, GROQ_API_KEY, GROQ_MODEL, workingMessages, onToken);
       return { ...result, provider: 'groq', model: GROQ_MODEL };
     } catch (error: any) {
       if (!geminiClient) throw error;
       console.warn('[AgentService] Groq falhou, usando Gemini como fallback:', error.message);
     }
-  } else if (!geminiClient) {
-    throw new Error('Nenhum provedor de IA configurado (GROQ_API_KEY ou GEMINI_API_KEY)');
+  } else if (!geminiClient && !OPENROUTER_API_KEY) {
+    throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY, GROQ_API_KEY ou GEMINI_API_KEY)');
   }
 
   const result = await callGeminiCompletion(workingMessages, onToken);
   return { ...result, provider: 'gemini', model: GEMINI_MODEL };
 }
 
-async function callGroqCompletion(
+async function callOpenAiCompatibleCompletion(
+  apiUrl: string,
+  apiKey: string,
+  model: string,
   workingMessages: any[],
   onToken?: (token: string) => void
 ): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number } }> {
   const useStream = typeof onToken === 'function';
 
-  const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${GROQ_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
+      ...(apiUrl === OPENROUTER_API_URL ? { 'HTTP-Referer': 'https://zapbroker.dev', 'X-Title': 'ZapBroker' } : {}),
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model,
       messages: workingMessages,
       tools: AGENT_TOOLS,
       tool_choice: 'auto',
@@ -1455,7 +1491,7 @@ async function callGroqCompletion(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[AgentService] Groq API error: ${response.status} ${errorText}`);
+    console.error(`[AgentService] LLM API error (${apiUrl}): ${response.status} ${errorText}`);
     throw new Error(`Erro na comunicação com a IA: ${response.status}`);
   }
 
@@ -1604,7 +1640,7 @@ interface ToolLoopContext {
   sessionId: string;
   planId: string;
   lists: Array<{ id: string; name: string; leadCount: number }>;
-  instances: Array<{ id: string; name: string; status: string }>;
+  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null }>;
   campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }>;
   stalledCount: number;
 }
@@ -1670,7 +1706,7 @@ async function continueAfterAction(
   sessionId: string,
   eventDescription: string
 ): Promise<{ reply: string; actions: Action[]; draft: CampaignDraft | null; component: AgentComponent | null }> {
-  if (!GROQ_API_KEY && !geminiClient) {
+  if (!OPENROUTER_API_KEY && !GROQ_API_KEY && !geminiClient) {
     return { reply: '', actions: [], draft: await loadDraft(userId, sessionId), component: null };
   }
 
@@ -1730,8 +1766,8 @@ export async function chat(
     currentSessionId = session.id;
   }
 
-  if (!GROQ_API_KEY && !geminiClient) {
-    const reply = 'Olá! 👋 Para eu poder ajudar, preciso que você configure a chave da IA (GROQ_API_KEY ou GEMINI_API_KEY) no arquivo .env do sistema. Peça pro seu desenvolvedor ou administrador adicionar essa chave.';
+  if (!OPENROUTER_API_KEY && !GROQ_API_KEY && !geminiClient) {
+    const reply = 'Olá! 👋 Para eu poder ajudar, preciso que você configure a chave da IA (OPENROUTER_API_KEY, GROQ_API_KEY ou GEMINI_API_KEY) no arquivo .env do sistema. Peça pro seu desenvolvedor ou administrador adicionar essa chave.';
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', reply);
     return {
@@ -1849,7 +1885,7 @@ export async function chat(
 }
 
 export async function getSuggestions(userId: string): Promise<Array<{ icon: string; title: string; desc: string; action: string }>> {
-  if (!GROQ_API_KEY) {
+  if (!OPENROUTER_API_KEY && !GROQ_API_KEY) {
     return [
       { icon: 'rocket', title: 'Criar campanha', desc: 'Comece um disparo para seus leads', action: 'start_dispatch' },
       { icon: 'upload', title: 'Importar contatos', desc: 'Adicione leads à sua base', action: 'import_leads' },
@@ -1894,14 +1930,19 @@ Dados do usuário:
       }
     ];
 
-    const response = await fetch(GROQ_API_URL, {
+    const [apiUrl, apiKey, model] = OPENROUTER_API_KEY
+      ? [OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL]
+      : [GROQ_API_URL, GROQ_API_KEY as string, GROQ_MODEL];
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
+        ...(apiUrl === OPENROUTER_API_URL ? { 'HTTP-Referer': 'https://zapbroker.dev', 'X-Title': 'ZapBroker' } : {}),
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model,
         messages,
         temperature: 0.2,
         max_tokens: 600,
@@ -1910,7 +1951,7 @@ Dados do usuário:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[getSuggestions] Groq API error:', response.status, errorText);
+      console.error('[getSuggestions] LLM API error:', response.status, errorText);
       throw new Error('Erro na comunicação com a IA');
     }
 

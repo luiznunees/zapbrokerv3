@@ -1,8 +1,9 @@
 // Preço aproximado por 1M de tokens (USD), pago aos provedores de IA.
 // Atualizar manualmente quando os provedores mudarem preço — não há API de preço em tempo real.
 export const AI_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
-    'llama-3.3-70b-versatile': { inputPer1M: 0.59, outputPer1M: 0.79 }, // Groq
-    'gemini-2.5-flash-lite': { inputPer1M: 0.10, outputPer1M: 0.40 }, // Gemini
+    'meta-llama/llama-3.3-70b-instruct': { inputPer1M: 0.10, outputPer1M: 0.32 }, // OpenRouter (principal)
+    'llama-3.3-70b-versatile': { inputPer1M: 0.59, outputPer1M: 0.79 }, // Groq (fallback)
+    'gemini-2.5-flash-lite': { inputPer1M: 0.10, outputPer1M: 0.40 }, // Gemini (fallback)
 };
 
 // Cotação aproximada USD -> BRL, só pra dar noção de custo em real no admin.
