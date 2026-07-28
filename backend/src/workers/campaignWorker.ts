@@ -5,6 +5,7 @@ import * as evolutionService from '../services/evolutionService';
 import fs from 'fs';
 import path from 'path';
 import { injectInvisibleMarker } from '../utils/invisibleMarker';
+import * as eventLogService from '../services/eventLogService';
 
 const MIMETYPE_BY_EXTENSION: Record<string, string> = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
@@ -327,5 +328,12 @@ campaignWorker.on('failed', async (job, err) => {
                 updated_at: new Date().toISOString()
             })
             .eq('id', job.data.id);
+
+        eventLogService.logEvent({
+            type: 'campaign.message_failed',
+            severity: 'warn',
+            message: `Mensagem da campanha ${job.data.campaignId} falhou definitivamente após ${maxAttempts} tentativas: ${err.message}`,
+            metadata: { campaignId: job.data.campaignId, messageId: job.data.id },
+        });
     }
 });

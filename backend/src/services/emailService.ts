@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_X4xSeAjc_3P3tAn7SSsCwGnPpyXhzatGF');
+const resend = process.env.RESEND_API_KEY
+    ? new Resend(process.env.RESEND_API_KEY)
+    : null;
+
+if (!resend) {
+    console.warn('RESEND_API_KEY not configured — emails will not be sent');
+}
 
 const BRAND_COLOR = '#6E29DA';
 const SECONDARY_COLOR = '#10B981';
@@ -43,6 +49,7 @@ const getEmailTemplate = (content: string) => `
 `;
 
 export const sendConfirmationEmail = async (email: string, confirmationUrl: string) => {
+    if (!resend) { console.warn('Resend not configured, skipping confirmation email to', email); return; }
     try {
         const html = getEmailTemplate(`
             <h1 class="welcome-hero">Confirme seu cadastro 🚀</h1>
@@ -74,7 +81,63 @@ export const sendConfirmationEmail = async (email: string, confirmationUrl: stri
     }
 };
 
+export const sendPaymentReminderEmail = async (email: string, name: string, checkoutUrl: string) => {
+    if (!resend) { console.warn('Resend not configured, skipping payment reminder email to', email); return; }
+    try {
+        const html = getEmailTemplate(`
+            <h1 class="welcome-hero">Hora de renovar seu PIX 💜</h1>
+            <p>Olá, ${name}! Sua assinatura do ZapBroker está próxima do vencimento.</p>
+            <p>Para continuar automatizando suas vendas sem interrupção, pague o PIX abaixo:</p>
+            <div style="text-align: center;">
+                <a href="${checkoutUrl}" class="button">Pagar com PIX</a>
+            </div>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">Se o botão não funcionar, copie este link: <br/> ${checkoutUrl}</p>
+        `);
+
+        const { data, error } = await resend.emails.send({
+            from: 'ZapBroker <onboarding@zapbroker.dev>',
+            to: [email],
+            subject: 'Renove sua assinatura ZapBroker (PIX)',
+            html,
+        });
+
+        if (error) console.error('Resend Error (Payment Reminder):', error);
+        console.log('Payment reminder email sent to:', email);
+        return data;
+    } catch (error) {
+        console.error('Failed to send payment reminder email:', error);
+    }
+};
+
+// Alerta pro admin quando um evento crítico acontece (ver eventLogService.logEvent).
+// Sem ADMIN_EMAIL configurado, só avisa no console e segue — nunca derruba o fluxo que chamou.
+export const sendAdminAlertEmail = async (subject: string, message: string) => {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!resend) { console.warn('Resend not configured, skipping admin alert:', subject); return; }
+    if (!adminEmail) { console.warn('ADMIN_EMAIL not configured, skipping admin alert:', subject); return; }
+
+    try {
+        const html = getEmailTemplate(`
+            <h1 class="welcome-hero" style="color: #dc2626;">⚠️ ${subject}</h1>
+            <p>${message}</p>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">Ver mais em <a href="https://zapbroker.dev/admin/logs">/admin/logs</a>.</p>
+        `);
+
+        const { error } = await resend.emails.send({
+            from: 'ZapBroker <onboarding@zapbroker.dev>',
+            to: [adminEmail],
+            subject: `[ZapBroker] ${subject}`,
+            html,
+        });
+
+        if (error) console.error('Resend Error (Admin Alert):', error);
+    } catch (error) {
+        console.error('Failed to send admin alert email:', error);
+    }
+};
+
 export const sendWelcomeEmail = async (email: string, name: string) => {
+    if (!resend) { console.warn('Resend not configured, skipping welcome email to', email); return; }
     try {
         const html = getEmailTemplate(`
             <h1 class="welcome-hero">Bem-vindo(a), ${name}! 💜</h1>
