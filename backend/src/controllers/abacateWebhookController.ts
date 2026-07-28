@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { supabase } from '../config/supabase';
+import * as eventLogService from '../services/eventLogService';
 
 function getAbacateHmacKey(): string {
     const key = process.env.ABACATE_WEBHOOK_HMAC_KEY;
@@ -140,6 +141,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`Subscription ${subscriptionId} cancelled via AbacatePay webhook.`);
+                eventLogService.logEvent({
+                    type: 'payment.cancelled',
+                    severity: 'warn',
+                    message: `Assinatura ${subscriptionId} cancelada via webhook AbacatePay`,
+                    metadata: { subscriptionId },
+                });
             }
 
             return res.status(200).send('OK');
@@ -181,6 +188,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`Checkout ${paymentExternalId} paid — subscription ${subscriptionId} activated/renewed.`);
+                eventLogService.logEvent({
+                    type: 'payment.confirmed',
+                    severity: 'info',
+                    message: `Pagamento confirmado (checkout) — assinatura ${subscriptionId}`,
+                    metadata: { subscriptionId, paymentExternalId },
+                });
             }
 
             return res.status(200).send('OK');
@@ -221,6 +234,12 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
                     .eq('id', subscriptionId);
 
                 console.log(`PIX ${paymentExternalId} paid — subscription ${subscriptionId} activated/renewed.`);
+                eventLogService.logEvent({
+                    type: 'payment.confirmed',
+                    severity: 'info',
+                    message: `Pagamento PIX confirmado — assinatura ${subscriptionId}`,
+                    metadata: { subscriptionId, paymentExternalId },
+                });
             }
 
             return res.status(200).send('OK');

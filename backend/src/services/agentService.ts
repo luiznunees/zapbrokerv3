@@ -7,6 +7,7 @@ import * as campaignService from './campaignService';
 import { QuotaService } from './quotaService';
 import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 import { logAiCost } from './costService';
+import { logEvent } from './eventLogService';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
@@ -2538,6 +2539,13 @@ export async function executeAction(
 
         const availability = await QuotaService.checkAvailability(userId, planId, 1);
         if (!availability.available) {
+          logEvent({
+            type: 'quota.exceeded',
+            severity: 'warn',
+            message: `Usuário ${userId} tentou disparar além do limite do plano (limite: ${availability.limit})`,
+            userId,
+            metadata: { planId, limit: availability.limit },
+          });
           return {
             success: false,
             message: `Você já usou todas as suas campanhas deste mês (limite: ${availability.limit}). Considere fazer upgrade para disparos liberados.`,
