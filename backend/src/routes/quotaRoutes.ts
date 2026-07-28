@@ -11,7 +11,6 @@ router.get('/current', async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
 
-        // Get Plan ID
         const { data: subscription } = await supabase
             .from('subscriptions')
             .select('plan_id')
@@ -19,18 +18,27 @@ router.get('/current', async (req: AuthRequest, res: Response) => {
             .eq('status', 'active')
             .single();
 
-        const planId = subscription?.plan_id || 'free'; // Handle no plan
+        const planId = subscription?.plan_id;
+
+        if (!planId) {
+            return res.json({ plan: null, quota: null });
+        }
+
+        if (QuotaService.isUnlimited(planId)) {
+            return res.json({ plan: planId, unlimited: true, quota: null });
+        }
 
         const quota = await QuotaService.getCurrentQuota(userId, planId);
-        const weekRange = QuotaService.getCurrentWeekRange();
+        const monthRange = QuotaService.getCurrentMonthRange();
 
         res.json({
             plan: planId,
-            week: {
+            unlimited: false,
+            month: {
                 start: quota.week_start,
                 end: quota.week_end,
-                number: weekRange.weekNumber,
-                year: weekRange.year
+                number: monthRange.month,
+                year: monthRange.year
             },
             quota: {
                 limit: quota.plan_limit,

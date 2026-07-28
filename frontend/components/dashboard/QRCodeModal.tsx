@@ -1,6 +1,7 @@
-import { X, Loader2, Smartphone } from 'lucide-react';
+import { X, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import React from 'react';
+import { BrandLoader } from '@/components/ui/BrandLoader';
 
 export interface QRCodeModalProps {
     isOpen: boolean;
@@ -47,11 +48,8 @@ export function QRCodeModal({ isOpen, onClose, qrCode, isLoading, onRetry }: QRC
 
                     <div className="p-8 flex flex-col items-center justify-center text-center space-y-6">
                         {isLoading ? (
-                            <div className="flex flex-col items-center gap-4 py-8">
-                                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                                <p className="text-sm text-muted-foreground animate-pulse">
-                                    Gerando QR Code seguro...
-                                </p>
+                            <div className="py-8">
+                                <BrandLoader size="md" label="Gerando QR Code seguro..." />
                             </div>
                         ) : qrCode ? (
                             <div className="space-y-4 relative">
@@ -107,7 +105,7 @@ export function QRCodeModal({ isOpen, onClose, qrCode, isLoading, onRetry }: QRC
                                     <span className="text-white text-sm font-bold">!</span>
                                 </div>
                                 <div className="flex-1 text-left">
-                                    <p className="font-bold text-sm text-yellow-700 dark:text-yellow-400 mb-1">
+                                    <p className="font-bold text-sm text-yellow-700 mb-1">
                                         ⚠️ Aviso Importante sobre o Chip
                                     </p>
                                     <p className="text-xs text-muted-foreground leading-relaxed">

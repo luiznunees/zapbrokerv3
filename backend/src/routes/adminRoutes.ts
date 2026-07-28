@@ -12,6 +12,7 @@ router.use(requireAdmin);
 // Dashboard
 router.get('/stats', adminController.getStats);
 router.get('/logs', adminController.getLogs);
+router.get('/finance', adminController.getFinance);
 
 // Users
 router.get('/users', adminController.listUsers);

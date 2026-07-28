@@ -35,11 +35,20 @@ export const getSystemStats = async () => {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'error');
 
+    // 5. Eventos error/critical das últimas 24h (ver system_events / eventLogService)
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentCriticalEvents } = await supabase
+        .from('system_events')
+        .select('*', { count: 'exact', head: true })
+        .in('severity', ['error', 'critical'])
+        .gte('created_at', dayAgo);
+
     return {
         users: userCount || 0,
         activeInstances: instanceCount || 0,
         messagesToday: messagesToday || 0,
-        activeErrors: errorCount || 0
+        activeErrors: errorCount || 0,
+        recentCriticalEvents: recentCriticalEvents || 0,
     };
 };
 
@@ -107,23 +116,38 @@ export const generateInvite = async (planId: string, createdBy: string) => {
     return data;
 };
 
-export const getSystemLogs = async () => {
-    // Return instances with errors or disconnected state as 'logs'
-    const { data, error } = await supabase
-        .from('instances')
-        .select('id, name, status, updated_at, phone_number')
-        .or('status.eq.error,status.eq.disconnected')
-        .order('updated_at', { ascending: false })
-        .limit(50);
+const SEVERITY_TO_LEVEL: Record<string, string> = {
+    info: 'INFO',
+    warn: 'WARN',
+    error: 'ERROR',
+    critical: 'CRITICAL',
+};
+
+// Lê da tabela real de eventos (system_events, alimentada por eventLogService.logEvent nos
+// pontos-chave do backend). Mantém o mesmo formato {id, level, message, timestamp, source}
+// que o painel admin já consome, pra não exigir mudança na página de logs.
+export const getSystemLogs = async (options: { severity?: string; type?: string; page?: number; limit?: number } = {}) => {
+    const { severity, type, page = 1, limit = 50 } = options;
+
+    let query = supabase
+        .from('system_events')
+        .select('id, type, severity, message, created_at')
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
+
+    if (severity) query = query.eq('severity', severity);
+    if (type) query = query.eq('type', type);
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
 
-    return data.map(i => ({
-        id: i.id,
-        level: i.status === 'error' ? 'ERROR' : 'WARN',
-        message: `Instance ${i.name} (${i.phone_number}) is ${i.status}`,
-        timestamp: i.updated_at,
-        source: 'Instance Monitor'
+    return (data || []).map(e => ({
+        id: e.id,
+        level: SEVERITY_TO_LEVEL[e.severity] || 'INFO',
+        message: e.message,
+        timestamp: e.created_at,
+        source: e.type,
     }));
 };
 

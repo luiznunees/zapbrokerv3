@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent } from '@dnd-kit/core'
-import { AltArrowLeft, Refresh } from '@solar-icons/react'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { api } from '@/services/api'
 import { KanbanColumn } from '@/components/kanban/KanbanColumn'
 import { LeadCard } from '@/components/kanban/LeadCard'
+import { BrandLoader } from '@/components/ui/BrandLoader'
 
 interface Lead {
     id: string
@@ -115,14 +116,7 @@ export default function KanbanPage() {
     }
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-                    <p className="text-muted-foreground">Carregando Kanban...</p>
-                </div>
-            </div>
-        )
+        return <BrandLoader size="lg" label="Carregando Kanban..." fullScreen />
     }
 
     if (!kanbanData) {
@@ -153,7 +147,7 @@ export default function KanbanPage() {
                             onClick={() => router.push(`/dashboard/campaigns/${campaignId}`)}
                             className="p-2 hover:bg-accent rounded-lg transition-colors"
                         >
-                            <AltArrowLeft className="w-5 h-5" />
+                            <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
                             <h1 className="text-2xl font-bold text-foreground">Kanban de Leads</h1>
@@ -165,7 +159,7 @@ export default function KanbanPage() {
                         disabled={updating}
                         className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                        <Refresh className={updating ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
+                        <RefreshCw className={updating ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
                         Atualizar
                     </button>
                 </div>

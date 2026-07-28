@@ -16,10 +16,10 @@ export const create = async (req: AuthRequest, res: Response) => {
             .select('plan_id, status')
             .eq('user_id', userId)
             .eq('status', 'active')
-            .single();
+            .maybeSingle();
 
-        const planId = subscription?.plan_id;
-        const limits = planId ? PLAN_LIMITS[planId] : DEFAULT_LIMITS;
+        const planId = subscription?.plan_id || 'free';
+        const limits = PLAN_LIMITS[planId] || DEFAULT_LIMITS;
 
         if (!limits) {
             // Should not happen if subscription is active, but fallback

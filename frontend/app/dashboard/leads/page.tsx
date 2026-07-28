@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
 import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip'
 import { HelpBadge } from '@/components/ui/HelpBadge'
+import { BrandLoader } from '@/components/ui/BrandLoader'
 
 type ContactList = {
     id: string
@@ -222,9 +223,8 @@ export default function LeadsPage() {
 
     if (loading && view === 'folders' && lists.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-[60vh]">
-                <Restart className="w-10 h-10 animate-spin text-primary mb-4" />
-                <p className="text-muted-foreground font-medium">Carregando suas pastas...</p>
+            <div className="flex items-center justify-center h-[60vh]">
+                <BrandLoader size="lg" label="Carregando suas pastas..." />
             </div>
         )
     }
@@ -603,9 +603,8 @@ export default function LeadsPage() {
                     className="bg-card border border-border rounded-[2rem] overflow-hidden shadow-xl shadow-primary/5"
                 >
                     {loading ? (
-                        <div className="p-24 text-center">
-                            <Restart className="w-10 h-10 animate-spin text-primary mx-auto mb-6" />
-                            <p className="text-muted-foreground font-bold">Carregando contatos...</p>
+                        <div className="p-24 flex justify-center">
+                            <BrandLoader size="lg" label="Carregando contatos..." />
                         </div>
                     ) : (
                         <div className="overflow-x-auto">

@@ -4,25 +4,24 @@ import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 
 export class QuotaService {
 
-    static getCurrentWeekRange() {
+    static getCurrentMonthRange() {
         const now = moment().tz('America/Sao_Paulo');
-        const weekStart = now.clone().startOf('isoWeek').format('YYYY-MM-DD');
-        const weekEnd = now.clone().endOf('isoWeek').format('YYYY-MM-DD');
+        const monthStart = now.clone().startOf('month').format('YYYY-MM-DD');
+        const monthEnd = now.clone().endOf('month').format('YYYY-MM-DD');
 
-        return { weekStart, weekEnd, weekNumber: now.isoWeek(), year: now.year() };
+        return { monthStart, monthEnd, month: now.month() + 1, year: now.year() };
     }
 
     static async getCurrentQuota(userId: string, planId: string) {
-        const { weekStart, weekEnd } = this.getCurrentWeekRange();
+        const { monthStart, monthEnd } = this.getCurrentMonthRange();
         const limits = PLAN_LIMITS[planId] || DEFAULT_LIMITS;
-        const planLimit = limits.maxMonthlyMessages; // Using maxMonthlyMessages as weekly limit for now based on user request "50 msgs/semana"
+        const planLimit = limits.maxMonthlyCampaigns; // cota de campanhas por mês
 
-        // Check existing quota
         const { data: existingQuota } = await supabase
             .from('weekly_quotas')
             .select('*')
             .eq('user_id', userId)
-            .eq('week_start', weekStart)
+            .eq('week_start', monthStart)
             .eq('status', 'ACTIVE')
             .single();
 
@@ -30,13 +29,12 @@ export class QuotaService {
             return existingQuota;
         }
 
-        // Create new quota
         const { data: newQuota, error } = await supabase
             .from('weekly_quotas')
             .insert({
                 user_id: userId,
-                week_start: weekStart,
-                week_end: weekEnd,
+                week_start: monthStart,
+                week_end: monthEnd,
                 plan_limit: planLimit,
                 messages_used: 0,
                 messages_remaining: planLimit,
@@ -47,41 +45,52 @@ export class QuotaService {
 
         if (error) throw new Error(`Failed to create quota: ${error.message}`);
 
-        // Log transaction
         await this.logTransaction({
             userId,
             weeklyQuotaId: newQuota.id,
             messageCount: planLimit,
             type: 'RENEWAL',
-            reason: 'Nova semana iniciada'
+            reason: 'Novo mês iniciado'
         });
 
         return newQuota;
     }
 
-    static async checkAvailability(userId: string, planId: string, requestedMessages: number) {
+    /** Planos com cota ilimitada (ex: Pro) pulam a verificação por completo. */
+    static isUnlimited(planId: string) {
+        const limits = PLAN_LIMITS[planId] || DEFAULT_LIMITS;
+        return !Number.isFinite(limits.maxMonthlyCampaigns);
+    }
+
+    static async checkAvailability(userId: string, planId: string, requestedCampaigns: number = 1) {
+        if (this.isUnlimited(planId)) {
+            return { available: true, remaining: Infinity, requested: requestedCampaigns, limit: Infinity };
+        }
+
         const quota = await this.getCurrentQuota(userId, planId);
 
         return {
-            available: quota.messages_remaining >= requestedMessages,
+            available: quota.messages_remaining >= requestedCampaigns,
             remaining: quota.messages_remaining,
-            requested: requestedMessages,
+            requested: requestedCampaigns,
             limit: quota.plan_limit
         };
     }
 
-    static async consumeQuota(userId: string, planId: string, messageCount: number, campaignId: string) {
+    static async consumeQuota(userId: string, planId: string, campaignCount: number = 1, campaignId: string) {
+        if (this.isUnlimited(planId)) return null;
+
         const quota = await this.getCurrentQuota(userId, planId);
 
-        if (quota.messages_remaining < messageCount) {
-            throw new Error(`Cota insuficiente. Disponível: ${quota.messages_remaining}, Necessário: ${messageCount}`);
+        if (quota.messages_remaining < campaignCount) {
+            throw new Error(`Cota insuficiente. Disponível: ${quota.messages_remaining}, Necessário: ${campaignCount}`);
         }
 
         const { data: updatedQuota, error } = await supabase
             .from('weekly_quotas')
             .update({
-                messages_used: quota.messages_used + messageCount,
-                messages_remaining: quota.messages_remaining - messageCount
+                messages_used: quota.messages_used + campaignCount,
+                messages_remaining: quota.messages_remaining - campaignCount
             })
             .eq('id', quota.id)
             .select()
@@ -93,7 +102,7 @@ export class QuotaService {
             userId,
             weeklyQuotaId: quota.id,
             campaignId,
-            messageCount,
+            messageCount: campaignCount,
             type: 'USAGE',
             reason: 'Campanha criada'
         });
@@ -101,10 +110,12 @@ export class QuotaService {
         return updatedQuota;
     }
 
-    static async refundQuota(userId: string, planId: string, messageCount: number, campaignId: string, reason: string) {
+    static async refundQuota(userId: string, planId: string, campaignCount: number, campaignId: string, reason: string) {
+        if (this.isUnlimited(planId)) return;
+
         const quota = await this.getCurrentQuota(userId, planId);
 
-        const newRemaining = Math.min(quota.messages_remaining + messageCount, quota.plan_limit);
+        const newRemaining = Math.min(quota.messages_remaining + campaignCount, quota.plan_limit);
         const actualRefund = newRemaining - quota.messages_remaining;
 
         await supabase
@@ -126,12 +137,12 @@ export class QuotaService {
     }
 
     static async expireOldQuotas() {
-        const { weekStart } = this.getCurrentWeekRange();
+        const { monthStart } = this.getCurrentMonthRange();
 
         const { error } = await supabase
             .from('weekly_quotas')
             .update({ status: 'EXPIRED' })
-            .lt('week_start', weekStart)
+            .lt('week_start', monthStart)
             .eq('status', 'ACTIVE');
 
         if (error) console.error('Error expiring quotas:', error);

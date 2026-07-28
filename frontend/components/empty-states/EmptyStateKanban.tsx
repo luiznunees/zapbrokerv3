@@ -25,19 +25,19 @@ export function EmptyStateKanban() {
             </Link>
 
             <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl">
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border-2 border-border">
+                <div className="bg-gray-50 rounded-lg p-3 border-2 border-border">
                     <p className="text-xs font-bold mb-1">📋 Na Fila</p>
                     <p className="text-xs text-muted-foreground">Aguardando envio</p>
                 </div>
-                <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 border-2 border-blue-200 dark:border-blue-800">
+                <div className="bg-blue-50 rounded-lg p-3 border-2 border-blue-200">
                     <p className="text-xs font-bold mb-1">📤 Enviado</p>
                     <p className="text-xs text-muted-foreground">Mensagem enviada</p>
                 </div>
-                <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3 border-2 border-green-200 dark:border-green-800">
+                <div className="bg-green-50 rounded-lg p-3 border-2 border-green-200">
                     <p className="text-xs font-bold mb-1">💬 Respondeu</p>
                     <p className="text-xs text-muted-foreground">Lead interessado</p>
                 </div>
-                <div className="bg-emerald-50 dark:bg-emerald-950 rounded-lg p-3 border-2 border-emerald-200 dark:border-emerald-800">
+                <div className="bg-emerald-50 rounded-lg p-3 border-2 border-emerald-200">
                     <p className="text-xs font-bold mb-1">✅ Convertido</p>
                     <p className="text-xs text-muted-foreground">Venda fechada!</p>
                 </div>

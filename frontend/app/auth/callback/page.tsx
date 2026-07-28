@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { BrandLoader } from '@/components/ui/BrandLoader';
 
 // Safe initialization for Docker build time where envs might be missing
 const getSupabase = () => {
@@ -84,10 +84,5 @@ export default function AuthCallbackPage() {
         );
     }
 
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-background">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground text-sm">Finalizando autenticação...</p>
-        </div>
-    );
+    return <BrandLoader size="lg" label="Finalizando autenticação..." fullScreen />;
 }

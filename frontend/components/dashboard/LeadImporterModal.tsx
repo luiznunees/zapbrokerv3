@@ -13,10 +13,16 @@ import {
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
 
+export interface ImportedList {
+    id: string
+    name: string
+    count: number
+}
+
 interface LeadImporterModalProps {
     isOpen: boolean
     onClose: () => void
-    onSuccess: () => void
+    onSuccess: (list?: ImportedList) => void
     targetListId?: string
     targetListName?: string
 }
@@ -40,10 +46,12 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
             formData.append('file', file)
 
             let result;
+            let importedList: ImportedList
 
             if (mode === 'pdf') {
                 const response = await api.contacts.importPdf(formData)
                 result = { listName: response.list.name, count: response.count }
+                importedList = { id: response.list.id, name: response.list.name, count: response.count }
             } else {
                 // CSV or Excel Import - creates new folder automatically
                 const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
@@ -53,11 +61,12 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                     : await api.contacts.importCsv(formData)
 
                 result = { listName: response.list.name, count: response.count }
+                importedList = { id: response.list.id, name: response.list.name, count: response.count }
             }
 
             setImportResult(result)
             setStep('result')
-            onSuccess()
+            onSuccess(importedList)
         } catch (error: any) {
             console.error("Import failed", error)
             alert("Erro ao importar: " + (error.message || "Erro desconhecido"))
@@ -136,7 +145,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400">Para que serve?</h4>
+                                    <h4 className="text-sm font-bold text-blue-600">Para que serve?</h4>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                                         Ideal para <b>listagens de condomínios</b>, <b>documentos de proprietários</b>,
                                         relatórios de imobiliárias ou qualquer PDF com contatos.
@@ -147,7 +156,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400">Importante</h4>
+                                    <h4 className="text-sm font-bold text-orange-600">Importante</h4>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                                         A extração automática não é 100% precisa. Ela depende da formatação do PDF original.
                                         Sempre revise os dados na pasta criada antes de iniciar campanhas.
@@ -160,7 +169,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                                 <div className="flex-1">
-                                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 mb-1">Para que serve?</h4>
+                                    <h4 className="text-sm font-bold text-blue-600 mb-1">Para que serve?</h4>
                                     <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                                         Ideal para <b>planilhas de contatos</b>, listas exportadas de outros sistemas (CRM, Excel, Google Sheets)
                                         ou qualquer arquivo CSV/Excel com nomes e telefones organizados.
@@ -177,7 +186,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-green-600 dark:text-green-400">Como preparar seu arquivo</h4>
+                                    <h4 className="text-sm font-bold text-green-600">Como preparar seu arquivo</h4>
                                     <ul className="text-xs text-muted-foreground mt-2 leading-relaxed space-y-1 list-disc list-inside">
                                         <li>Use as colunas <b>"nome"</b> e <b>"telefone"</b></li>
                                         <li>Telefones devem estar no formato: <b>5511999998888</b> (com DDI e DDD)</li>

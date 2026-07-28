@@ -10,11 +10,14 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PLAN_INFO } from '@/lib/plans'
 
 export default function SignupPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const inviteCode = searchParams.get('invite')
+    const planId = searchParams.get('planId')
+    const plan = planId ? PLAN_INFO[planId] : undefined
 
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
@@ -45,20 +48,26 @@ export default function SignupPage() {
         }
 
         try {
-            // Pass invite code to register endpoint if available
-            // Note: Update backend 'register' to accept 'inviteCode' if needed
-            // For now, standard register. If invite code logic is complex (skips payment), backend needs update.
-            // Assuming backend logic: if invite code, assign plan.
-
-            await api.auth.register({
+            const result = await api.auth.register({
                 name,
                 email,
                 password,
-                inviteCode // Pass this along
+                inviteCode,
+                planId: planId && !inviteCode ? planId : undefined,
             })
 
-            // Redirect to login or dashboard
-            router.push('/login?registered=true')
+            if (result.token) {
+                localStorage.setItem('token', result.token)
+                localStorage.setItem('user', JSON.stringify(result.user))
+            }
+
+            if (planId && !inviteCode && result.token) {
+                router.push(`/checkout/redirect?planId=${planId}`)
+            } else if (result.token) {
+                router.push('/dashboard')
+            } else {
+                router.push('/login?registered=true')
+            }
         } catch (err: any) {
             console.error(err)
             setError(err.message || 'Erro ao criar conta. Tente novamente.')
@@ -77,6 +86,18 @@ export default function SignupPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {plan && !inviteCode && (
+                        <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-3">
+                            <div>
+                                <p className="text-xs text-muted-foreground">Você está assinando</p>
+                                <p className="font-bold">Plano {plan.name}</p>
+                            </div>
+                            <p className="font-bold text-lg">
+                                R$ {plan.price}<span className="text-xs font-normal text-muted-foreground">/mês</span>
+                            </p>
+                        </div>
+                    )}
+
                     {inviteCode && (
                         <Alert className="mb-4 bg-emerald-500/10 border-emerald-500/20 text-emerald-500">
                             <CheckCircle className="h-4 w-4" />

@@ -13,7 +13,7 @@ export const create = async (req: AuthRequest, res: Response) => {
 
         // Zod Validation
         const validatedData = createCampaignSchema.parse(req.body);
-        const { name, messageVariations, contactListId, instanceId, delaySeconds, batchSize, batchDelaySeconds, mediaType, sequentialMode, blockDelay, excludedContactIds } = validatedData;
+        const { name, messageVariations, contactListId, instanceIds, delaySeconds, batchSize, batchDelaySeconds, mediaType, sequentialMode, blockDelay, excludedContactIds } = validatedData;
         const scheduledAt = req.body.scheduledAt;
 
         let mediaUrl = undefined;
@@ -37,7 +37,7 @@ export const create = async (req: AuthRequest, res: Response) => {
             name,
             messageVariations,
             contactListId,
-            instanceId,
+            instanceIds,
             scheduledAt,
             delaySeconds,
             batchSize,
@@ -50,13 +50,12 @@ export const create = async (req: AuthRequest, res: Response) => {
         );
         console.log('[CampaignCreate] Service Success:', result.id);
 
-        // Consume Quota
+        // Consume Quota (1 campanha, independente da quantidade de contatos)
         const userPlanId = (req as any).userPlanId;
-        const messageCount = (req as any).quotaCheck?.requested || 0;
 
-        if (userPlanId && messageCount > 0) {
+        if (userPlanId) {
             try {
-                await QuotaService.consumeQuota(userId, userPlanId, messageCount, result.id);
+                await QuotaService.consumeQuota(userId, userPlanId, 1, result.id);
             } catch (quotaError) {
                 console.error('Error consuming quota:', quotaError);
             }
@@ -82,6 +81,16 @@ export const list = async (req: AuthRequest, res: Response) => {
         const userId = req.user.id;
         const result = await campaignService.getCampaigns(userId);
         res.status(200).json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
+export const getStalledCount = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const count = await campaignService.getStalledLeadsCount(userId);
+        res.status(200).json({ count });
     } catch (error: any) {
         res.status(400).json({ error: error.message });
     }
