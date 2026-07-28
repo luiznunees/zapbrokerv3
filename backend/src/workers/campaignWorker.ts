@@ -4,6 +4,40 @@ import { supabase } from '../config/supabase';
 import * as evolutionService from '../services/evolutionService';
 import fs from 'fs';
 import path from 'path';
+import { injectInvisibleMarker } from '../utils/invisibleMarker';
+
+const MIMETYPE_BY_EXTENSION: Record<string, string> = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+    mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
+    mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4',
+};
+
+// Se o arquivo estiver hospedado localmente (uploads/), lê e converte pra base64 puro —
+// a Evolution API prefere isso a mandar só a URL. Reaproveitado por imagem/vídeo/áudio.
+function readLocalMediaAsBase64(mediaUrl: string, fallbackMimetype: string): { mediaData: string; mimetype: string } {
+    let mediaData = mediaUrl;
+    let mimetype = fallbackMimetype;
+
+    if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
+        try {
+            const filename = mediaUrl.split('/').pop() as string;
+            const filePath = path.join(process.cwd(), 'uploads', filename);
+
+            if (fs.existsSync(filePath)) {
+                const fileBuffer = fs.readFileSync(filePath);
+                const extension = path.extname(filePath).toLowerCase().replace('.', '');
+                mimetype = MIMETYPE_BY_EXTENSION[extension] || fallbackMimetype;
+                mediaData = fileBuffer.toString('base64');
+            } else {
+                console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
+            }
+        } catch (err: any) {
+            console.error('[CampaignWorker] Failed to convert local media to base64:', err.message);
+        }
+    }
+
+    return { mediaData, mimetype };
+}
 
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay, sequentialMode, blockDelay } = job.data;
@@ -93,6 +127,9 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     let finalMessage = selectedMessage;
     if (finalMessage) {
         finalMessage = finalMessage.replace(/{nome}/gi, contactName);
+        // Anti-banimento: cada mensagem enviada leva marcadores invisíveis únicos,
+        // pra não ser detectada como conteúdo idêntico em massa.
+        finalMessage = injectInvisibleMarker(finalMessage);
     }
 
     let result: any;
@@ -102,50 +139,42 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         console.log(`[CampaignWorker] Sequential mode enabled. Auto-splitting message...`);
 
         // 1. Send Media First if exists
-        // (Copied and adapted from standard mode logic)
-        if (mediaType === 'image' && mediaUrl) {
-            let mediaData = mediaUrl;
-            let mimetype = 'image/jpeg';
+        if ((mediaType === 'image' || mediaType === 'video') && mediaUrl) {
+            const fallbackMimetype = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+            const { mediaData, mimetype } = readLocalMediaAsBase64(mediaUrl, fallbackMimetype);
 
-            // Local file processing
-            if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
-                try {
-                    const filename = mediaUrl.split('/').pop();
-                    const filePath = path.join(process.cwd(), 'uploads', filename);
-                    console.log(`[CampaignWorker] Local image detected. Reading from: ${filePath}`);
-
-                    if (fs.existsSync(filePath)) {
-                        const fileBuffer = fs.readFileSync(filePath);
-                        const extension = path.extname(filePath).toLowerCase().replace('.', '');
-                        mimetype = extension === 'png' ? 'image/png' : 'image/jpeg';
-                        mediaData = fileBuffer.toString('base64');
-                        console.log(`[CampaignWorker] Image converted to pure base64 successfully (mimetype: ${mimetype})`);
-                    } else {
-                        console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
-                    }
-                } catch (err: any) {
-                    console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
-                }
-            }
-
-            // 👻 Ghost Action for Media
             console.log(`[CampaignWorker] Ghost Action (Sequential): Uploading media simulation...`);
             await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Send Image alone (without caption, since caption is split below)
-            // Or should we send it with the first block? standard is to split text. 
-            // We'll send image first, then text blocks.
-            const mediaResult = await evolutionService.sendImage(targetInstanceName, phone, {
+            // Send media alone (without caption, since caption is split below into text blocks)
+            const mediaResult = await evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
-                caption: '', // No caption on image, text follows sequentially
-                mimetype: mimetype,
-                filename: 'image.jpg'
+                caption: '',
+                mimetype,
+                filename: mediaType === 'video' ? 'video.mp4' : 'image.jpg',
+                mediatype: mediaType,
             });
-            result = mediaResult; // Capture ID for status update
+            result = mediaResult;
 
-            // Wait after sending image before starting text blocks
-            console.log(`[CampaignWorker] Image sent. Waiting ${blockDelay}s before starting text blocks...`);
+            console.log(`[CampaignWorker] Media sent. Waiting ${blockDelay}s before starting text blocks...`);
+            await new Promise(resolve => setTimeout(resolve, blockDelay * 1000));
+        } else if (mediaType === 'audio' && mediaUrl) {
+            const { mediaData, mimetype } = readLocalMediaAsBase64(mediaUrl, 'audio/mpeg');
+
+            console.log(`[CampaignWorker] Ghost Action (Sequential): Recording audio simulation...`);
+            await evolutionService.sendPresence(targetInstanceName, phone, 'recording');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const mediaResult = await evolutionService.sendMedia(targetInstanceName, phone, {
+                media: mediaData,
+                mimetype,
+                filename: 'audio.mp3',
+                mediatype: 'audio',
+            });
+            result = mediaResult;
+
+            console.log(`[CampaignWorker] Audio sent. Waiting ${blockDelay}s before starting text blocks...`);
             await new Promise(resolve => setTimeout(resolve, blockDelay * 1000));
         }
 
@@ -219,46 +248,41 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
             result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
             console.log(`[CampaignWorker] TEXT Sent successfully`);
-        } else if (mediaType === 'image') {
-            let mediaData = mediaUrl;
-            let mimetype = 'image/jpeg';
+        } else if (mediaType === 'image' || mediaType === 'video') {
+            const fallbackMimetype = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+            const { mediaData, mimetype } = readLocalMediaAsBase64(mediaUrl, fallbackMimetype);
 
-            // If it's a local URL, try to read the file and convert to base64
-            if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
-                try {
-                    const filename = mediaUrl.split('/').pop();
-                    const filePath = path.join(process.cwd(), 'uploads', filename);
-                    console.log(`[CampaignWorker] Local image detected. Reading from: ${filePath}`);
-
-                    if (fs.existsSync(filePath)) {
-                        const fileBuffer = fs.readFileSync(filePath);
-                        const extension = path.extname(filePath).toLowerCase().replace('.', '');
-                        mimetype = extension === 'png' ? 'image/png' : 'image/jpeg';
-                        // Evolution API often prefers pure base64 without prefix when mimetype is provided
-                        mediaData = fileBuffer.toString('base64');
-                        console.log(`[CampaignWorker] Image converted to pure base64 successfully (mimetype: ${mimetype})`);
-                    } else {
-                        console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
-                    }
-                } catch (err: any) {
-                    console.error('[CampaignWorker] Failed to convert local image to base64:', err.message);
-                }
-            }
-
-            // 👻 ANTI-BAN: GHOST RECORDING/TYPING FOR MEDIA
             console.log(`[CampaignWorker] Ghost Action: Uploading media simulation...`);
-            await evolutionService.sendPresence(targetInstanceName, phone, 'composing'); // Or 'recording' if audio
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Fixed 3s for media upload sim
+            await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
-            result = await evolutionService.sendImage(targetInstanceName, phone, {
+            result = await evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
                 caption: finalMessage,
-                mimetype: mimetype,
-                filename: 'image.jpg'
+                mimetype,
+                filename: mediaType === 'video' ? 'video.mp4' : 'image.jpg',
+                mediatype: mediaType,
             });
+        } else if (mediaType === 'audio') {
+            const { mediaData, mimetype } = readLocalMediaAsBase64(mediaUrl, 'audio/mpeg');
+
+            console.log(`[CampaignWorker] Ghost Action: Recording audio simulation...`);
+            await evolutionService.sendPresence(targetInstanceName, phone, 'recording');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Áudio não aceita legenda na Evolution API — manda o áudio e o texto em seguida
+            result = await evolutionService.sendMedia(targetInstanceName, phone, {
+                media: mediaData,
+                mimetype,
+                filename: 'audio.mp3',
+                mediatype: 'audio',
+            });
+            if (finalMessage) {
+                await evolutionService.sendText(targetInstanceName, phone, finalMessage);
+            }
         } else {
-            // Fallback for other media types (video, audio) - send as text link for now or implement sendFile
-            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nMedia: ${mediaUrl}`);
+            // Fallback for other media types (document, etc.) - send as text link for now
+            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nArquivo: ${mediaUrl}`);
         }
     }
 
@@ -285,6 +309,23 @@ campaignWorker.on('completed', (job) => {
     console.log(`Job ${job.id} completed!`);
 });
 
-campaignWorker.on('failed', (job, err) => {
+campaignWorker.on('failed', async (job, err) => {
     console.error(`Job ${job?.id} failed: ${err.message}`);
+
+    if (!job) return;
+
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts || 1;
+
+    if (attemptsMade >= maxAttempts) {
+        console.error(`[CampaignWorker] Job ${job.id} exhausted all ${maxAttempts} attempts. Marking message ${job.data.id} as FAILED.`);
+        await supabase
+            .from('campaign_messages')
+            .update({
+                status: 'FAILED',
+                error_message: err.message,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', job.data.id);
+    }
 });

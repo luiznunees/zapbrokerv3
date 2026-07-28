@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { initSocket } from './services/socketService';
 import { errorHandler } from './middlewares/errorHandler';
 import dns from 'dns';
+import path from 'path';
 
 // Fix for Node 17+ IPV6 issues
 if (dns.setDefaultResultOrder) {
@@ -20,10 +21,26 @@ const httpServer = http.createServer(app);
 const port = process.env.PORT || 3000;
 
 // Security Middleware
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://api.zapbroker.dev"],
+            fontSrc: ["'self'"],
+            frameAncestors: ["'none'"],
+        },
+    },
+    crossOriginEmbedderPolicy: false,
+}));
+
+const productionOrigins = ['https://zapbroker.dev', 'https://www.zapbroker.dev'];
+const devOrigins = ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'http://192.168.0.242:3000'];
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'http://192.168.0.242:3000', 'https://zapbroker.dev', 'https://www.zapbroker.dev'],
+    origin: process.env.NODE_ENV === 'production' ? productionOrigins : [...productionOrigins, ...devOrigins],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -47,17 +64,27 @@ app.use(express.json());
 // Apply auth limiter to auth routes
 import authRoutes from './routes/authRoutes';
 app.use('/auth', authLimiter, authRoutes);
-app.use('/uploads', express.static('uploads')); // Serve uploaded files
+
 
 import swaggerUi from 'swagger-ui-express';
 import { specs } from './config/swagger';
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+import { authenticateToken } from './middlewares/authMiddleware';
+import agentRoutes from './routes/agentRoutes';
+app.use('/agent', authenticateToken, agentRoutes);
+
+import uploadRoutes from './routes/uploadRoutes';
+app.use('/uploads', authenticateToken, uploadRoutes);
 
 import instanceRoutes from './routes/instanceRoutes';
 app.use('/instances', instanceRoutes);
 
 import contactRoutes from './routes/contactRoutes';
 app.use('/contact-lists', contactRoutes);
+
+import apiContactRoutes from './routes/apiContactRoutes';
+app.use('/api', apiContactRoutes);
 
 import campaignRoutes from './routes/campaignRoutes';
 app.use('/campaigns', campaignRoutes);
@@ -71,20 +98,28 @@ app.use('/quotas', quotaRoutes);
 import adminRoutes from './routes/adminRoutes';
 app.use('/admin', adminRoutes);
 
+import { runMigrations } from './migrations/create_agent_sessions';
+
 import { startProcessor } from './services/campaignProcessor';
 startProcessor();
 
 import { startQuotaRenewalJob } from './jobs/renewQuotas';
 startQuotaRenewalJob();
 
+import { startSubscriptionRenewalJob } from './jobs/renewSubscriptions';
+startSubscriptionRenewalJob();
+
+import { startMonthlyBillingJob } from './jobs/monthlyBilling';
+startMonthlyBillingJob();
+
 import './workers/campaignWorker'; // Start BullMQ Worker
 
 import * as paymentController from './controllers/paymentController';
-import { authenticateToken } from './middlewares/authMiddleware';
 
 // Payment Routes
 app.post('/payments/subscribe', authenticateToken, paymentController.createSubscription);
 app.get('/payments/subscription/:id', authenticateToken, paymentController.getSubscriptionStatus);
+app.post('/payments/subscription/cancel', authenticateToken, paymentController.cancelSubscription);
 
 app.get('/', (req, res) => {
     res.send('ZapBroker API is running');
@@ -96,14 +131,8 @@ initSocket(httpServer);
 // Global Error Handler
 app.use(errorHandler);
 
-import legacyRoutes from './routes/legacyRoutes';
-app.use('/api', legacyRoutes); // Mount at /api to match frontend baseURL (http://localhost:3000/api)
-// Note: frontend api.ts has baseURL: 'http://localhost:3000/api'
-// So requests will be /api/whatsapp/connect, /api/contatos, etc.
-// My legacyRoutes defines /whatsapp/connect, /contatos.
-// So mounting at /api is correct.
-
-httpServer.listen(port, () => {
+httpServer.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
+    await runMigrations();
 });
 
