@@ -1,30 +1,28 @@
-import Sidebar from '@/components/dashboard/Sidebar'
+import { NavRail } from '@/components/dashboard/NavRail'
+import { DashboardProvider } from '@/contexts/dashboard-context'
+import { UserProvider } from '@/contexts/user-context'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PaymentGuard from '@/components/auth/PaymentGuard'
 
 export default function DashboardLayout({
-    children,
+  children,
 }: {
-    children: React.ReactNode
+  children: React.ReactNode
 }) {
-    return (
-        <ProtectedRoute>
-            <PaymentGuard>
-                <div className="flex bg-background h-screen overflow-hidden text-foreground transition-colors duration-300">
-                    <Sidebar />
-                    <main className="flex-1 overflow-y-auto h-full relative">
-                        <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-sm sticky top-0 z-10 w-full">
-                            <h2 className="font-semibold text-foreground">Dashboard do Corretor</h2>
-                            <div className="flex items-center gap-2">
-                                {/* User profile removed as requested */}
-                            </div>
-                        </header>
-                        <div className="p-6 max-w-6xl mx-auto">
-                            {children}
-                        </div>
-                    </main>
-                </div>
-            </PaymentGuard>
-        </ProtectedRoute>
-    )
+  return (
+    <ProtectedRoute>
+      <UserProvider>
+        <PaymentGuard>
+          <DashboardProvider>
+            <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-zinc-50 text-foreground transition-colors duration-300">
+              <NavRail />
+              <main className="flex-1 overflow-y-auto h-full relative pb-20 lg:pb-0">
+                <div className="p-4 pt-3 h-full">{children}</div>
+              </main>
+            </div>
+          </DashboardProvider>
+        </PaymentGuard>
+      </UserProvider>
+    </ProtectedRoute>
+  )
 }
