@@ -150,6 +150,11 @@ export default function LoginPage() {
                                             'Entrar com Email'
                                         )}
                                     </button>
+                                    <div className="text-center">
+                                        <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                                            Esqueci minha senha
+                                        </Link>
+                                    </div>
                                 </div>
 
                                 <div className="relative">

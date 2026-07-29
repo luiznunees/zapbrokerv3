@@ -48,39 +48,6 @@ const getEmailTemplate = (content: string) => `
 </html>
 `;
 
-export const sendConfirmationEmail = async (email: string, confirmationUrl: string) => {
-    if (!resend) { console.warn('Resend not configured, skipping confirmation email to', email); return; }
-    try {
-        const html = getEmailTemplate(`
-            <h1 class="welcome-hero">Confirme seu cadastro 🚀</h1>
-            <p>Olá! Você está a um passo de automatizar suas vendas no WhatsApp com o ZapBroker.</p>
-            <p>Por favor, clique no botão abaixo para confirmar seu endereço de e-mail e ativar sua conta:</p>
-            <div style="text-align: center;">
-                <a href="${confirmationUrl}" class="button">Ativar Minha Conta</a>
-            </div>
-            <p style="font-size: 12px; color: #666; margin-top: 20px;">Se o botão não funcionar, copie este link: <br/> ${confirmationUrl}</p>
-        `);
-
-        const { data, error } = await resend.emails.send({
-            from: 'ZapBroker <onboarding@zapbroker.dev>',
-            to: [email],
-            subject: 'Confirme seu cadastro no ZapBroker',
-            html,
-        });
-
-        if (error) {
-            console.error('Resend Error (Confirmation):', error);
-            throw error;
-        }
-
-        console.log('Confirmation email sent to:', email);
-        return data;
-    } catch (error) {
-        console.error('Failed to send confirmation email:', error);
-        throw error;
-    }
-};
-
 export const sendPaymentReminderEmail = async (email: string, name: string, checkoutUrl: string) => {
     if (!resend) { console.warn('Resend not configured, skipping payment reminder email to', email); return; }
     try {
@@ -109,30 +76,88 @@ export const sendPaymentReminderEmail = async (email: string, name: string, chec
     }
 };
 
-// Alerta pro admin quando um evento crítico acontece (ver eventLogService.logEvent).
-// Sem ADMIN_EMAIL configurado, só avisa no console e segue — nunca derruba o fluxo que chamou.
-export const sendAdminAlertEmail = async (subject: string, message: string) => {
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (!resend) { console.warn('Resend not configured, skipping admin alert:', subject); return; }
-    if (!adminEmail) { console.warn('ADMIN_EMAIL not configured, skipping admin alert:', subject); return; }
-
+// Pagamento do ciclo (assinatura nova ou renovação) confirmado — recibo simples pro cliente.
+export const sendPaymentConfirmedEmail = async (email: string, name: string, planName: string, amount: number, nextBillingDate: Date) => {
+    if (!resend) { console.warn('Resend not configured, skipping payment confirmed email to', email); return; }
     try {
+        const formattedAmount = (amount / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const formattedDate = nextBillingDate.toLocaleDateString('pt-BR');
         const html = getEmailTemplate(`
-            <h1 class="welcome-hero" style="color: #dc2626;">⚠️ ${subject}</h1>
-            <p>${message}</p>
-            <p style="font-size: 12px; color: #666; margin-top: 20px;">Ver mais em <a href="https://zapbroker.dev/admin/logs">/admin/logs</a>.</p>
+            <h1 class="welcome-hero">Pagamento confirmado! ✅</h1>
+            <p>Olá, ${name}! Recebemos seu PIX e sua assinatura do ZapBroker está ativa.</p>
+            <div style="margin: 20px 0; background: #f0fdf4; padding: 20px; border-radius: 12px; border-left: 4px solid ${SECONDARY_COLOR};">
+                <p style="margin: 0 0 8px;"><strong>Plano:</strong> ${planName}</p>
+                <p style="margin: 0 0 8px;"><strong>Valor pago:</strong> ${formattedAmount}</p>
+                <p style="margin: 0;"><strong>Próxima renovação:</strong> ${formattedDate}</p>
+            </div>
+            <p>Aproveite pra continuar automatizando suas vendas no WhatsApp. Qualquer dúvida, é só responder este e-mail.</p>
         `);
 
-        const { error } = await resend.emails.send({
+        const { data, error } = await resend.emails.send({
             from: 'ZapBroker <onboarding@zapbroker.dev>',
-            to: [adminEmail],
-            subject: `[ZapBroker] ${subject}`,
+            to: [email],
+            subject: 'Pagamento confirmado — ZapBroker',
             html,
         });
 
-        if (error) console.error('Resend Error (Admin Alert):', error);
+        if (error) console.error('Resend Error (Payment Confirmed):', error);
+        return data;
     } catch (error) {
-        console.error('Failed to send admin alert email:', error);
+        console.error('Failed to send payment confirmed email:', error);
+    }
+};
+
+// Assinatura passou da carência sem pagar — acesso já foi cortado (ver monthlyBilling.ts),
+// esse email avisa o cliente e dá o link pra regularizar.
+export const sendSubscriptionOverdueEmail = async (email: string, name: string, checkoutUrl: string) => {
+    if (!resend) { console.warn('Resend not configured, skipping overdue email to', email); return; }
+    try {
+        const html = getEmailTemplate(`
+            <h1 class="welcome-hero" style="color: #dc2626;">Sua assinatura está atrasada ⚠️</h1>
+            <p>Olá, ${name}! Não recebemos o pagamento do seu PIX dentro do prazo, e seu acesso ao ZapBroker foi pausado.</p>
+            <p>Pra reativar agora, é só pagar o PIX abaixo:</p>
+            <div style="text-align: center;">
+                <a href="${checkoutUrl}" class="button">Regularizar Pagamento</a>
+            </div>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">Se o botão não funcionar, copie este link: <br/> ${checkoutUrl}</p>
+        `);
+
+        const { data, error } = await resend.emails.send({
+            from: 'ZapBroker <onboarding@zapbroker.dev>',
+            to: [email],
+            subject: 'Sua assinatura ZapBroker está atrasada',
+            html,
+        });
+
+        if (error) console.error('Resend Error (Overdue):', error);
+        return data;
+    } catch (error) {
+        console.error('Failed to send overdue email:', error);
+    }
+};
+
+// Cliente cancelou a assinatura — confirmação, sem tentar reverter a decisão no email.
+export const sendSubscriptionCancelledEmail = async (email: string, name: string) => {
+    if (!resend) { console.warn('Resend not configured, skipping cancellation email to', email); return; }
+    try {
+        const html = getEmailTemplate(`
+            <h1 class="welcome-hero">Assinatura cancelada</h1>
+            <p>Olá, ${name}. Confirmamos o cancelamento da sua assinatura do ZapBroker — você continua com acesso até o fim do período já pago.</p>
+            <p>Se mudar de ideia, é só assinar de novo quando quiser: <a href="https://zapbroker.dev/dashboard/settings" style="color: ${BRAND_COLOR}">acessar configurações</a>.</p>
+            <p>Se cancelou por algum problema que a gente poderia ter resolvido, responde este e-mail — a gente quer saber.</p>
+        `);
+
+        const { data, error } = await resend.emails.send({
+            from: 'ZapBroker <onboarding@zapbroker.dev>',
+            to: [email],
+            subject: 'Confirmamos o cancelamento da sua assinatura',
+            html,
+        });
+
+        if (error) console.error('Resend Error (Cancellation):', error);
+        return data;
+    } catch (error) {
+        console.error('Failed to send cancellation email:', error);
     }
 };
 

@@ -4,11 +4,6 @@ import { supabase } from '../config/supabase';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
 
-// Note: We need admin access to generate links and bypass default emails
-// Ideally, `supabase` in config/supabase.ts should be the SERVICE_ROLE client for this to work
-// If it's the anon client, this will fail. We assume the user has configured SERVICE_ROLE in backend.
-
-import * as emailService from '../services/emailService';
 import * as eventLogService from '../services/eventLogService';
 
 export const register = async (req: Request, res: Response) => {
@@ -37,16 +32,14 @@ export const register = async (req: Request, res: Response) => {
         }
 
         // 1. Create User via Admin API
-        // Auto-confirm the email when invited OR when a plan was chosen: in both cases the
-        // user is about to pay (or already vouched for), so the email-confirmation hop only
-        // adds friction without adding real verification value.
-        const emailConfirm = !!inviteData || !!planId;
-
+        // Confirmação de email por link foi removida de propósito — todo cadastro entra
+        // direto, sem esse passo extra de fricção. A verificação real acontece de outro
+        // jeito (pagamento confirmado, convite validado, ou simplesmente uso da conta).
         const { data: user, error } = await supabase.auth.admin.createUser({
             email,
             password,
             user_metadata: { nome: name },
-            email_confirm: emailConfirm
+            email_confirm: true
         });
 
         if (error) throw error;
@@ -79,43 +72,20 @@ export const register = async (req: Request, res: Response) => {
                     next_billing_date: new Date(new Date().setFullYear(new Date().getFullYear() + 100)) // 100 years for invited plans (lifetime/freemium)
                 }]);
 
+            const inviteSession = await authService.loginUser(email, password);
             return res.status(201).json({
-                user: user.user,
-                message: 'Conta criada com sucesso via convite! Login liberado.'
+                user: inviteSession.user,
+                token: inviteSession.token,
+                message: 'Conta criada com sucesso via convite!'
             });
         }
 
-        // 2. Paid signup flow: skip the email confirmation hop entirely — log the user in
-        // immediately so the frontend can send them straight to the PIX checkout.
-        if (planId) {
-            const session = await authService.loginUser(email, password);
-            return res.status(201).json({
-                user: session.user,
-                token: session.token,
-                message: 'Conta criada com sucesso.'
-            });
-        }
-
-        // 3. Standard Flow (no plan chosen): Generate Confirmation Link
-        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-            type: 'signup',
-            email: email,
-            password: password,
-        });
-
-        if (linkError) throw linkError;
-
-        const confirmationUrl = linkData.properties?.action_link || linkData.properties?.email_otp || '';
-
-        if (!confirmationUrl) {
-            console.warn('No confirmation URL generated. Service Role might be missing.');
-        } else {
-            await emailService.sendConfirmationEmail(email, confirmationUrl);
-        }
-
-        res.status(201).json({
-            user: user.user,
-            message: 'User created. Confirmation email sent via Resend.'
+        // 2. Fluxo padrão (com ou sem plano escolhido): login imediato, sem confirmação de email.
+        const session = await authService.loginUser(email, password);
+        return res.status(201).json({
+            user: session.user,
+            token: session.token,
+            message: 'Conta criada com sucesso.'
         });
 
     } catch (error: any) {

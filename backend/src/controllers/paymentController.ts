@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase';
 import * as billingService from '../services/billingService';
+import * as emailService from '../services/emailService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
 import { PLANS } from '../config/plans';
@@ -132,6 +133,12 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
             updated_at: new Date(),
         })
         .eq('id', sub.id);
+
+    if (req.user?.email) {
+        const name = req.user.user_metadata?.nome || req.user.email;
+        emailService.sendSubscriptionCancelledEmail(req.user.email, name)
+            .catch(err => console.error('[PaymentController] Failed to send cancellation email:', err.message));
+    }
 
     res.json({ message: 'Subscription canceled. Access until end of billing period.' });
 };

@@ -90,10 +90,25 @@ async function markOverdueSubscriptions() {
         .update({ status: 'overdue', updated_at: new Date() })
         .eq('status', 'active')
         .lt('next_billing_date', cutoff.toISOString())
-        .select();
+        .select('id, user_id, plan_id');
 
-    if (error) console.error('[MonthlyBilling] Error marking overdue subscriptions:', error.message);
-    else if (overdue?.length) console.log(`[MonthlyBilling] ${overdue.length} subscription(s) marked overdue.`);
+    if (error) {
+        console.error('[MonthlyBilling] Error marking overdue subscriptions:', error.message);
+        return;
+    }
+    if (!overdue?.length) return;
+
+    console.log(`[MonthlyBilling] ${overdue.length} subscription(s) marked overdue.`);
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    for (const sub of overdue) {
+        const { data: user } = await supabase.from('users').select('name, email').eq('id', sub.user_id).maybeSingle();
+        if (!user?.email) continue;
+
+        const checkoutUrl = `${frontendUrl}/checkout/redirect?planId=${sub.plan_id}&subscriptionId=${sub.id}`;
+        emailService.sendSubscriptionOverdueEmail(user.email, user.name || 'corretor(a)', checkoutUrl)
+            .catch(err => console.error(`[MonthlyBilling] Failed to send overdue email for subscription ${sub.id}:`, err.message));
+    }
 }
 
 export function startMonthlyBillingJob() {
