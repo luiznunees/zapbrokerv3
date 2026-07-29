@@ -180,6 +180,13 @@ export default function LoginPage() {
                             </svg>
                             <span className="text-sm font-bold text-foreground">Continuar com Google</span>
                         </button>
+
+                        <p className="text-center text-sm text-muted-foreground">
+                            Não tem conta?{' '}
+                            <Link href="/signup" className="text-primary font-bold hover:underline">
+                                Cadastre-se
+                            </Link>
+                        </p>
                     </div>
 
                     <p className="text-center mt-8 text-muted-foreground text-[10px] leading-relaxed max-w-[280px] mx-auto">
