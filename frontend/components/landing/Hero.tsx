@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2 } from 'lucide-react'
+import { Clock, CreditCard, Smartphone, Star } from 'lucide-react'
 import { WhatsAppMockup } from './WhatsAppMockup'
+
+const AVATAR_COLORS = ['bg-primary/20', 'bg-indigo-200', 'bg-primary/30', 'bg-indigo-300']
 
 export function Hero() {
     const [city, setCity] = useState('Sua Cidade')
@@ -55,52 +57,60 @@ export function Hero() {
 
                     {/* Left: copy */}
                     <div className="max-w-xl">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-green-500/10 text-brand-green-700 dark:text-brand-green-400 text-[11px] font-semibold mb-4">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green-500 opacity-75" />
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-green-500" />
-                            </span>
-                            Direto no seu WhatsApp, sem trocar de número
-                        </div>
-
                         <h1 className="text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight mb-4 text-foreground leading-[1.1]">
-                            Corretor de {city}, dispare mensagens em massa e{' '}
-                            <span className="text-brand-green-600 dark:text-brand-green-400">não esqueça</span>{' '}
-                            nenhum lead
+                            Corretor de {city}, nunca mais esqueça um lead no{' '}
+                            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-500">WhatsApp</span>.
                         </h1>
 
-                        <p className="text-sm md:text-base text-muted-foreground mb-6 leading-relaxed">
-                            Crie disparos pro seus leads em segundos e deixe o agente avisar quem não respondeu. Você aprova cada lembrete antes de sair — sem trocar de número, sem aprender sistema novo.
+                        <p className="text-sm md:text-base text-muted-foreground mb-5 leading-relaxed">
+                            O ZapBroker envia campanhas no automático, acompanha quem não respondeu e sugere lembretes. Você aprova tudo em um clique.
                         </p>
+
+                        <div className="flex flex-wrap gap-2 mb-6">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-xs font-medium text-foreground/80">
+                                <Clock className="w-3.5 h-3.5 text-primary" /> Ativação em 2 minutos
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-xs font-medium text-foreground/80">
+                                <CreditCard className="w-3.5 h-3.5 text-primary" /> Pagamento via PIX
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-xs font-medium text-foreground/80">
+                                <Smartphone className="w-3.5 h-3.5 text-primary" /> Continua no seu número
+                            </div>
+                        </div>
 
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                             <Link
                                 href="/login"
-                                className="w-full sm:w-auto text-center px-6 py-3 bg-brand-green-500 hover:bg-brand-green-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-brand-green-500/20 transition-colors"
+                                className="w-full sm:w-auto text-center px-6 py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-bold text-sm shadow-lg shadow-primary/20 transition-colors"
                             >
-                                Começar Teste Grátis de 7 Dias →
+                                Assinar Agora →
                             </Link>
                         </div>
 
-                        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground font-medium">
-                            <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-brand-green-500" /> 7 dias grátis
+                        <div className="mt-5 flex items-center gap-3">
+                            <div className="flex -space-x-2">
+                                {AVATAR_COLORS.map((color, i) => (
+                                    <div key={i} className={`w-7 h-7 rounded-full border-2 border-white ${color}`} />
+                                ))}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-brand-green-500" /> Sem cartão de crédito
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-brand-green-500" /> Continua no seu número
+                            <div className="text-xs text-muted-foreground font-medium">
+                                <p className="font-bold text-foreground">+2.500 corretores já usam</p>
+                                <div className="flex items-center gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-3 h-3 fill-primary text-primary" />)}
+                                    <span className="ml-1">4.9/5.0</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right: real WhatsApp conversation mockup — proof, not decoration */}
                     <div className="relative flex items-center justify-center">
+                        <div className="absolute -top-10 -right-10 w-72 h-72 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
+                        <div className="absolute -bottom-10 -left-10 w-64 h-64 rounded-full bg-indigo-400/20 blur-3xl pointer-events-none" />
                         <div
                             className="absolute inset-0 pointer-events-none"
                             style={{
-                                background: 'radial-gradient(55% 55% at 50% 50%, rgba(34,197,94,0.10) 0%, rgba(34,197,94,0) 70%)',
+                                background: 'radial-gradient(55% 55% at 50% 50%, rgba(138,91,245,0.10) 0%, rgba(138,91,245,0) 70%)',
                             }}
                         />
                         <WhatsAppMockup />

@@ -52,7 +52,7 @@ export default function Error({
                     </div>
 
                     <a
-                        href="https://wa.me/5551989194794"
+                        href="https://wa.me/5551980985330?text=Olá,%20tive%20um%20erro%20no%20site%20do%20ZapBroker"
                         target="_blank"
                         className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium transition-colors rounded-lg border border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground"
                     >

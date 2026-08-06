@@ -1,8 +1,8 @@
 import { Header } from "@/components/landing/Header"
 import { Hero } from "@/components/landing/Hero"
-import { Stats } from "@/components/landing/Stats"
 import { Features } from "@/components/landing/Features"
 import { AgentShowcase } from "@/components/landing/AgentShowcase"
+import { Testimonials } from "@/components/landing/Testimonials"
 import { Pricing } from "@/components/landing/Pricing"
 import { FAQ } from "@/components/landing/FAQ"
 import { Footer, CTA } from "@/components/landing/Footer"
@@ -14,9 +14,9 @@ export default function LandingPage() {
         <Header />
         <main>
           <Hero />
-          <Stats />
           <Features />
           <AgentShowcase />
+          <Testimonials />
           <Pricing />
           <FAQ />
           <CTA />

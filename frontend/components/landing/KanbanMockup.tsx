@@ -84,7 +84,7 @@ export function KanbanMockup() {
 
             {/* Floating Cursor/Action to make it alive */}
             <div className="absolute bottom-6 right-8 pointer-events-none">
-                <div className="bg-brand-green-500 text-white text-[8px] px-2 py-1 rounded-full shadow-lg shadow-brand-green-500/20 translate-x-2 translate-y-2 animate-bounce">
+                <div className="bg-primary text-white text-[8px] px-2 py-1 rounded-full shadow-lg shadow-primary/20 translate-x-2 translate-y-2 animate-bounce">
                     Nova Proposta!
                 </div>
             </div>

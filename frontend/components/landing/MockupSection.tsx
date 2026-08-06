@@ -30,7 +30,7 @@ export function MockupSection() {
                                 "Gestão de Equipes (Corretores)"
                             ].map((item, i) => (
                                 <div key={i} className="flex items-center gap-2">
-                                    <div className="p-0.5 rounded-full bg-[#145c3b]/10 text-[#145c3b]">
+                                    <div className="p-0.5 rounded-full bg-[#8A5BF5]/10 text-[#8A5BF5]">
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                     </div>
                                     <span className="font-bold text-sm text-[#0a0a0a]">{item}</span>
@@ -40,7 +40,7 @@ export function MockupSection() {
 
                         <Link
                             href="#pricing"
-                            className="inline-flex h-11 items-center justify-center rounded-full bg-[#145c3b] px-6 text-sm font-black text-white shadow-lg transition-all hover:-translate-y-0.5"
+                            className="inline-flex h-11 items-center justify-center rounded-full bg-[#8A5BF5] px-6 text-sm font-black text-white shadow-lg transition-all hover:-translate-y-0.5"
                         >
                             Assinar agora →
                         </Link>

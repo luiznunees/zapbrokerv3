@@ -1,0 +1,17 @@
+{
+  "name": "ZapBroker - Venda no Piloto Automático",
+  "short_name": "ZapBroker",
+  "description": "Automação de WhatsApp para Corretores de Imóveis",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f4f4f6",
+  "theme_color": "#8A5BF5",
+  "icons": [
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

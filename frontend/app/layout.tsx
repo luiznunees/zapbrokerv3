@@ -9,6 +9,19 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "ZapBroker - Venda no Piloto Automático",
   description: "Automação de WhatsApp para Corretores de Imóveis",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ZapBroker",
+  },
+  icons: {
+    apple: "/icon-512.svg",
+  },
+};
+
+export const viewport = {
+  themeColor: "#8A5BF5",
 };
 
 export default function RootLayout({
