@@ -7,13 +7,14 @@ import * as campaignService from './campaignService';
 import { QuotaService } from './quotaService';
 import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 import { logAiCost } from './costService';
+import { logAgentTurn } from './agentLogService';
 import { logEvent } from './eventLogService';
 
 // Provedor principal: créditos pré-pagos (compra um bloco, vai consumindo, sem cobrança
 // recorrente) — resolve tanto o limite de tokens/minuto da Groq grátis quanto a necessidade
 // de cartão internacional (OpenRouter aceita qualquer cartão usado só na hora de recarregar).
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct';
+const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Fallback 1: Groq (tier grátis, sujeito a rate limit de 12k TPM) — mantido como camada
@@ -250,7 +251,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'suggest_connect_whatsapp',
-      description: 'Sugere (mostra um botão) pro usuário conectar um número de WhatsApp à plataforma — seja o primeiro ou mais um adicional. Use tanto quando não houver nenhum conectado quanto quando o usuário pedir explicitamente pra conectar mais um número (o botão gera o QR Code do próximo número disponível dentro do limite do plano dele).',
+      description: 'Sugere (mostra um BOTÃO, não o QR Code em si) pro usuário conectar um número de WhatsApp à plataforma — seja o primeiro ou mais um adicional. Use tanto quando não houver nenhum conectado quanto quando o usuário pedir explicitamente pra conectar mais um número. O QR Code só é gerado DEPOIS que o usuário clicar nesse botão — na sua resposta desse turno, fale no futuro ("vou te mostrar o botão pra conectar", nunca "escaneie o QR Code que apareceu").',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -698,11 +699,29 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
   return draft;
 }
 
+function formatCampaignsSummaryForPrompt(
+  campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }>
+): string {
+  if (!campaignsSummary || campaignsSummary.length === 0) return '';
+  const lines = campaignsSummary.map(c =>
+    `- "${c.name}" (${c.status}) — ${c.total} contatos, ${c.sent} enviados, ${c.read} lidos, ${c.replied} responderam`
+  );
+  return `CAMPANHAS RECENTES (${campaignsSummary.length} mais recentes — você já sabe disso, NÃO precisa chamar get_campaign_stats de novo só pra responder sobre elas):\n${lines.join('\n')}`;
+}
+
+function formatRecentSessionsForPrompt(sessions: Array<{ title: string; messages: string[] }>): string {
+  if (!sessions || sessions.length === 0) return '';
+  const blocks = sessions.map(s => `- "${s.title}":\n${s.messages.map(m => `  ${m}`).join('\n')}`);
+  return `CONVERSAS RECENTES (resumo de outras sessões de chat com esse corretor — use pra continuidade, não repita como se fosse a primeira vez que fala com ele):\n${blocks.join('\n\n')}`;
+}
+
 function buildSystemPrompt(
   ctx: UserContext,
   draft: CampaignDraft | null,
   memoryFacts: string[] = [],
   brokerContext: BrokerContext = EMPTY_BROKER_CONTEXT,
+  campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }> = [],
+  recentSessions: Array<{ title: string; messages: string[] }> = [],
 ): string {
   const draftText = `Estado do disparo em andamento:\n${buildDraftChecklist(draft)}`;
 
@@ -718,6 +737,9 @@ function buildSystemPrompt(
 - Uso de cada número: ${brokerContext.chipPurposes.length > 0 ? brokerContext.chipPurposes.join(', ') : 'não informado'}
 - Quer indicação de listagens de condomínio: ${brokerContext.wantsListingReferrals === null ? 'não informado' : brokerContext.wantsListingReferrals ? 'sim' : 'não'}`
     : '';
+
+  const campaignsText = formatCampaignsSummaryForPrompt(campaignsSummary);
+  const recentSessionsText = formatRecentSessionsForPrompt(recentSessions);
 
   return `Você é o assistente virtual da ZapBroker — o braço-direito do corretor de imóveis dentro da plataforma. Seu papel é bem mais amplo que "fazer disparo": você é o suporte e o parceiro de conversa dele no dia a dia — tira dúvida sobre vendas, dá conselho, bate papo, ajuda a pensar em estratégia com um lead específico, e também monta e envia campanhas de WhatsApp quando ele precisar. Disparo é UMA das coisas que você faz, não a única — trate perguntas soltas e conversa casual como interações legítimas, não como desvio do "verdadeiro" propósito.
 
@@ -740,6 +762,10 @@ ${draftText}
 ${memoryText}
 
 ${brokerContextText}
+
+${campaignsText}
+
+${recentSessionsText}
 
 VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder de memória:
 - get_contact_lists / get_whatsapp_instances / get_campaign_stats: chame ANTES de responder qualquer pergunta sobre listas, WhatsApps conectados ou desempenho de campanhas. Nunca invente números ou nomes.
@@ -787,6 +813,7 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - Se faltar WhatsApp conectado, avise e chame suggest_connect_whatsapp antes de seguir com o disparo.
 - Se o usuário disser que "já tem" WhatsApp conectado (sem citar qual), chame get_whatsapp_instances antes de perguntar mais nada. Se só existir um conectado, já use esse via update_campaign_draft e confirme pelo nome — NÃO pergunte "qual número" como se houvesse várias opções quando só tem uma.
 - Se o usuário pedir pra conectar "mais um" WhatsApp mesmo já tendo um conectado, NÃO diga que já está conectado e recuse — chame suggest_connect_whatsapp normalmente; o botão vai gerar o QR Code de um número novo (respeitando o limite do plano dele).
+- NUNCA diga que um QR Code, seletor ou botão "apareceu"/"já está na tela" a menos que você tenha chamado a tool correspondente NESSE MESMO turno — isso inclui repetir a mesma alegação depois. Se o usuário disser que não está vendo nada (QR Code, seletor, botão), isso significa que a tool não foi chamada ou precisa ser chamada de novo: chame de novo nesse turno, nunca insista que "já apareceu".
 - Nunca contradiga o "JÁ DEFINIDO" na sua resposta em texto.
 - Mensagens que começam com "[EVENTO DO SISTEMA — não é fala do usuário]" não foram digitadas pelo usuário — são notificações automáticas de uma ação que ele fez pela interface (escolheu uma lista, anexou mídia). Reaja normalmente continuando a conversa a partir disso, seguindo a REGRA DE OURO acima — nunca pare depois de um evento desses sem fazer a próxima pergunta ou confirmar que está tudo pronto.
 
@@ -863,11 +890,15 @@ export async function listSessions(userId: string) {
 }
 
 export async function deleteSession(userId: string, sessionId: string) {
-  const { error } = await supabase
+  // .select() no retorno é essencial aqui — sem ele, um delete que não bate em nenhuma
+  // linha (ex: sessionId de outro usuário, já deletada) volta sem "error" nenhum, e o
+  // chamador acha que apagou com sucesso quando na verdade não mudou nada no banco.
+  const { data, error } = await supabase
     .from('agent_sessions')
     .delete()
     .eq('id', sessionId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('id');
 
   if (error) {
     if (isTableMissingError(error)) {
@@ -878,6 +909,13 @@ export async function deleteSession(userId: string, sessionId: string) {
     }
     console.error('[AgentService] Error deleting session:', error.message);
     throw new Error('Erro ao deletar sessão');
+  }
+
+  if (!data || data.length === 0) {
+    // Já não existe (deletada antes, ou uma duplicata órfã de uma sessão de dev antiga) —
+    // o efeito desejado (sessão sumida) já é verdade, então isso é sucesso, não erro.
+    // Só vira erro de verdade lá em cima se o Postgres reclamar de algo (catch acima).
+    console.warn(`[AgentService] deleteSession: session já não existia (session=${sessionId} user=${userId})`);
   }
 }
 
@@ -898,6 +936,35 @@ export async function getSessionMessages(userId: string, sessionId: string) {
     return [];
   }
   return data || [];
+}
+
+// Resumo curto de outras sessões recentes — desde que todo chat novo começa zerado (não
+// resume mais a última sessão automaticamente), isso é o que evita que o agente pareça
+// amnésico logo de cara: ele entra sabendo o essencial do que rolou nas últimas conversas.
+async function getRecentSessionsBrief(
+  userId: string,
+  excludeSessionId: string,
+  limit: number = 2,
+  messagesPerSession: number = 4
+): Promise<Array<{ title: string; messages: string[] }>> {
+  const allSessions = await listSessions(userId);
+  const otherSessions = allSessions
+    .filter((s: any) => s.id !== excludeSessionId)
+    .slice(0, limit);
+
+  const briefs = await Promise.all(
+    otherSessions.map(async (session: any) => {
+      const messages = await getSessionMessages(userId, session.id);
+      const tail = messages.slice(-messagesPerSession).map((m: any) => {
+        const who = m.role === 'agent' ? 'Você' : 'Corretor';
+        const text = (m.content || '').slice(0, 200);
+        return `${who}: ${text}`;
+      });
+      return { title: session.title || 'Nova conversa', messages: tail };
+    })
+  );
+
+  return briefs.filter(b => b.messages.length > 0);
 }
 
 // ─── Rascunho de disparo (persistido por sessão) ────────────
@@ -1435,11 +1502,12 @@ async function callGeminiCompletion(
 
 async function callLLM(
   workingMessages: any[],
-  onToken?: (token: string) => void
+  onToken?: (token: string) => void,
+  forceText: boolean = false
 ): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number }; provider: string; model: string }> {
   if (OPENROUTER_API_KEY) {
     try {
-      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken);
+      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken, forceText);
       return { ...result, provider: 'openrouter', model: OPENROUTER_MODEL };
     } catch (error: any) {
       console.warn('[AgentService] OpenRouter falhou, tentando próximo provedor:', error.message);
@@ -1448,7 +1516,7 @@ async function callLLM(
 
   if (GROQ_API_KEY) {
     try {
-      const result = await callOpenAiCompatibleCompletion(GROQ_API_URL, GROQ_API_KEY, GROQ_MODEL, workingMessages, onToken);
+      const result = await callOpenAiCompatibleCompletion(GROQ_API_URL, GROQ_API_KEY, GROQ_MODEL, workingMessages, onToken, forceText);
       return { ...result, provider: 'groq', model: GROQ_MODEL };
     } catch (error: any) {
       if (!geminiClient) throw error;
@@ -1467,7 +1535,8 @@ async function callOpenAiCompatibleCompletion(
   apiKey: string,
   model: string,
   workingMessages: any[],
-  onToken?: (token: string) => void
+  onToken?: (token: string) => void,
+  forceText: boolean = false
 ): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number } }> {
   const useStream = typeof onToken === 'function';
 
@@ -1481,8 +1550,10 @@ async function callOpenAiCompatibleCompletion(
     body: JSON.stringify({
       model,
       messages: workingMessages,
-      tools: AGENT_TOOLS,
-      tool_choice: 'auto',
+      // tool_choice: 'none' força uma resposta só em texto — usado quando o loop de tools
+      // já esgotou as iterações e precisamos de uma resposta final de qualquer jeito, em
+      // vez de deixar o modelo tentar chamar mais uma ferramenta e nunca concluir.
+      ...(forceText ? {} : { tools: AGENT_TOOLS, tool_choice: 'auto' }),
       temperature: 0.3,
       max_tokens: 1024,
       ...(useStream ? { stream: true, stream_options: { include_usage: true } } : {}),
@@ -1572,40 +1643,102 @@ async function callOpenAiCompatibleCompletion(
 // Llama 3.x às vezes "vaza" uma tentativa de tool call como pseudo-XML dentro do
 // próprio texto (ex: <function=nome>{...}</function>) em vez de usar tool_calls
 // estruturado. Isso nunca deve chegar ao usuário — remove como rede de segurança.
+//
+// Também vaza, às vezes, como um objeto JSON solto no texto (não estruturado em tool_calls
+// de verdade, e frequentemente até JSON inválido/corrompido) tipo:
+// {"type": "function", "function": {"name": "get_contact_lists", ...}
+// stripJsonToolCallLeaks varre e remove qualquer bloco assim, contando chaves pra achar
+// onde ele termina (não dá pra usar JSON.parse porque o JSON costuma vir quebrado).
+function stripJsonToolCallLeaks(text: string): string {
+  const startPattern = /\{\s*"type"\s*:\s*"function"|\{\s*"function"\s*:|\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(parameters|arguments)"\s*:/gi;
+  let result = '';
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = startPattern.exec(text))) {
+    if (match.index < cursor) continue;
+    result += text.slice(cursor, match.index);
+
+    let depth = 0;
+    let i = match.index;
+    for (; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') {
+        depth--;
+        if (depth === 0) { i++; break; }
+      }
+    }
+    cursor = i;
+    startPattern.lastIndex = cursor;
+  }
+
+  result += text.slice(cursor);
+  return result;
+}
+
 function stripLeakedToolSyntax(text: string): string {
-  return text
-    .replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '')
-    .replace(/<\|?tool_call\|?>[\s\S]*?<\/\|?tool_call\|?>/gi, '')
-    .trim();
+  return stripJsonToolCallLeaks(
+    text
+      .replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '')
+      .replace(/<\|?tool_call\|?>[\s\S]*?<\/\|?tool_call\|?>/gi, '')
+  ).trim();
 }
 
 // Filtro pra streaming: mesmo risco do stripLeakedToolSyntax, mas token a token — se
-// deixássemos passar direto, o usuário veria o "<function=...>" piscando na tela antes
-// de conseguirmos remover. Bufferiza qualquer coisa que comece com "<" até confirmar se
-// é uma tag suspeita (aí suprime até o fechamento) ou texto normal (aí libera).
+// deixássemos passar direto, o usuário veria o "<function=...>" (ou o JSON solto) piscando
+// na tela antes de conseguirmos remover. Bufferiza qualquer coisa que comece com "<" ou "{"
+// até confirmar se é lixo suspeito (aí suprime até o fechamento) ou texto normal (aí libera).
 function createStreamSanitizer(onSafeToken: (token: string) => void) {
   let pending = '';
-  let suppressing = false;
-  const OPEN_PATTERNS = [/^<function=/i, /^<\|?tool_call\|?>/i];
-  const CLOSE_PATTERN = /<\/function>|<\/\|?tool_call\|?>/i;
-  const MAX_PREFIX = '<|tool_call|>'.length; // maior prefixo entre os padrões acima
+  let mode: 'none' | 'tag' | 'json' = 'none';
+  let jsonDepth = 0;
+  const TAG_OPEN_PATTERNS = [/^<function=/i, /^<\|?tool_call\|?>/i];
+  const TAG_CLOSE_PATTERN = /<\/function>|<\/\|?tool_call\|?>/i;
+  const JSON_OPEN_PATTERNS = [
+    /^\{\s*"type"\s*:\s*"function"/i,
+    /^\{\s*"function"\s*:/i,
+    // Confirma cedo (só "name") em vez de esperar ver "parameters"/"arguments" também —
+    // senão o nome da tool (que pode ter 30+ caracteres) já teria vazado token a token
+    // antes do buffer decidir que era suspeito.
+    /^\{\s*"name"\s*:\s*"/i,
+  ];
+  const MAX_PREFIX = Math.max('<|tool_call|>'.length, '{"function":'.length);
 
   return (token: string) => {
     pending += token;
 
     while (pending.length > 0) {
-      if (suppressing) {
-        const closeMatch = pending.match(CLOSE_PATTERN);
+      if (mode === 'tag') {
+        const closeMatch = pending.match(TAG_CLOSE_PATTERN);
         if (!closeMatch) {
           pending = '';
           return;
         }
         pending = pending.slice((closeMatch.index ?? 0) + closeMatch[0].length);
-        suppressing = false;
+        mode = 'none';
         continue;
       }
 
-      const openIdx = pending.indexOf('<');
+      if (mode === 'json') {
+        let i = 0;
+        for (; i < pending.length; i++) {
+          if (pending[i] === '{') jsonDepth++;
+          else if (pending[i] === '}') {
+            jsonDepth--;
+            if (jsonDepth === 0) { i++; break; }
+          }
+        }
+        if (jsonDepth > 0) {
+          // Ainda dentro do bloco JSON, nada seguro pra liberar ainda.
+          pending = '';
+          return;
+        }
+        pending = pending.slice(i);
+        mode = 'none';
+        continue;
+      }
+
+      const openIdx = pending.search(/[<{]/);
       if (openIdx === -1) {
         onSafeToken(pending);
         pending = '';
@@ -1617,18 +1750,23 @@ function createStreamSanitizer(onSafeToken: (token: string) => void) {
         pending = pending.slice(openIdx);
       }
 
-      // pending agora começa com "<"
-      if (OPEN_PATTERNS.some(p => p.test(pending))) {
-        suppressing = true;
+      // pending agora começa com "<" ou "{"
+      if (TAG_OPEN_PATTERNS.some(p => p.test(pending))) {
+        mode = 'tag';
+        continue;
+      }
+      if (JSON_OPEN_PATTERNS.some(p => p.test(pending))) {
+        mode = 'json';
+        jsonDepth = 0;
         continue;
       }
 
-      // Ainda não dá pra saber se vira uma tag suspeita — espera mais tokens chegarem.
+      // Ainda não dá pra saber se vira lixo suspeito — espera mais tokens chegarem.
       if (pending.length < MAX_PREFIX) {
         return;
       }
 
-      // Não bateu com nenhum padrão suspeito e já temos caracteres suficientes: é "<" normal.
+      // Não bateu com nenhum padrão suspeito e já temos caracteres suficientes: é normal.
       onSafeToken(pending[0]);
       pending = pending.slice(1);
     }
@@ -1653,11 +1791,20 @@ async function runToolLoop(
   onReset?: () => void
 ): Promise<string> {
   let finalReply = '';
+  let iterationsUsed = 0;
+  let hitIterationLimit = false;
+  let lastProvider = '';
+  let lastModel = '';
+  const toolTrace: Array<{ name: string; args: any; ok: boolean }> = [];
+  const userMessage = [...workingMessages].reverse().find((m: any) => m.role === 'user')?.content || '';
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     console.log(`[AgentService] Calling LLM for user ${ctx.userId} session=${ctx.sessionId} iteration=${iteration}`);
+    iterationsUsed = iteration + 1;
 
     const { content, tool_calls, usage, provider, model } = await callLLM(workingMessages, onToken);
+    lastProvider = provider;
+    lastModel = model;
     logAiCost({ userId: ctx.userId, sessionId: ctx.sessionId, provider, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
     const message = { role: 'assistant', content, tool_calls };
 
@@ -1678,12 +1825,15 @@ async function runToolLoop(
         }
 
         let result: any;
+        let ok = true;
         try {
           result = await executeTool(ctx.userId, ctx.sessionId, ctx.planId, call.function.name, args, state, ctx.lists, ctx.instances, ctx.campaignsSummary, ctx.stalledCount);
         } catch (toolError: any) {
           console.error(`[AgentService] Tool ${call.function.name} failed for user ${ctx.userId}:`, toolError.message);
           result = { error: 'Falha ao executar a ferramenta.' };
+          ok = false;
         }
+        toolTrace.push({ name: call.function.name, args, ok });
 
         workingMessages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: JSON.stringify(result) });
       }
@@ -1694,7 +1844,39 @@ async function runToolLoop(
     break;
   }
 
-  return finalReply || 'Desculpa, não consegui montar uma resposta agora. Pode reformular?';
+  if (!finalReply) {
+    hitIterationLimit = true;
+    // O loop esgotou as iterações chamando ferramentas sem nunca concluir em texto (ex:
+    // um pedido vago que faz o modelo ficar checando lista/instância/campanha em loop).
+    // Em vez de mostrar um erro genérico, força uma última resposta só em texto com o
+    // que já foi apurado até aqui.
+    try {
+      workingMessages.push({
+        role: 'user',
+        content: '[EVENTO DO SISTEMA — não é fala do usuário] Responda agora em texto direto, sem chamar mais nenhuma ferramenta, usando o que você já apurou até aqui.',
+      });
+      const { content, provider, model } = await callLLM(workingMessages, onToken, true);
+      lastProvider = provider;
+      lastModel = model;
+      finalReply = stripLeakedToolSyntax(content || '');
+    } catch (error: any) {
+      console.error(`[AgentService] Forced text completion failed for user ${ctx.userId}:`, error.message);
+    }
+  }
+
+  const reply = finalReply || 'Desculpa, não consegui montar uma resposta agora. Pode reformular?';
+  logAgentTurn({
+    userId: ctx.userId,
+    sessionId: ctx.sessionId,
+    userMessage,
+    toolCalls: toolTrace,
+    iterations: iterationsUsed,
+    hitIterationLimit,
+    finalReply: reply,
+    provider: lastProvider,
+    model: lastModel,
+  });
+  return reply;
 }
 
 // Chamado depois que o usuário interage com um componente visual (escolher lista,
@@ -1711,7 +1893,7 @@ async function continueAfterAction(
   }
 
   try {
-    const [ctx, lists, instances, existingDraft, persistedMessages, campaignsSummary, stalledCount, memoryFacts, brokerContext] = await Promise.all([
+    const [ctx, lists, instances, existingDraft, persistedMessages, campaignsSummary, stalledCount, memoryFacts, brokerContext, recentSessions] = await Promise.all([
       buildContext(userId),
       contactService.getListsWithCounts(userId),
       instanceService.getInstances(userId),
@@ -1721,9 +1903,10 @@ async function continueAfterAction(
       campaignService.getStalledLeadsCount(userId),
       loadUserMemory(userId),
       buildBrokerContext(userId),
+      getRecentSessionsBrief(userId, sessionId),
     ]);
 
-    const systemPrompt = buildSystemPrompt(ctx, existingDraft, memoryFacts, brokerContext);
+    const systemPrompt = buildSystemPrompt(ctx, existingDraft, memoryFacts, brokerContext, campaignsSummary, recentSessions);
     const dbHistory: ChatMessage[] = persistedMessages
       .slice(-20)
       .map((m: any) => ({ role: m.role === 'agent' ? 'assistant' : 'user', content: m.content }));
@@ -1785,7 +1968,7 @@ export async function chat(
   }
 
   try {
-    const [ctx, lists, instances, existingDraft, persistedMessages, campaignsSummary, stalledCount, memoryFacts, brokerContext] = await Promise.all([
+    const [ctx, lists, instances, existingDraft, persistedMessages, campaignsSummary, stalledCount, memoryFacts, brokerContext, recentSessions] = await Promise.all([
       buildContext(userId),
       contactService.getListsWithCounts(userId),
       instanceService.getInstances(userId),
@@ -1795,9 +1978,10 @@ export async function chat(
       campaignService.getStalledLeadsCount(userId),
       loadUserMemory(userId),
       buildBrokerContext(userId),
+      getRecentSessionsBrief(userId, currentSessionId),
     ]);
 
-    const systemPrompt = buildSystemPrompt(ctx, existingDraft, memoryFacts, brokerContext);
+    const systemPrompt = buildSystemPrompt(ctx, existingDraft, memoryFacts, brokerContext, campaignsSummary, recentSessions);
 
     // O histórico vem sempre do banco (fonte confiável), não do parâmetro `history` do
     // chamador — o frontend não estava enviando isso, o que deixava o agente sem memória

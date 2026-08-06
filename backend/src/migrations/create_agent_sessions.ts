@@ -16,15 +16,20 @@ create index if not exists idx_agent_messages_session_id on agent_messages(sessi
 
 alter table agent_sessions enable row level security;
 
-create policy if not exists "Users can view their own agent sessions" on agent_sessions
+drop policy if exists "Users can view their own agent sessions" on agent_sessions;
+create policy "Users can view their own agent sessions" on agent_sessions
   for select using (auth.uid() = user_id);
-create policy if not exists "Users can insert their own agent sessions" on agent_sessions
+drop policy if exists "Users can insert their own agent sessions" on agent_sessions;
+create policy "Users can insert their own agent sessions" on agent_sessions
   for insert with check (auth.uid() = user_id);
-create policy if not exists "Users can delete their own agent sessions" on agent_sessions
+drop policy if exists "Users can delete their own agent sessions" on agent_sessions;
+create policy "Users can delete their own agent sessions" on agent_sessions
   for delete using (auth.uid() = user_id);
-create policy if not exists "Users can update their own agent sessions" on agent_sessions
+drop policy if exists "Users can update their own agent sessions" on agent_sessions;
+create policy "Users can update their own agent sessions" on agent_sessions
   for update using (auth.uid() = user_id);
-create policy if not exists "Users can delete their own agent messages" on agent_messages
+drop policy if exists "Users can delete their own agent messages" on agent_messages;
+create policy "Users can delete their own agent messages" on agent_messages
   for delete using (auth.uid() = user_id);
 `;
 
@@ -98,12 +103,45 @@ create table if not exists agent_user_memory (
 
 alter table agent_user_memory enable row level security;
 
-create policy if not exists "Users can view their own agent memory" on agent_user_memory
+drop policy if exists "Users can view their own agent memory" on agent_user_memory;
+create policy "Users can view their own agent memory" on agent_user_memory
   for select using (auth.uid() = user_id);
-create policy if not exists "Users can upsert their own agent memory" on agent_user_memory
+drop policy if exists "Users can upsert their own agent memory" on agent_user_memory;
+create policy "Users can upsert their own agent memory" on agent_user_memory
   for insert with check (auth.uid() = user_id);
-create policy if not exists "Users can update their own agent memory" on agent_user_memory
+drop policy if exists "Users can update their own agent memory" on agent_user_memory;
+create policy "Users can update their own agent memory" on agent_user_memory
   for update using (auth.uid() = user_id);
+`;
+
+// Log estruturado por turno do agente (não por chamada de LLM individual, isso já existe em
+// ai_cost_events) — quais tools foram chamadas, quantas iterações, se bateu no limite de
+// segurança. Sem isso, todo bug do agente (loop infinito, resposta vazia) só aparecia
+// reproduzindo ao vivo; com isso dá pra auditar depois e a suite de regressão consegue
+// verificar hit_iteration_limit direto em vez de adivinhar pelo texto da resposta.
+const AGENT_TURN_LOGS_SQL = `
+create table if not exists agent_turn_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  session_id uuid references agent_sessions(id) on delete set null,
+  user_message text,
+  tool_calls jsonb not null default '[]'::jsonb,
+  iterations integer not null default 0,
+  hit_iteration_limit boolean not null default false,
+  final_reply text,
+  provider text,
+  model text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_agent_turn_logs_user_id on agent_turn_logs(user_id);
+create index if not exists idx_agent_turn_logs_session_id on agent_turn_logs(session_id);
+create index if not exists idx_agent_turn_logs_created_at on agent_turn_logs(created_at);
+alter table agent_turn_logs enable row level security;
+
+drop policy if exists "Users can view their own agent turn logs" on agent_turn_logs;
+create policy "Users can view their own agent turn logs" on agent_turn_logs
+  for select using (auth.uid() = user_id);
 `;
 
 export async function runMigrations() {
@@ -232,5 +270,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar agent_user_memory:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: AGENT_TURN_LOGS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar agent_turn_logs automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente o SQL de agent_turn_logs (ver create_agent_sessions.ts).');
+    } else {
+      console.log('[Migrations] Tabela agent_turn_logs verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar agent_turn_logs:', err.message);
   }
 }
