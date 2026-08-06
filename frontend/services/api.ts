@@ -61,6 +61,7 @@ export const api = {
         me: () => fetchAPI('/auth/me'),
         profile: () => fetchAPI('/auth/me'),
         updateProfile: (data: any) => fetchAPI('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
+        deleteAccount: () => fetchAPI('/auth/account', { method: 'DELETE' }),
         google: async () => {
             const { supabase } = await import('@/lib/supabase');
             return supabase.auth.signInWithOAuth({
@@ -145,6 +146,8 @@ export const api = {
             }),
         getSubscriptionStatus: (subscriptionId: string) =>
             fetchAPI(`/payments/subscription/${subscriptionId}`),
+        checkPaymentNow: (subscriptionId: string) =>
+            fetchAPI(`/payments/subscription/${subscriptionId}/check-now`, { method: 'POST' }),
     },
     admin: {
         stats: () => fetchAPI('/admin/stats'),
@@ -164,6 +167,7 @@ export const api = {
             const qs = params.toString()
             return fetchAPI(`/admin/finance${qs ? `?${qs}` : ''}`)
         },
+        aiCredits: () => fetchAPI('/admin/ai-credits'),
     },
     sessions: {
         list: () => fetchAPI('/agent/sessions'),

@@ -7,7 +7,7 @@ import { BrandLoader } from "@/components/ui/BrandLoader"
 import { LeadImporterModal } from "@/components/dashboard/LeadImporterModal"
 import {
   Bot, Send, Users, Target, Import, Phone, Rocket,
-  Sparkles, TrendingUp, Wifi, AlertCircle, Plus, PanelLeft
+  Sparkles, TrendingUp, Wifi, AlertCircle, Plus, ListChecks
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/services/api"
@@ -21,7 +21,6 @@ import { ChatFileUpload } from "@/components/dashboard/ChatFileUpload"
 import { ChatTimingConfirm, type TimingValues } from "@/components/dashboard/ChatTimingConfirm"
 import { ChatSchedulePicker } from "@/components/dashboard/ChatSchedulePicker"
 import { ChatInstancePicker } from "@/components/dashboard/ChatInstancePicker"
-import { ChatMessageVariationsEditor } from "@/components/dashboard/ChatMessageVariationsEditor"
 import { ChatCampaignSummaryConfirm } from "@/components/dashboard/ChatCampaignSummaryConfirm"
 import { ChatAntiBanWarningConfirm } from "@/components/dashboard/ChatAntiBanWarningConfirm"
 import { ChatDuplicateCampaignConfirm } from "@/components/dashboard/ChatDuplicateCampaignConfirm"
@@ -29,6 +28,7 @@ import { ChatQuotaConfirm } from "@/components/dashboard/ChatQuotaConfirm"
 import { ChatFollowUpScheduler } from "@/components/dashboard/ChatFollowUpScheduler"
 import { ChatLeadPicker } from "@/components/dashboard/ChatLeadPicker"
 import { ChatContactExclusionPicker } from "@/components/dashboard/ChatContactExclusionPicker"
+import { ChatOnboardingBriefing, type OnboardingResult } from "@/components/dashboard/ChatOnboardingBriefing"
 import { useDashboard } from "@/contexts/dashboard-context"
 import { useUser } from "@/contexts/user-context"
 
@@ -47,7 +47,7 @@ type WhatsAppQrState = {
 type AgentComponent = {
   type: "list_picker" | "file_upload" | "timing_confirm" | "schedule_picker" | "instance_picker"
     | "message_editor" | "campaign_summary" | "antiban_warning" | "duplicate_campaign_confirm"
-    | "quota_confirm" | "followup_scheduler" | "lead_picker" | "contact_exclusion"
+    | "quota_confirm" | "followup_scheduler" | "lead_picker" | "contact_exclusion" | "onboarding_briefing"
   purpose?: string
 }
 
@@ -92,6 +92,18 @@ const FALLBACK_SUGGESTIONS: SuggestionCard[] = [
 
 // Ações de sugestão que já sabem o que fazer sem precisar perguntar pro LLM
 const DIRECT_ACTIONS = new Set(["connect_whatsapp", "import_leads"])
+
+// O título do card é gerado pela IA (getSuggestions no backend) e pode sair vago ou
+// "de boas-vindas" (ex: "Começar a usar o ZapBroker") mesmo quando a ação por trás é bem
+// específica — mandar esse texto solto pro agente faz ele perder o fio e responder genérico
+// em vez de ir direto ao ponto. Por isso a mensagem de fato enviada usa uma instrução clara
+// por ação, não o título livre do card.
+const ACTION_MESSAGES: Record<string, string> = {
+  start_dispatch: "Quero criar uma campanha de disparo agora.",
+  view_campaigns: "Quero ver como estão minhas campanhas.",
+  suggest_followup: "Quero criar um follow-up para leads que não responderam.",
+  follow_up_stalled: "Quero criar um follow-up para os leads que estão parados.",
+}
 const WHATSAPP_QR_TIMEOUT_MS = 30_000
 const WHATSAPP_POLL_INTERVAL_MS = 3_000
 
@@ -106,15 +118,22 @@ const WELCOME_TITLE = "Como posso ajudar hoje?"
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { user } = useUser()
   const [stats, setStats] = useState({ leads: 0, campaigns: 0, remaining: 0, stalledLeads: 0 })
+  const [statusBar, setStatusBar] = useState<{
+    connectedInstances: number
+    totalInstances: number
+    listCount: number
+    lastCampaign: { name: string; status: string; createdAt: string } | null
+  }>({ connectedInstances: 0, totalInstances: 0, listCount: 0, lastCampaign: null })
   const [suggestionCards, setSuggestionCards] = useState<SuggestionCard[]>(FALLBACK_SUGGESTIONS)
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const recentCampaigns: any[] = []
-  const { sidebarOpen, setSidebarOpen, newChatTrigger } = useDashboard()
+  const { newChatTrigger } = useDashboard()
   const router = useRouter()
   const [isNewChatAnimating, setIsNewChatAnimating] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
@@ -122,6 +141,7 @@ export default function DashboardPage() {
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const [isLeadImporterOpen, setIsLeadImporterOpen] = useState(false)
   const [currentDraft, setCurrentDraft] = useState<CampaignDraft | null>(null)
+  const [autoEditMessageTrigger, setAutoEditMessageTrigger] = useState(0)
   const [isConfirmingCampaign, setIsConfirmingCampaign] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -130,6 +150,10 @@ export default function DashboardPage() {
   // estado depois de um re-render, então vários keydown antes disso passariam pelo
   // "isLoading" antigo e disparariam a mesma mensagem várias vezes. Um ref é síncrono.
   const isSendingRef = useRef(false)
+  // React 18 Strict Mode roda o efeito de montagem 2x em dev — sem essa guarda, a carga
+  // inicial cria DUAS sessões novas por reload (uma órfã, some da lista mas continua no
+  // banco e reaparece depois), efeito colateral real do "sempre abrir chat novo".
+  const hasLoadedInitialRef = useRef(false)
   const filesInputRef = useRef<HTMLInputElement>(null)
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -141,15 +165,21 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
+    if (hasLoadedInitialRef.current) return
+    hasLoadedInitialRef.current = true
+
     const loadInitial = async () => {
       try {
-        const [countData, campaignsData, quotaData, sessionData, stalledData] =
+        const [countData, campaignsData, quotaData, sessionData, stalledData, profileData, instancesData, listsData] =
           await Promise.all([
             api.contacts.getCount().catch(() => ({ count: 0 })),
             api.campaigns.list().catch(() => []),
             api.quotas.current().catch(() => ({ remainingMessages: 0 })),
             api.sessions.list().catch(() => []),
             api.campaigns.getStalledCount().catch(() => ({ count: 0 })),
+            api.auth.me().catch(() => null),
+            api.instances.list().catch(() => []),
+            api.contacts.list().catch(() => []),
           ])
 
         setStats({
@@ -160,17 +190,31 @@ export default function DashboardPage() {
         })
         setSessions(sessionData || [])
 
-        if (!sessionData || sessionData.length === 0) {
-          try {
-            const session = await api.sessions.create()
-            setSessions([session])
-            setCurrentSessionId(session.id)
-          } catch {
-            console.error("Failed to create initial session")
-          }
-        } else {
-          setCurrentSessionId(sessionData[0].id)
-          await loadSessionMessages(sessionData[0].id)
+        const instancesList = instancesData || []
+        setStatusBar({
+          connectedInstances: instancesList.filter((i: any) => i.status === "connected").length,
+          totalInstances: instancesList.length,
+          listCount: (listsData || []).length,
+          lastCampaign: campaignsData?.[0]
+            ? { name: campaignsData[0].name, status: campaignsData[0].status, createdAt: campaignsData[0].created_at }
+            : null,
+        })
+
+        const profileUser = (profileData as any)?.user || profileData
+        const onboardingDone = !!profileUser?.onboarding_steps?.completed
+        setNeedsOnboarding(!onboardingDone)
+
+        // Não cria sessão nenhuma ainda — só quando a primeira mensagem for enviada
+        // (ver sendMessage). Entrar no dashboard e sair sem escrever nada não deveria
+        // deixar uma "Nova conversa" vazia pra sempre no histórico.
+        if (!onboardingDone) {
+          setMessages([{
+            id: `agent-onboarding-${Date.now()}`,
+            role: "agent",
+            content: "Antes de começar, deixa eu te conhecer melhor — leva menos de 1 minuto e me ajuda a te dar sugestões mais certeiras.",
+            timestamp: new Date(),
+            component: { type: "onboarding_briefing" },
+          }])
         }
       } catch {
         console.error("Failed to load initial data")
@@ -205,6 +249,15 @@ export default function DashboardPage() {
       .catch(() => setSuggestionCards(FALLBACK_SUGGESTIONS))
       .finally(() => setSuggestionsLoading(false))
   }, [stats.leads, stats.campaigns])
+
+  useEffect(() => {
+    // O agente chamou request_message_variations_editor — em vez de um card solto na
+    // bolha, abre o campo "Mensagem" do painel lateral já em modo de edição.
+    const last = messages[messages.length - 1]
+    if (last?.role === "agent" && last.component?.type === "message_editor") {
+      setAutoEditMessageTrigger((v) => v + 1)
+    }
+  }, [messages])
 
   useEffect(() => {
     const viewport = messagesEndRef.current?.closest(
@@ -244,35 +297,34 @@ export default function DashboardPage() {
 
   const handleNewSession = useCallback(async () => {
     setIsNewChatAnimating(true)
-    setSidebarOpen(true)
 
     await new Promise((r) => setTimeout(r, 150))
 
+    // Sem sessão nenhuma ainda — só é criada de verdade quando a primeira mensagem for
+    // enviada (ver sendMessage). Clicar em "Novo chat" e não escrever nada não deveria
+    // deixar uma sessão vazia no histórico.
     setMessages([])
     setCurrentSessionId(null)
     setCurrentDraft(null)
 
-    await new Promise((r) => setTimeout(r, 200))
-
-    try {
-      const session = await api.sessions.create()
-      setSessions((prev) => [session, ...prev])
-      setCurrentSessionId(session.id)
-    } catch {
-      console.error("Failed to create session")
+    if (needsOnboarding) {
+      setMessages([{
+        id: `agent-onboarding-${Date.now()}`,
+        role: "agent",
+        content: "Antes de continuar, deixa eu te conhecer melhor — leva menos de 1 minuto.",
+        timestamp: new Date(),
+        component: { type: "onboarding_briefing" },
+      }])
     }
 
     setIsNewChatAnimating(false)
-  }, [setSidebarOpen])
+  }, [needsOnboarding])
 
   const handleSelectSession = async (session: ChatSession) => {
     setCurrentSessionId(session.id)
     setMessages([])
     setCurrentDraft(null)
     await loadSessionMessages(session.id)
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false)
-    }
   }
 
   const handleDeleteSession = async (sessionId: string) => {
@@ -284,13 +336,24 @@ export default function DashboardPage() {
         setMessages([])
         setCurrentDraft(null)
       }
-    } catch {
-      console.error("Failed to delete session")
+    } catch (error: any) {
+      console.error("Failed to delete session", error)
+      alert(error?.message || "Não foi possível excluir essa conversa. Tente novamente.")
     }
   }
 
+  // Cria a sessão só quando ela realmente vai ser usada (primeira mensagem, seja pelo
+  // composer ou por um card de sugestão) — evita sessões vazias no histórico.
+  const ensureSessionId = async (): Promise<string> => {
+    if (currentSessionId) return currentSessionId
+    const session = await api.sessions.create()
+    setCurrentSessionId(session.id)
+    setSessions((prev) => [session, ...prev])
+    return session.id
+  }
+
   const sendMessage = async () => {
-    if (!input.trim() || isLoading || !currentSessionId || isSendingRef.current) return
+    if (!input.trim() || isLoading || isSendingRef.current) return
     isSendingRef.current = true
 
     const messageText = input.trim()
@@ -310,16 +373,20 @@ export default function DashboardPage() {
     setIsLoading(true)
 
     const agentMessageId = `agent-${Date.now()}`
+    // Cria a bolha vazia (mostra as bolinhas de "digitando") já aqui, antes de qualquer
+    // await — senão, no primeiro envio de uma conversa nova, a criação da sessão
+    // (ensureSessionId) deixa um instante sem nenhum feedback visual.
+    setMessages((prev) => [
+      ...prev,
+      { id: agentMessageId, role: "agent", content: "", timestamp: new Date() },
+    ])
 
     try {
-      setMessages((prev) => [
-        ...prev,
-        { id: agentMessageId, role: "agent", content: "", timestamp: new Date() },
-      ])
+      const sessionId = await ensureSessionId()
 
       const response = await api.agent.chatStream(
         messageText + attachmentNote,
-        currentSessionId,
+        sessionId,
         (token: string) => {
           setMessages((prev) =>
             prev.map((m) => (m.id === agentMessageId ? { ...m, content: m.content + token } : m))
@@ -425,6 +492,24 @@ export default function DashboardPage() {
   const handleConfirmCampaign = () => {
     if (!currentSessionId) return
     handleAction({ type: "confirm_campaign", data: { sessionId: currentSessionId }, label: "Confirmar e disparar" })
+  }
+
+  const handleOnboardingComplete = async (result: OnboardingResult) => {
+    try {
+      await api.auth.updateProfile(result)
+    } catch {
+      console.error("Failed to save onboarding profile")
+    }
+    setNeedsOnboarding(false)
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `agent-onboarding-followup-${Date.now()}`,
+        role: "agent",
+        content: "Perfeito, anotado! Agora sim — quer criar sua primeira campanha, importar contatos ou conectar seu WhatsApp?",
+        timestamp: new Date(),
+      },
+    ])
   }
 
   const handleSelectDraftList = (list: { id: string; name: string; leadCount: number }) => {
@@ -608,10 +693,12 @@ export default function DashboardPage() {
     await handleNewSession()
     await new Promise((r) => setTimeout(r, 400))
 
+    const messageText = ACTION_MESSAGES[card.action] || card.title
+
     const msg: Message = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: card.title,
+      content: messageText,
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, msg])
@@ -624,7 +711,8 @@ export default function DashboardPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.agent.chat(card.title, currentSessionId!)
+      const sessionId = await ensureSessionId()
+      const response = await api.agent.chat(messageText, sessionId)
       const agentMessage: Message = {
         id: `agent-${Date.now()}`,
         role: "agent",
@@ -650,6 +738,26 @@ export default function DashboardPage() {
     }
   }
 
+  const formatRelativeTime = (iso: string) => {
+    const diffMs = Date.now() - new Date(iso).getTime()
+    const minutes = Math.floor(diffMs / 60000)
+    if (minutes < 1) return "agora"
+    if (minutes < 60) return `há ${minutes}min`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `há ${hours}h`
+    const days = Math.floor(hours / 24)
+    if (days < 30) return `há ${days}d`
+    return new Date(iso).toLocaleDateString("pt-BR")
+  }
+
+  const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
+    COMPLETED: "concluída",
+    RUNNING: "enviando",
+    PENDING: "pendente",
+    PAUSED: "pausada",
+    FAILED: "falhou",
+  }
+
   const getInitials = (name: string) => {
     if (!name) return "U"
     return name
@@ -661,7 +769,9 @@ export default function DashboardPage() {
   }
 
   const userName = user?.nome || user?.name || "Corretor"
-  const showWelcome = !currentSessionId || (messages.length === 0 && !isLoading)
+  // Sem sessão criada ainda não significa "sem conversa" — só significa que a primeira
+  // mensagem não foi enviada. O que decide a tela de boas-vindas é não ter mensagens.
+  const showWelcome = messages.length === 0 && !isLoading
 
   if (pageLoading) {
     return (
@@ -671,9 +781,10 @@ export default function DashboardPage() {
     )
   }
 
+
   return (
     <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
-      {/* Mobile-only header: new chat / history toggle (hidden on lg, where NavRail has these) */}
+      {/* Mobile-only header: new chat (history is pinned, lg+ only — NavRail has "Novo Chat" on lg) */}
       <div className="flex lg:hidden items-center justify-end gap-2 pb-3">
         <button
           onClick={handleNewSession}
@@ -682,43 +793,15 @@ export default function DashboardPage() {
         >
           <Plus className="size-5" />
         </button>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          title="Histórico"
-          className={cn(
-            "flex items-center justify-center size-9 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all",
-            sidebarOpen && "text-zinc-600 bg-zinc-100"
-          )}
-        >
-          <PanelLeft className="size-5" />
-        </button>
       </div>
 
-      {/* Chat history: side column on lg+, drawer overlay below lg */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            key="mobile-history-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="lg:hidden fixed inset-0 bg-black/40 z-40"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-      <div
-        className={cn(
-          "transition-all duration-300 ease-out overflow-hidden shrink-0",
-          "fixed inset-y-0 left-0 z-50 lg:static lg:z-auto",
-          sidebarOpen ? "w-[260px] opacity-100" : "w-0 opacity-0"
-        )}
-      >
-        <div className="w-[260px] h-full py-1 pr-1 pl-1 lg:pl-0">
+      {/* Chat history — pinned side column, always visible on lg+, no way to collapse it */}
+      <div className="hidden lg:block w-[260px] shrink-0">
+        <div className="w-[260px] h-full py-1 pr-1">
           <ChatHistory
             sessions={sessions}
             currentSessionId={currentSessionId}
-            onSelect={(session) => { handleSelectSession(session); setSidebarOpen(false) }}
+            onSelect={handleSelectSession}
             onNew={handleNewSession}
             onDelete={handleDeleteSession}
             isNewChatAnimating={isNewChatAnimating}
@@ -726,6 +809,57 @@ export default function DashboardPage() {
         </div>
       </div>
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80">
+            <span className={cn(
+              "flex items-center justify-center size-[26px] rounded-lg shrink-0",
+              statusBar.connectedInstances > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-200 text-zinc-400"
+            )}>
+              <Wifi className="size-3.5" />
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className="text-xs font-semibold text-foreground">
+                {statusBar.connectedInstances}/{statusBar.totalInstances}
+              </span>
+              <span className="text-[11px] text-muted-foreground/70">WhatsApp{statusBar.totalInstances === 1 ? "" : "s"}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80">
+            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+              <ListChecks className="size-3.5" />
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className="text-xs font-semibold text-foreground">{statusBar.listCount} lista{statusBar.listCount === 1 ? "" : "s"}</span>
+              <span className="text-[11px] text-muted-foreground/70">{stats.leads} leads</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80">
+            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+              <Target className="size-3.5" />
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className="text-xs font-semibold text-foreground">{stats.remaining} disparo{stats.remaining === 1 ? "" : "s"}</span>
+              <span className="text-[11px] text-muted-foreground/70">restante{stats.remaining === 1 ? "" : "s"}</span>
+            </span>
+          </div>
+
+          {statusBar.lastCampaign && (
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80 min-w-0">
+              <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+                <Rocket className="size-3.5" />
+              </span>
+              <span className="flex flex-col leading-tight min-w-0">
+                <span className="text-xs font-semibold text-foreground truncate max-w-[200px]">"{statusBar.lastCampaign.name}"</span>
+                <span className="text-[11px] text-muted-foreground/70">
+                  {CAMPAIGN_STATUS_LABELS[statusBar.lastCampaign.status] || statusBar.lastCampaign.status.toLowerCase()} · {formatRelativeTime(statusBar.lastCampaign.createdAt)}
+                </span>
+              </span>
+            </div>
+          )}
+        </div>
 
         <AnimatePresence mode="wait">
           {showWelcome ? (
@@ -800,7 +934,7 @@ export default function DashboardPage() {
                           className={cn(
                             "size-9 rounded-2xl flex items-center justify-center shrink-0 mt-0.5",
                             msg.role === "agent"
-                              ? "bg-gradient-to-br from-purple-500/80 to-blue-500/80 shadow-lg shadow-purple-500/20"
+                              ? "bg-gradient-to-br from-primary/80 to-indigo-500/80 shadow-lg shadow-primary/20"
                               : "bg-primary shadow-lg shadow-primary/20"
                           )}
                         >
@@ -825,7 +959,15 @@ export default function DashboardPage() {
                                 : "glass rounded-3xl rounded-tl-sm text-accent-foreground"
                             )}
                           >
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            {msg.role === "agent" && msg.content === "" && isLoading ? (
+                              <div className="flex gap-1.5 py-0.5">
+                                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                              </div>
+                            ) : (
+                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            )}
                           </div>
 
                           {msg.whatsapp && (
@@ -834,6 +976,10 @@ export default function DashboardPage() {
                               status={msg.whatsapp.status}
                               onRegenerate={() => regenerateWhatsAppQr(msg.id, msg.whatsapp!.instanceId)}
                             />
+                          )}
+
+                          {msg.component?.type === "onboarding_briefing" && (
+                            <ChatOnboardingBriefing onComplete={handleOnboardingComplete} disabled={isLoading} />
                           )}
 
                           {msg.component?.type === "list_picker" && (
@@ -854,10 +1000,6 @@ export default function DashboardPage() {
 
                           {msg.component?.type === "instance_picker" && (
                             <ChatInstancePicker onConfirm={handleConfirmDraftInstances} disabled={isLoading} />
-                          )}
-
-                          {msg.component?.type === "message_editor" && (
-                            <ChatMessageVariationsEditor purpose={msg.component.purpose} onConfirm={handleConfirmDraftMessages} disabled={isLoading} />
                           )}
 
                           {msg.component?.type === "campaign_summary" && (
@@ -917,20 +1059,20 @@ export default function DashboardPage() {
                     ))}
                   </AnimatePresence>
 
-                  {isLoading && (
+                  {isLoading && !(messages[messages.length - 1]?.role === "agent" && messages[messages.length - 1]?.content === "") && (
                     <motion.div
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4"
                     >
-                      <div className="size-9 rounded-2xl bg-gradient-to-br from-purple-500/80 to-blue-500/80 shadow-lg shadow-purple-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="size-9 rounded-2xl bg-gradient-to-br from-primary/80 to-indigo-500/80 shadow-lg shadow-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                         <Bot className="size-4 text-white" />
                       </div>
                       <div className="glass rounded-3xl rounded-tl-sm px-4 py-3">
                         <div className="flex gap-1.5">
-                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                          <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                         </div>
                       </div>
                     </motion.div>
@@ -952,14 +1094,8 @@ export default function DashboardPage() {
               onSelectAttachType={handleSelectAttachType}
               attachment={pendingAttachment}
               onRemoveAttachment={() => setPendingAttachment(null)}
-              placeholder={
-                isUploadingAttachment
-                  ? "Enviando anexo..."
-                  : currentSessionId
-                  ? "Envie uma mensagem..."
-                  : "Crie uma nova conversa para começar..."
-              }
-              disabled={!currentSessionId}
+              placeholder={isUploadingAttachment ? "Enviando anexo..." : "Envie uma mensagem..."}
+              disabled={false}
               isLoading={isLoading}
             />
             <p className="text-center text-[11px] text-muted-foreground/50 mt-2">
@@ -989,6 +1125,8 @@ export default function DashboardPage() {
             draft={currentDraft}
             onConfirm={handleConfirmCampaign}
             onRemoveMedia={currentDraft.mediaUrl ? handleRemoveDraftMedia : undefined}
+            onSaveMessages={(variations) => handleConfirmDraftMessages({ messageVariations: variations })}
+            autoEditMessageTrigger={autoEditMessageTrigger}
             isConfirming={isConfirmingCampaign}
           />
         </>

@@ -52,11 +52,14 @@ export default function CheckoutRedirectPage() {
     const [cellphone, setCellphone] = useState('');
     const [charge, setCharge] = useState<PixCharge | null>(null);
     const [copied, setCopied] = useState(false);
+    const [checkingNow, setCheckingNow] = useState(false);
+    const [checkMsg, setCheckMsg] = useState<string | null>(null);
     const [checkingExisting, setCheckingExisting] = useState(false);
     const hasRun = useRef(false);
 
     const planId = searchParams.get('planId');
     const existingSubscriptionId = searchParams.get('subscriptionId');
+    const isRenewal = searchParams.get('renewal') === '1';
     const plan = planId ? PLAN_INFO[planId] : undefined;
     const cpfDigits = cpf.replace(/\D/g, '');
     const cpfTouched = cpfDigits.length > 0;
@@ -160,6 +163,24 @@ export default function CheckoutRedirectPage() {
         });
     }, [charge]);
 
+    const handleCheckNow = async () => {
+        if (!charge) return;
+        setCheckingNow(true);
+        setCheckMsg(null);
+        try {
+            const data: any = await api.payments.checkPaymentNow(charge.subscriptionId);
+            if (data.status === 'active') {
+                router.push('/dashboard');
+                return;
+            }
+            setCheckMsg('Ainda não identificamos o pagamento. Se você acabou de pagar, aguarde alguns segundos e tente de novo.');
+        } catch {
+            setCheckMsg('Não conseguimos verificar agora. Tente de novo em instantes.');
+        } finally {
+            setCheckingNow(false);
+        }
+    };
+
     const handleRetry = () => {
         setError(null);
         setCharge(null);
@@ -245,7 +266,9 @@ export default function CheckoutRedirectPage() {
                         ) : (
                             <>
                                 <div>
-                                    <h1 className="text-lg font-bold text-zinc-900">Pague com PIX para ativar sua assinatura</h1>
+                                    <h1 className="text-lg font-bold text-zinc-900">
+                                        {isRenewal ? 'Pague com PIX para renovar sua assinatura' : 'Pague com PIX para ativar sua assinatura'}
+                                    </h1>
                                     {plan && (
                                         <p className="text-zinc-500 text-sm mt-1">
                                             Plano {plan.name} · R$ {plan.price.toFixed(2).replace('.', ',')}/mês
@@ -277,13 +300,18 @@ export default function CheckoutRedirectPage() {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-center gap-2 text-zinc-500 text-sm pt-2">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>Aguardando pagamento...</span>
-                                </div>
+                                <button
+                                    onClick={handleCheckNow}
+                                    disabled={checkingNow}
+                                    className="w-full py-3 bg-brand-purple-600 text-white rounded-md text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                                >
+                                    {checkingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                    Já fiz o pagamento
+                                </button>
+                                {checkMsg && <p className="text-xs text-amber-600">{checkMsg}</p>}
 
                                 <p className="text-[11px] text-zinc-400">
-                                    A confirmação é automática — assim que o PIX cair, você é redirecionado pro seu painel.
+                                    A confirmação também acontece sozinha assim que o PIX cair.
                                 </p>
                             </>
                         )}
@@ -351,8 +379,12 @@ export default function CheckoutRedirectPage() {
                             className="bg-white border border-zinc-200 rounded-xl p-6 space-y-5"
                         >
                             <div>
-                                <h1 className="text-lg font-bold text-zinc-900">Finalizar assinatura</h1>
-                                <p className="text-zinc-500 text-sm mt-0.5">Confirme seus dados para gerar o PIX</p>
+                                <h1 className="text-lg font-bold text-zinc-900">{isRenewal ? 'Renovar assinatura' : 'Finalizar assinatura'}</h1>
+                                <p className="text-zinc-500 text-sm mt-0.5">
+                                    {isRenewal
+                                        ? 'Sua assinatura anterior venceu — confirme seus dados para gerar um novo PIX'
+                                        : 'Confirme seus dados para gerar o PIX'}
+                                </p>
                             </div>
 
                             <div className="space-y-1">

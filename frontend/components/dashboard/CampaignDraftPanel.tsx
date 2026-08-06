@@ -1,6 +1,7 @@
 "use client"
 
-import { Rocket, Users, Wifi, MessageSquare, Paperclip, Clock, Zap, AlertTriangle, Loader2, X, CheckCircle2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Rocket, Users, Wifi, MessageSquare, Paperclip, Clock, Zap, AlertTriangle, Loader2, X, CheckCircle2, Pencil, Plus, Copy, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type CampaignDraft = {
@@ -29,6 +30,8 @@ interface CampaignDraftPanelProps {
   draft: CampaignDraft
   onConfirm: () => void
   onRemoveMedia?: () => void
+  onSaveMessages?: (variations: string[]) => void
+  autoEditMessageTrigger?: number
   isConfirming?: boolean
 }
 
@@ -46,11 +49,113 @@ function Field({ icon: Icon, label, filled, children }: { icon: any; label: stri
   )
 }
 
-export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, isConfirming }: CampaignDraftPanelProps) {
+function MessageCanvasEditor({
+  initialVariations,
+  onSave,
+  onCancel,
+}: {
+  initialVariations: string[]
+  onSave: (variations: string[]) => void
+  onCancel: () => void
+}) {
+  const [variations, setVariations] = useState<string[]>(initialVariations.length > 0 ? initialVariations : [""])
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+
+  const updateAt = (index: number, value: string) => {
+    setVariations((prev) => prev.map((v, i) => (i === index ? value : v)))
+  }
+
+  const removeAt = (index: number) => {
+    setVariations((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const addVariation = () => setVariations((prev) => [...prev, ""])
+
+  const handleCopy = (index: number) => {
+    navigator.clipboard.writeText(variations[index]).then(() => {
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex((i) => (i === index ? null : i)), 1500)
+    })
+  }
+
+  const validVariations = variations.map((v) => v.trim()).filter(Boolean)
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[11px] text-muted-foreground/70">Cada envio escolhe uma variação aleatória — ajuda a fugir de bloqueio por spam.</p>
+
+      {variations.map((v, i) => (
+        <div key={i} className="space-y-1">
+          <div className="flex items-start gap-2">
+            <textarea
+              autoFocus={i === 0}
+              value={v}
+              onChange={(e) => updateAt(i, e.target.value)}
+              placeholder={`Variação ${i + 1}`}
+              rows={3}
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-purple-500/30 resize-none"
+            />
+            <div className="flex flex-col gap-1 mt-0.5">
+              <button onClick={() => handleCopy(i)} title="Copiar" className="text-muted-foreground/50 hover:text-purple-500 transition-colors">
+                {copiedIndex === i ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+              </button>
+              {variations.length > 1 && (
+                <button onClick={() => removeAt(i)} title="Remover" className="text-muted-foreground/50 hover:text-rose-500 transition-colors">
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <button
+        onClick={addVariation}
+        className="flex items-center gap-1.5 text-xs text-purple-500 hover:text-purple-600"
+      >
+        <Plus className="size-3.5" /> Adicionar variação
+      </button>
+
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={() => onSave(validVariations)}
+          disabled={validVariations.length === 0}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+        >
+          <Check className="size-3.5" /> Salvar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMessages, autoEditMessageTrigger, isConfirming }: CampaignDraftPanelProps) {
+  const [isEditingMessage, setIsEditingMessage] = useState(false)
   const messageCount = draft.messageVariations?.length ?? 0
   const scheduleLabel = draft.scheduledAt
     ? new Date(draft.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : "Imediato"
+
+  // O agente pediu explicitamente pra abrir o editor (tool request_message_variations_editor)
+  // — abre aqui no painel em vez de um card solto na bolha do chat. O trigger é um contador
+  // (não um boolean) pra disparar de novo mesmo se o agente pedir duas vezes seguidas.
+  useEffect(() => {
+    if (autoEditMessageTrigger) {
+      setIsEditingMessage(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEditMessageTrigger])
+
+  const handleSaveMessages = (variations: string[]) => {
+    onSaveMessages?.(variations)
+    setIsEditingMessage(false)
+  }
 
   return (
     <div
@@ -89,13 +194,28 @@ export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, isConfirmi
         </Field>
 
         <Field icon={MessageSquare} label="Mensagem" filled={messageCount > 0}>
-          {messageCount > 0 ? (
-            <div className="space-y-1">
-              <p className="line-clamp-2 text-foreground/80">{draft.messageVariations![0]}</p>
-              {messageCount > 1 && <span className="text-[11px] text-purple-500">+{messageCount - 1} variação(ões)</span>}
-            </div>
+          {isEditingMessage ? (
+            <MessageCanvasEditor
+              initialVariations={draft.messageVariations ?? []}
+              onSave={handleSaveMessages}
+              onCancel={() => setIsEditingMessage(false)}
+            />
+          ) : messageCount > 0 ? (
+            <button onClick={() => setIsEditingMessage(true)} className="w-full text-left group/msg">
+              <div className="space-y-1">
+                <p className="line-clamp-2 text-foreground/80 group-hover/msg:text-foreground transition-colors">{draft.messageVariations![0]}</p>
+                <div className="flex items-center gap-1.5">
+                  {messageCount > 1 && <span className="text-[11px] text-purple-500">+{messageCount - 1} variação(ões)</span>}
+                  <span className="text-[11px] text-muted-foreground/60 group-hover/msg:text-purple-500 flex items-center gap-1 transition-colors">
+                    <Pencil className="size-3" /> editar
+                  </span>
+                </div>
+              </div>
+            </button>
           ) : (
-            "Ainda não definida"
+            <button onClick={() => setIsEditingMessage(true)} className="text-left text-muted-foreground hover:text-purple-500 transition-colors flex items-center gap-1.5">
+              Ainda não definida <Pencil className="size-3" />
+            </button>
           )}
         </Field>
 

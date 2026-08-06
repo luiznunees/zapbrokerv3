@@ -4,12 +4,13 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Users, Send, Settings,
-  LogOut, Plus, PanelLeft, PanelLeftClose,
+  LogOut, Plus,
   Store
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDashboard } from "@/contexts/dashboard-context"
 import { BrandIcon } from "@/components/BrandLogo"
+import { logoutUser } from "@/lib/supabase"
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, href: "/dashboard", label: "Painel" },
@@ -20,7 +21,7 @@ const NAV_ITEMS = [
 
 export function NavRail() {
   const pathname = usePathname()
-  const { sidebarOpen, toggleSidebar, triggerNewChat } = useDashboard()
+  const { triggerNewChat } = useDashboard()
 
   return (
     <nav
@@ -35,7 +36,7 @@ export function NavRail() {
       <Link
         href="/dashboard"
         title="ZapBroker"
-        className="hidden lg:flex items-center justify-center size-10 rounded-2xl hover:bg-purple-50 transition-all mb-1"
+        className="hidden lg:flex items-center justify-center size-10 rounded-2xl hover:bg-primary/5 transition-all mb-1"
       >
         <BrandIcon className="h-6" />
       </Link>
@@ -48,17 +49,6 @@ export function NavRail() {
         className="hidden lg:flex items-center justify-center size-10 rounded-2xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
       >
         <Plus className="size-5" />
-      </button>
-
-      <button
-        onClick={toggleSidebar}
-        title="Histórico"
-        className={cn(
-          "hidden lg:flex items-center justify-center size-10 rounded-2xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-all",
-          sidebarOpen && "text-zinc-600 bg-zinc-100"
-        )}
-      >
-        {sidebarOpen ? <PanelLeftClose className="size-5" /> : <PanelLeft className="size-5" />}
       </button>
 
       <div className="hidden lg:block flex-1" />
@@ -74,7 +64,7 @@ export function NavRail() {
               className={cn(
                 "flex items-center justify-center size-10 rounded-2xl transition-all",
                 isActive
-                  ? "bg-purple-100 text-purple-700"
+                  ? "bg-primary/10 text-primary"
                   : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
               )}
             >
@@ -93,7 +83,7 @@ export function NavRail() {
           className={cn(
             "flex items-center justify-center size-10 rounded-2xl transition-all",
             pathname === "/dashboard/settings"
-              ? "bg-purple-100 text-purple-700"
+              ? "bg-primary/10 text-primary"
               : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
           )}
         >
@@ -101,11 +91,7 @@ export function NavRail() {
         </Link>
 
         <button
-          onClick={() => {
-            localStorage.removeItem("token")
-            localStorage.removeItem("user")
-            window.location.href = "/login"
-          }}
+          onClick={() => logoutUser()}
           title="Sair"
           className="flex items-center justify-center size-10 rounded-2xl text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-all lg:mt-1"
         >

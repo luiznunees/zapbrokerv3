@@ -8,6 +8,8 @@ import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { useSearchParams } from 'next/navigation'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 import { BrandLoader } from '@/components/ui/BrandLoader'
+import { PixCheckoutModal } from '@/components/dashboard/PixCheckoutModal'
+import { logoutUser } from '@/lib/supabase'
 
 const PLANS = [
     {
@@ -33,15 +35,7 @@ export default function SettingsPage() {
 
     // Payment State
     const [selectedPlanId, setSelectedPlanId] = useState(PLANS[0].id)
-    const [loadingPayment, setLoadingPayment] = useState(false)
-    const [pixData, setPixData] = useState<any>(null)
-    const [subscriptionId, setSubscriptionId] = useState<string | null>(null)
-    const [billingDetails, setBillingDetails] = useState({
-        name: '',
-        email: '',
-        cellphone: '',
-        taxId: ''
-    })
+    const [showPixModal, setShowPixModal] = useState(false)
 
     const [name, setName] = useState('');
 
@@ -234,9 +228,23 @@ export default function SettingsPage() {
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        logoutUser();
+    };
+
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deletingAccount, setDeletingAccount] = useState(false);
+
+    const handleDeleteAccount = async () => {
+        setDeletingAccount(true);
+        try {
+            const result: any = await api.auth.deleteAccount();
+            alert(result?.message || 'Conta excluída.');
+            await logoutUser();
+        } catch (error: any) {
+            alert(error.message || 'Não foi possível excluir a conta. Tente novamente ou fale com o suporte.');
+            setDeletingAccount(false);
+        }
     };
 
     return (
@@ -385,6 +393,19 @@ export default function SettingsPage() {
                                 <LogOut className="w-4 h-4" /> Sair da conta
                             </button>
                         </div>
+
+                        <div className="pt-6 border-t border-border">
+                            <h3 className="text-sm font-bold text-red-600 mb-1">Zona de perigo</h3>
+                            <p className="text-xs text-muted-foreground mb-3">
+                                Excluir sua conta apaga permanentemente seus leads, campanhas, conexões de WhatsApp e assinatura. Essa ação não pode ser desfeita.
+                            </p>
+                            <button
+                                onClick={() => setShowDeleteModal(true)}
+                                className="flex items-center gap-2 text-red-500 border border-red-500/30 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                            >
+                                <Trash2 className="w-4 h-4" /> Excluir minha conta
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -414,7 +435,7 @@ export default function SettingsPage() {
                                     <h4 className="font-bold text-red-700 mb-1">Limite do Plano Atingido</h4>
                                     <p className="text-sm text-red-600">{errorMessage}</p>
                                     <button
-                                        onClick={() => window.location.href = '/dashboard/checkout'}
+                                        onClick={() => { setActiveTab('plan'); setErrorMessage(null); }}
                                         className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
                                     >
                                         Fazer Upgrade do Plano
@@ -630,21 +651,11 @@ export default function SettingsPage() {
                             </p>
 
                             <button
-                                disabled={loadingPayment}
-                                onClick={() => {
-                                    setLoadingPayment(true);
-                                    window.location.href = `/checkout/redirect?planId=${selectedPlanId}`;
-                                }}
+                                onClick={() => setShowPixModal(true)}
                                 className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-bold text-lg hover:bg-primary/90 transition-all flex items-center justify-center gap-2"
                             >
-                                {loadingPayment ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <>
-                                        <Zap className="w-5 h-5 fill-current" />
-                                        Assinar {PLANS.find(p => p.id === selectedPlanId)?.name} Agora
-                                    </>
-                                )}
+                                <Zap className="w-5 h-5 fill-current" />
+                                Assinar {PLANS.find(p => p.id === selectedPlanId)?.name} Agora
                             </button>
                             <p className="text-center text-xs text-muted-foreground mt-3 flex items-center justify-center gap-1.5">
                                 <Shield className="w-3 h-3" /> Pagamento 100% seguro via AbacatePay
@@ -653,6 +664,50 @@ export default function SettingsPage() {
                     </div>
                 )}
             </div>
+
+            {showPixModal && (
+                <PixCheckoutModal
+                    planId={selectedPlanId}
+                    onClose={() => setShowPixModal(false)}
+                    onSuccess={() => {
+                        setShowPixModal(false)
+                        fetchUserProfile()
+                    }}
+                />
+            )}
+
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                    <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full">
+                        <h3 className="font-bold text-foreground mb-2">Tem certeza?</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            Isso vai apagar permanentemente sua conta, leads, campanhas e conexões de WhatsApp. Não tem como desfazer.
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-1.5">Digite <strong>EXCLUIR</strong> para confirmar:</p>
+                        <input
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm mb-4"
+                            placeholder="EXCLUIR"
+                        />
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
+                                className="flex-1 px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-secondary transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteAccount}
+                                disabled={deleteConfirmText !== 'EXCLUIR' || deletingAccount}
+                                className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {deletingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Excluir permanentemente'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     )
 }
