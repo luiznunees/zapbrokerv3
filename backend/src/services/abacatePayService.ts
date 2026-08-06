@@ -84,6 +84,21 @@ export async function createPixCharge(
     }
 }
 
+// Active fallback for when the webhook is slow, never arrives, or (as in local dev) simply
+// can't reach us — lets "Já fiz o pagamento" ask AbacatePay directly instead of only trusting
+// our own DB, which only gets updated by the webhook.
+export async function checkPixChargeStatus(chargeId: string): Promise<{ status: string }> {
+    if (!ABACATE_PAY_KEY) throw new Error('AbacatePay not configured');
+    try {
+        const response = await api.get('/transparents/check', { params: { id: chargeId } });
+        return { status: response.data.data.status };
+    } catch (error: any) {
+        const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        console.error('Error checking AbacatePay PIX charge status:', detail);
+        throw new Error(`Failed to check PIX charge status: ${detail}`);
+    }
+}
+
 // ============================================================
 // One-time billing (legacy — used by existing pending payments)
 // ============================================================

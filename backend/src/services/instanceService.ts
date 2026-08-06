@@ -91,10 +91,19 @@ export const getInstances = async (userId: string) => {
 
             // Update DB if changed
             if (dbStatus !== instance.status) {
+                // Primeira conexão de verdade marca o início do aquecimento (ver
+                // campaignService.getWarmupInfo) — reconexões não resetam essa data.
+                const isFirstConnection = dbStatus === 'connected' && !instance.connected_at;
+
                 await supabase
                     .from('instances')
-                    .update({ status: dbStatus })
+                    .update({
+                        status: dbStatus,
+                        ...(isFirstConnection ? { connected_at: new Date().toISOString() } : {}),
+                    })
                     .eq('id', instance.id);
+
+                if (isFirstConnection) instance.connected_at = new Date().toISOString();
 
                 // Só interessa reportar quando o número CAI num estado ruim — a saída de
                 // erro/desconectado (voltando a conectar) não é um evento de alerta.

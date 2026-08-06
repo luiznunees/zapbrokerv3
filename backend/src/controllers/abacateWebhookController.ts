@@ -2,8 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { supabase } from '../config/supabase';
 import * as eventLogService from '../services/eventLogService';
-import * as emailService from '../services/emailService';
-import { PLANS } from '../config/plans';
+import * as billingService from '../services/billingService';
 
 function getAbacateHmacKey(): string {
     const key = process.env.ABACATE_WEBHOOK_HMAC_KEY;
@@ -217,55 +216,7 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
             const paymentExternalId = charge.id;
 
             if (subscriptionId && paymentExternalId) {
-                await supabase
-                    .from('payments')
-                    .update({ status: 'PAID', method: 'PIX', updated_at: new Date() })
-                    .eq('external_id', paymentExternalId);
-
-                const nextBilling = new Date();
-                nextBilling.setMonth(nextBilling.getMonth() + 1);
-
-                await supabase
-                    .from('subscriptions')
-                    .update({
-                        status: 'active',
-                        start_date: new Date(),
-                        next_billing_date: nextBilling,
-                        pending_checkout_id: null,
-                        pending_checkout_qrcode: null,
-                        pending_checkout_brcode: null,
-                        pending_checkout_expires_at: null,
-                        updated_at: new Date(),
-                    })
-                    .eq('id', subscriptionId);
-
-                console.log(`PIX ${paymentExternalId} paid — subscription ${subscriptionId} activated/renewed.`);
-                const { data: subRow } = await supabase
-                    .from('subscriptions')
-                    .select('user_id, plan_id, next_billing_date')
-                    .eq('id', subscriptionId)
-                    .maybeSingle();
-                eventLogService.logEvent({
-                    type: 'payment.confirmed',
-                    severity: 'info',
-                    message: `Pagamento PIX confirmado — assinatura ${subscriptionId}`,
-                    userId: subRow?.user_id,
-                    metadata: { subscriptionId, paymentExternalId },
-                });
-
-                if (subRow?.user_id) {
-                    const { data: userRow } = await supabase.from('users').select('name, email').eq('id', subRow.user_id).maybeSingle();
-                    const plan = subRow.plan_id ? PLANS[subRow.plan_id] : undefined;
-                    if (userRow?.email && plan) {
-                        emailService.sendPaymentConfirmedEmail(
-                            userRow.email,
-                            userRow.name || 'corretor(a)',
-                            plan.name,
-                            plan.price,
-                            new Date(subRow.next_billing_date)
-                        ).catch(err => console.error('[Webhook] Failed to send payment confirmed email:', err.message));
-                    }
-                }
+                await billingService.activateSubscriptionFromPayment(subscriptionId, paymentExternalId);
             }
 
             return res.status(200).send('OK');

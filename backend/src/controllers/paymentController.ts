@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { supabase } from '../config/supabase';
 import * as billingService from '../services/billingService';
+import * as abacatePayService from '../services/abacatePayService';
 import * as emailService from '../services/emailService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
@@ -105,6 +106,42 @@ export const getSubscriptionStatus = async (req: AuthRequest, res: Response) => 
         brCodeBase64: subscription.pending_checkout_qrcode,
         expiresAt: subscription.pending_checkout_expires_at,
     });
+};
+
+// "Já fiz o pagamento" — asks AbacatePay directly instead of only trusting our own DB,
+// which only updates when the webhook arrives. Covers the case where the webhook is slow,
+// never arrives, or (as in local dev against localhost) simply can't reach us at all.
+export const checkPaymentNow = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    const { data: subscription, error } = await supabase
+        .from('subscriptions')
+        .select('status, pending_checkout_id')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single();
+
+    if (error || !subscription) throw new AppError('Subscription not found', 404);
+
+    if (subscription.status === 'active') {
+        return res.json({ status: 'active' });
+    }
+
+    if (!subscription.pending_checkout_id) {
+        return res.json({ status: subscription.status });
+    }
+
+    try {
+        const { status } = await abacatePayService.checkPixChargeStatus(subscription.pending_checkout_id);
+        if (status === 'PAID') {
+            await billingService.activateSubscriptionFromPayment(id, subscription.pending_checkout_id);
+            return res.json({ status: 'active' });
+        }
+        res.json({ status: subscription.status, pixStatus: status });
+    } catch (err: any) {
+        throw new AppError('Não foi possível verificar o pagamento agora. Tente novamente em instantes.', 502);
+    }
 };
 
 export const cancelSubscription = async (req: AuthRequest, res: Response) => {

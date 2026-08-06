@@ -119,6 +119,7 @@ import * as paymentController from './controllers/paymentController';
 // Payment Routes
 app.post('/payments/subscribe', authenticateToken, paymentController.createSubscription);
 app.get('/payments/subscription/:id', authenticateToken, paymentController.getSubscriptionStatus);
+app.post('/payments/subscription/:id/check-now', authenticateToken, paymentController.checkPaymentNow);
 app.post('/payments/subscription/cancel', authenticateToken, paymentController.cancelSubscription);
 
 app.get('/', (req, res) => {

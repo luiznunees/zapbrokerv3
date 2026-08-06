@@ -65,5 +65,6 @@ router.post('/login', authController.login);
 import { authenticateToken } from '../middlewares/authMiddleware';
 router.get('/me', authenticateToken, authController.getProfile);
 router.put('/me', authenticateToken, authController.updateProfile);
+router.delete('/account', authenticateToken, authController.deleteAccount);
 
 export default router;

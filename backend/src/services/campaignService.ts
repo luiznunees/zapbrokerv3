@@ -490,6 +490,49 @@ export const getInstanceSendVolume = async (userId: string, instanceId: string, 
     return { sentLast24h: count || 0 };
 };
 
+// Rampa de aquecimento — quanto mais novo o número, menor o volume diário recomendado.
+// Baseado em orientações reais de fornecedores de chip aquecido: dia 1 descansa, sobe
+// gradualmente até liberar em ~2 semanas. 200/dia é usado como "capacidade cheia" de
+// referência (mesmo teto que getInstanceSendVolume/check_instance_rate_limit já tratam
+// como risco alto).
+const WARMUP_SCHEDULE: Array<{ maxDays: number; recommendedDailyLimit: number | null }> = [
+    { maxDays: 1, recommendedDailyLimit: 0 },
+    { maxDays: 2, recommendedDailyLimit: 40 },
+    { maxDays: 3, recommendedDailyLimit: 70 },
+    { maxDays: 7, recommendedDailyLimit: 120 },
+    { maxDays: 14, recommendedDailyLimit: 200 },
+];
+
+export interface WarmupInfo {
+    daysSinceConnected: number | null;
+    recommendedDailyLimit: number | null; // null = sem teto de aquecimento (chip já maduro)
+    sentLast24h: number;
+    inCooldown: boolean; // < 24h desde a primeira conexão — orientação é não usar ainda
+}
+
+export const getWarmupInfo = async (
+    userId: string,
+    instanceId: string,
+    connectedAt: string | null
+): Promise<WarmupInfo> => {
+    const { sentLast24h } = await getInstanceSendVolume(userId, instanceId);
+
+    if (!connectedAt) {
+        return { daysSinceConnected: null, recommendedDailyLimit: null, sentLast24h, inCooldown: false };
+    }
+
+    const daysSinceConnected = (Date.now() - new Date(connectedAt).getTime()) / (24 * 60 * 60 * 1000);
+    const stage = WARMUP_SCHEDULE.find(s => daysSinceConnected < s.maxDays);
+    const recommendedDailyLimit = stage ? stage.recommendedDailyLimit : null;
+
+    return {
+        daysSinceConnected: Math.floor(daysSinceConnected),
+        recommendedDailyLimit,
+        sentLast24h,
+        inCooldown: daysSinceConnected < 1,
+    };
+};
+
 export const pauseCampaign = async (userId: string, campaignId: string) => {
     // Check ownership
     const { data: campaign } = await supabase
