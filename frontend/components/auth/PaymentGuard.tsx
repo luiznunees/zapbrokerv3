@@ -53,6 +53,12 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
         setConfirmTimedOut(true)
     }
 
+    // Retry in place instead of a full page reload — a full reload re-fetches the whole
+    // app shell for no reason when all we need is one more check against the webhook.
+    const retryConfirmation = () => {
+        pollForConfirmation()
+    }
+
     const authorize = async (user: any) => {
         if (!user) return // ProtectedRoute handles missing/invalid auth
 
@@ -85,9 +91,12 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
         console.log('Subscription not active:', user.subscriptionStatus)
         setAuthorized(false)
         if (user.planId) {
-            router.push(`/checkout/redirect?planId=${user.planId}`)
+            // Had a subscription before (expired/overdue/canceled) — this is a renewal,
+            // not a first purchase, so the checkout page should say so instead of reusing
+            // brand-new-signup copy.
+            router.push(`/checkout/redirect?planId=${user.planId}&renewal=1`)
         } else {
-            router.push('/#pricing')
+            router.push('/assinar')
         }
     }
 
@@ -113,16 +122,26 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
                 <div>
                     <p className="font-bold text-foreground">Ainda processando seu pagamento</p>
                     <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                        O PIX pode levar um pouco mais para confirmar. Atualize a página em instantes —
-                        se o problema persistir, fale com o suporte.
+                        O PIX pode levar um pouco mais para confirmar. Clique em verificar novamente —
+                        se continuar assim por mais de alguns minutos, fala com a gente que resolvemos na hora.
                     </p>
                 </div>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-5 py-2.5 bg-primary text-primary-foreground rounded-lg font-bold text-sm"
-                >
-                    Atualizar
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={retryConfirmation}
+                        className="px-5 py-2.5 bg-primary text-primary-foreground rounded-full font-bold text-sm"
+                    >
+                        Verificar novamente
+                    </button>
+                    <a
+                        href="https://wa.me/5551980985330?text=Olá,%20paguei%20o%20PIX%20mas%20meu%20plano%20ainda%20não%20foi%20confirmado"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-5 py-2.5 border border-border rounded-full font-bold text-sm text-foreground hover:bg-primary/5 transition-colors"
+                    >
+                        Falar com suporte
+                    </a>
+                </div>
             </div>
         )
     }
