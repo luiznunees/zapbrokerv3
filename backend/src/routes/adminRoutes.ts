@@ -13,6 +13,7 @@ router.use(requireAdmin);
 router.get('/stats', adminController.getStats);
 router.get('/logs', adminController.getLogs);
 router.get('/finance', adminController.getFinance);
+router.get('/ai-credits', adminController.getAiCredits);
 
 // Users
 router.get('/users', adminController.listUsers);

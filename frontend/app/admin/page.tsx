@@ -4,17 +4,22 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, AlertTriangle, MessageSquare, Server, ArrowRight } from 'lucide-react'
+import { Users, AlertTriangle, MessageSquare, Server, ArrowRight, Zap } from 'lucide-react'
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<any>(null)
+    const [aiCredits, setAiCredits] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         const loadStats = async () => {
             try {
-                const data = await api.admin.stats()
-                setStats(data)
+                const [statsData, creditsData] = await Promise.all([
+                    api.admin.stats(),
+                    api.admin.aiCredits().catch(() => null),
+                ])
+                setStats(statsData)
+                setAiCredits(creditsData)
             } catch (error) {
                 console.error('Failed to load admin stats:', error)
             } finally {
@@ -26,6 +31,9 @@ export default function AdminDashboardPage() {
 
     if (loading) return <div className="p-8 text-zinc-400">Carregando estatísticas...</div>
 
+    const creditsNeedAttention = aiCredits?.configured && (aiCredits.status === 'empty' || aiCredits.status === 'low')
+    const hasAnyAlert = stats?.activeErrors > 0 || stats?.recentCriticalEvents > 0 || creditsNeedAttention
+
     return (
         <div className="space-y-8">
             <h1 className="text-3xl font-bold text-zinc-100">Visão Geral do Sistema</h1>
@@ -35,7 +43,7 @@ export default function AdminDashboardPage() {
                     title="Total de Usuários"
                     value={stats?.users || 0}
                     icon={Users}
-                    color="text-blue-500"
+                    color="text-primary"
                 />
                 <StatCard
                     title="Instâncias Ativas"
@@ -47,7 +55,7 @@ export default function AdminDashboardPage() {
                     title="Mensagens Hoje"
                     value={stats?.messagesToday || 0}
                     icon={MessageSquare}
-                    color="text-indigo-500"
+                    color="text-primary"
                 />
                 <StatCard
                     title="Erros (Instâncias)"
@@ -78,16 +86,38 @@ export default function AdminDashboardPage() {
                     <CardHeader>
                         <CardTitle className="text-zinc-100">Alertas do Sistema</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        {(stats?.activeErrors > 0 || stats?.recentCriticalEvents > 0) ? (
-                            <div className="bg-red-500/10 text-red-400 p-4 rounded-lg flex items-center gap-2">
-                                <AlertTriangle className="w-5 h-5" />
-                                <span>
-                                    {stats.activeErrors > 0 && `${stats.activeErrors} instância(s) com erro de conexão`}
-                                    {stats.activeErrors > 0 && stats.recentCriticalEvents > 0 && ' — '}
-                                    {stats.recentCriticalEvents > 0 && `${stats.recentCriticalEvents} evento(s) crítico(s) nas últimas 24h`}
-                                </span>
-                            </div>
+                    <CardContent className="space-y-3">
+                        {hasAnyAlert ? (
+                            <>
+                                {(stats?.activeErrors > 0 || stats?.recentCriticalEvents > 0) && (
+                                    <div className="bg-red-500/10 text-red-400 p-4 rounded-lg flex items-center gap-2">
+                                        <AlertTriangle className="w-5 h-5 shrink-0" />
+                                        <span>
+                                            {stats.activeErrors > 0 && `${stats.activeErrors} instância(s) com erro de conexão`}
+                                            {stats.activeErrors > 0 && stats.recentCriticalEvents > 0 && ' — '}
+                                            {stats.recentCriticalEvents > 0 && `${stats.recentCriticalEvents} evento(s) crítico(s) nas últimas 24h`}
+                                        </span>
+                                    </div>
+                                )}
+                                {creditsNeedAttention && (
+                                    <div className={`p-4 rounded-lg flex items-center gap-2 ${aiCredits.status === 'empty' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                        <Zap className="w-5 h-5 shrink-0" />
+                                        <span className="flex-1">
+                                            {aiCredits.status === 'empty'
+                                                ? 'Créditos do OpenRouter zerados — o agente está caindo pro provedor de fallback.'
+                                                : `Créditos do OpenRouter baixos (~$${aiCredits.remaining?.toFixed(2)}).`}
+                                        </span>
+                                        <a
+                                            href="https://openrouter.ai/settings/credits"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-bold underline shrink-0"
+                                        >
+                                            Recarregar
+                                        </a>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="text-emerald-500 flex items-center gap-2">
                                 <Server className="w-5 h-5" />

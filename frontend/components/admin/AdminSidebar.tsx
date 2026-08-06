@@ -7,6 +7,7 @@ import { LayoutDashboard, Users, Ticket, Settings, LogOut, ShieldAlert, BarChart
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { useState, useEffect } from 'react'
+import { logoutUser } from '@/lib/supabase'
 
 const ADMIN_NAV_ITEMS = [
     {
@@ -49,7 +50,7 @@ export default function AdminSidebar() {
             <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-2 mb-4 mt-2">
                     <BrandLogo className="h-6 w-auto text-white" monochrome />
-                    <span className="text-xs font-bold bg-red-600 px-2 py-0.5 rounded text-white">ADMIN</span>
+                    <span className="text-xs font-bold bg-gradient-to-r from-primary to-indigo-500 px-2 py-0.5 rounded text-white">ADMIN</span>
                 </div>
             </div>
 
@@ -73,11 +74,7 @@ export default function AdminSidebar() {
                 </Link>
 
                 <button
-                    onClick={() => {
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('user');
-                        window.location.href = '/login';
-                    }}
+                    onClick={() => logoutUser()}
                     className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-red-900/10 transition-colors group"
                 >
                     <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
@@ -95,11 +92,11 @@ function NavItem({ item, isActive }: { item: any, isActive: boolean }) {
             className={cn(
                 "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 group relative overflow-hidden",
                 isActive
-                    ? "bg-red-600/10 text-red-500 shadow-sm border border-red-600/20"
+                    ? "bg-primary/10 text-primary shadow-sm border border-primary/20"
                     : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
             )}
         >
-            <item.icon className={cn("w-4 h-4", isActive ? "text-red-500" : "text-zinc-400 group-hover:text-zinc-100")} />
+            <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-zinc-400 group-hover:text-zinc-100")} />
             <span className="relative z-10">{item.name}</span>
         </Link>
     )

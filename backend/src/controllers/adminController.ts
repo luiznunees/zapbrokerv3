@@ -98,3 +98,36 @@ export const getFinance = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// Saldo de crédito pré-pago do OpenRouter — sem isso, um saldo zerado só aparece como
+// erro 402 nos logs do servidor, e o agente vai silenciosamente pro fallback (Groq/Gemini)
+// sem ninguém perceber que o provedor principal parou de funcionar.
+export const getAiCredits = async (req: AuthRequest, res: Response) => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+        res.status(200).json({ configured: false, status: 'unknown', remaining: null });
+        return;
+    }
+
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/credits', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+        });
+
+        if (!response.ok) {
+            throw new Error(`OpenRouter respondeu ${response.status}`);
+        }
+
+        const body = await response.json();
+        const totalCredits = Number(body?.data?.total_credits ?? 0);
+        const totalUsage = Number(body?.data?.total_usage ?? 0);
+        const remaining = totalCredits - totalUsage;
+
+        const status = remaining <= 0 ? 'empty' : remaining <= 5 ? 'low' : 'ok';
+
+        res.status(200).json({ configured: true, status, remaining, totalCredits, totalUsage });
+    } catch (error: any) {
+        console.error('[AdminController] Failed to fetch OpenRouter credits:', error.message);
+        res.status(200).json({ configured: true, status: 'unknown', remaining: null, error: error.message });
+    }
+};

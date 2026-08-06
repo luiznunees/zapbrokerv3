@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, TrendingDown, DollarSign, Cpu } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Cpu, Zap } from 'lucide-react'
 
 interface FinanceOverview {
     period: { startDate: string; endDate: string }
@@ -23,6 +23,7 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 export default function AdminFinancePage() {
     const [data, setData] = useState<FinanceOverview | null>(null)
+    const [aiCredits, setAiCredits] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -31,6 +32,7 @@ export default function AdminFinancePage() {
             .then((res: FinanceOverview) => setData(res))
             .catch((err: any) => setError(err.message || 'Erro ao carregar dados financeiros'))
             .finally(() => setLoading(false))
+        api.admin.aiCredits().then(setAiCredits).catch(() => {})
     }, [])
 
     if (loading) return <div className="p-8 text-zinc-400">Carregando dados financeiros...</div>
@@ -46,6 +48,29 @@ export default function AdminFinancePage() {
                     Mês atual · câmbio usado: 1 USD ≈ {brl(data.exchangeRateUsed)}
                 </p>
             </div>
+
+            {aiCredits?.configured && (
+                <div className={`p-4 rounded-lg flex items-center gap-3 border ${
+                    aiCredits.status === 'empty' ? 'bg-red-500/10 border-red-900/50 text-red-400'
+                        : aiCredits.status === 'low' ? 'bg-amber-500/10 border-amber-900/50 text-amber-400'
+                        : 'bg-emerald-500/10 border-emerald-900/50 text-emerald-400'
+                }`}>
+                    <Zap className="w-5 h-5 shrink-0" />
+                    <span className="flex-1 text-sm">
+                        Saldo do OpenRouter: {aiCredits.remaining !== null ? `$${aiCredits.remaining.toFixed(2)} USD` : 'indisponível'}
+                        {aiCredits.status === 'empty' && ' — zerado, o agente está no fallback'}
+                        {aiCredits.status === 'low' && ' — considere recarregar'}
+                    </span>
+                    <a
+                        href="https://openrouter.ai/settings/credits"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold underline shrink-0"
+                    >
+                        Gerenciar créditos
+                    </a>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-zinc-900 border-zinc-800">
