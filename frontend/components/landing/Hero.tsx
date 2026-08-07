@@ -1,60 +1,19 @@
 "use client"
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Clock, CreditCard, Smartphone, Star, ArrowUpRight } from 'lucide-react'
 import { WhatsAppMockup } from './WhatsAppMockup'
 
 const AVATAR_COLORS = ['bg-primary/20', 'bg-indigo-200', 'bg-primary/30', 'bg-indigo-300']
 
+const REGION = 'Litoral Norte RS'
+
 export function Hero() {
-    const [city, setCity] = useState('Sua Cidade')
-
-    useEffect(() => {
-        async function getLocation() {
-            try {
-                const response = await fetch('https://geoip.vuiz.net/geoip')
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.city) {
-                        setCity(data.city)
-                        return
-                    }
-                }
-            } catch (e) { console.warn('geoip.vuiz.net failed') }
-
-            try {
-                const response = await fetch('https://ipapi.co/json/')
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.city) {
-                        setCity(data.city)
-                        return
-                    }
-                }
-            } catch (e) { console.warn('ipapi failed') }
-
-            try {
-                const response = await fetch('https://get.geojs.io/v1/ip/geo.json')
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.city) {
-                        setCity(data.city)
-                        return
-                    }
-                }
-            } catch (e) { console.warn('geojs failed') }
-
-            setCity('Capão da Canoa')
-        }
-        getLocation()
-    }, [])
-
     return (
         <section className="relative overflow-hidden landing-sky-gradient pt-14 pb-8 md:pt-20">
             <div className="container relative mx-auto px-4 md:px-6 text-center">
                 <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-5 text-white leading-[1.05] text-balance max-w-4xl mx-auto">
-                    Corretor de {city}, nunca mais esqueça<br className="hidden md:block" /> um lead no WhatsApp.
+                    Corretor do {REGION}, nunca mais esqueça<br className="hidden md:block" /> um lead no WhatsApp.
                 </h1>
 
                 <p className="text-base md:text-lg text-white/70 mb-8 leading-relaxed max-w-xl mx-auto">
