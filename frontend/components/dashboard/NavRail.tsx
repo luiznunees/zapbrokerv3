@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Users, Send, Settings,
   LogOut, Plus,
-  Store
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDashboard } from "@/contexts/dashboard-context"
@@ -16,7 +15,7 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, href: "/dashboard", label: "Painel" },
   { icon: Users, href: "/dashboard/leads", label: "Leads" },
   { icon: Send, href: "/dashboard/campaigns", label: "Campanhas" },
-  { icon: Store, href: "/dashboard/loja", label: "Loja de Extras" },
+  // Loja de Extras oculta temporariamente — página em app/dashboard/loja/page.tsx continua intacta.
 ]
 
 export function NavRail() {

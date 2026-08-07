@@ -462,6 +462,13 @@ export default function DashboardPage() {
         if (instance?.status === "connected") {
           stopWhatsAppPolling(messageId)
           updateWhatsAppState(messageId, { status: "connected" })
+          if (currentSessionId && currentDraft?.instanceId !== instanceId) {
+            handleAction({
+              type: "set_draft_instances",
+              data: { sessionId: currentSessionId, instanceIds: [instanceId], instanceNames: [instance.name] },
+              label: instance.name,
+            })
+          }
         }
       } catch {
         // silencioso — tenta de novo no próximo tick
@@ -934,7 +941,7 @@ export default function DashboardPage() {
                           className={cn(
                             "size-9 rounded-2xl flex items-center justify-center shrink-0 mt-0.5",
                             msg.role === "agent"
-                              ? "bg-gradient-to-br from-primary/80 to-indigo-500/80 shadow-lg shadow-primary/20"
+                              ? "bg-gradient-to-br from-primary/80 to-sky-500/80 shadow-lg shadow-primary/20"
                               : "bg-primary shadow-lg shadow-primary/20"
                           )}
                         >
@@ -1065,7 +1072,7 @@ export default function DashboardPage() {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4"
                     >
-                      <div className="size-9 rounded-2xl bg-gradient-to-br from-primary/80 to-indigo-500/80 shadow-lg shadow-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="size-9 rounded-2xl bg-gradient-to-br from-primary/80 to-sky-500/80 shadow-lg shadow-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                         <Bot className="size-4 text-white" />
                       </div>
                       <div className="glass rounded-3xl rounded-tl-sm px-4 py-3">
