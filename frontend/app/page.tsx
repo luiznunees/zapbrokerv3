@@ -4,6 +4,7 @@ import { Features } from "@/components/landing/Features"
 import { AgentShowcase } from "@/components/landing/AgentShowcase"
 import { Pricing } from "@/components/landing/Pricing"
 import { FAQ } from "@/components/landing/FAQ"
+import { AppPromo } from "@/components/landing/AppPromo"
 import { Footer, CTA } from "@/components/landing/Footer"
 
 export default function LandingPage() {
@@ -17,6 +18,7 @@ export default function LandingPage() {
           <AgentShowcase />
           <Pricing />
           <FAQ />
+          <AppPromo />
           <CTA />
         </main>
         <Footer />

@@ -1,18 +1,40 @@
 "use client"
 
 import { useState } from 'react'
-import { HelpCircle, MessageCircle, BookOpen, X } from 'lucide-react'
+import { HelpCircle, MessageCircle, BookOpen, X, Download } from 'lucide-react'
 import { HowItWorksModal } from '@/components/dashboard/HowItWorksModal'
+import { InstallAppModal } from '@/components/dashboard/InstallAppModal'
+import { usePwaInstall } from '@/hooks/usePwaInstall'
 
 export default function SupportButton() {
     const [isOpen, setIsOpen] = useState(false)
     const [showHowItWorks, setShowHowItWorks] = useState(false)
+    const [showInstallSteps, setShowInstallSteps] = useState(false)
+    const { canInstall, isIOS, promptInstall } = usePwaInstall()
+
+    const handleInstallClick = () => {
+        setIsOpen(false)
+        if (canInstall) {
+            promptInstall()
+        } else if (isIOS) {
+            setShowInstallSteps(true)
+        }
+    }
 
     return (
         <>
             <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col items-end gap-2">
                 {isOpen && (
                     <div className="bg-card border border-border rounded-2xl shadow-xl p-2 w-56 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                        {(canInstall || isIOS) && (
+                            <button
+                                onClick={handleInstallClick}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-accent transition-colors text-left"
+                            >
+                                <Download className="size-4 text-primary shrink-0" />
+                                Instalar app
+                            </button>
+                        )}
                         <button
                             onClick={() => { setShowHowItWorks(true); setIsOpen(false) }}
                             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-accent transition-colors text-left"
@@ -42,6 +64,7 @@ export default function SupportButton() {
             </div>
 
             {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+            {showInstallSteps && <InstallAppModal onClose={() => setShowInstallSteps(false)} />}
         </>
     )
 }
