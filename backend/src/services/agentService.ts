@@ -14,7 +14,7 @@ import { logEvent } from './eventLogService';
 // recorrente) — resolve tanto o limite de tokens/minuto da Groq grátis quanto a necessidade
 // de cartão internacional (OpenRouter aceita qualquer cartão usado só na hora de recarregar).
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL_OVERRIDE || 'anthropic/claude-haiku-4.5';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Fallback 1: Groq (tier grátis, sujeito a rate limit de 12k TPM) — mantido como camada
@@ -23,8 +23,13 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Fallback 2 (última linha): quando OpenRouter e Groq falham, o agente cai pro Gemini
-// automaticamente em vez de devolver "tive um problema" pro usuário.
+// Fallback 2: modelo grátis do próprio OpenRouter (mesma conta/chave, não consome saldo
+// pago nem exige cartão) — tentado se o modelo pago falhar por falta de crédito, antes
+// de gastar a cota do Groq/Gemini.
+const OPENROUTER_FREE_MODEL = 'openai/gpt-oss-20b:free';
+
+// Fallback 3 (última linha): quando OpenRouter (pago e grátis) e Groq falham, o agente cai
+// pro Gemini automaticamente em vez de devolver "tive um problema" pro usuário.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const geminiClient = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
@@ -158,10 +163,11 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'update_campaign_draft',
-      description: 'Atualiza o rascunho de disparo em andamento nesta conversa. Chame sempre que entender uma nova informação relevante (mensagem, WhatsApp a usar, agendamento, timing). Não inclua a lista de contatos aqui — ela é escolhida por um seletor visual (use request_contact_list_selection).',
+      description: 'Atualiza o rascunho de disparo em andamento nesta conversa. Chame sempre que entender uma nova informação relevante (mensagem, WhatsApp a usar, lista de contatos confirmada por texto, agendamento, timing).',
       parameters: {
         type: 'object',
         properties: {
+          contactListName: { type: 'string', description: 'Nome (ou parte) da lista de contatos que o usuário confirmou por texto (ex: respondeu "sim" depois de você oferecer o nome dela, ou citou o nome). Prefira request_contact_list_selection quando ainda não estiver claro qual lista ou houver mais de uma.' },
           instanceName: { type: 'string', description: 'Nome (ou parte) do WhatsApp que o usuário quer usar (disparo por um único número)' },
           instanceNames: { type: 'array', items: { type: 'string' }, description: 'Nomes (ou partes) de 2+ WhatsApps quando o corretor quer dividir o disparo entre vários números — use em vez de instanceName' },
           messageVariations: { type: 'array', items: { type: 'string' }, description: 'Uma ou mais variações da mensagem a enviar' },
@@ -211,7 +217,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'request_instance_selection',
-      description: 'Mostra um seletor visual dos WhatsApps conectados pro usuário escolher qual(is) usar no disparo (suporta escolher mais de um, pra dividir o envio entre vários números). Use em vez de tentar casar o nome do WhatsApp por texto.',
+      description: 'Mostra um seletor visual dos WhatsApps conectados pro usuário escolher qual(is) usar no disparo (suporta escolher mais de um, pra dividir o envio entre vários números). Use quando houver 2+ WhatsApps conectados e não estiver claro por texto qual usar. Se só houver um conectado, ou o usuário citou claramente qual, prefira update_campaign_draft com instanceName direto.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -560,8 +566,19 @@ function resolveDraftReferences(
   const draft: CampaignDraft = { ...current };
   const patchTouchedTiming = patch.delaySeconds !== undefined || patch.sequentialMode !== undefined || patch.blockDelay !== undefined;
 
-  // A lista de contatos é definida via componente visual (set_draft_list), não por texto —
-  // ver executeAction(). Aqui só resolvemos a instância de WhatsApp por nome.
+  // A lista de contatos normalmente é definida via componente visual (set_draft_list), mas
+  // também aceita confirmação por texto aqui (ex: usuário responde "sim" ou cita o nome
+  // depois do seletor já ter sido mostrado) — ver executeAction().
+  if (typeof (patch as any).contactListName === 'string') {
+    const query = (patch as any).contactListName.toLowerCase();
+    const match = lists.find(l => l.name.toLowerCase().includes(query) || query.includes(l.name.toLowerCase()));
+    if (match) {
+      draft.contactListId = match.id;
+      draft.contactListName = match.name;
+      draft.leadCount = match.leadCount;
+    }
+  }
+
   if (typeof (patch as any).instanceName === 'string') {
     const query = (patch as any).instanceName.toLowerCase();
     const match = instances.find(i => i.name.toLowerCase().includes(query) || query.includes(i.name.toLowerCase()));
@@ -769,8 +786,8 @@ ${recentSessionsText}
 
 VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder de memória:
 - get_contact_lists / get_whatsapp_instances / get_campaign_stats: chame ANTES de responder qualquer pergunta sobre listas, WhatsApps conectados ou desempenho de campanhas. Nunca invente números ou nomes.
-- update_campaign_draft: chame toda vez que entender uma informação nova relevante pro disparo (mensagem, WhatsApp, agendamento). NÃO inclua lista de contatos aqui. Use "instanceName" pra um único número, ou "instanceNames" (lista) quando o corretor quiser dividir o disparo entre 2+ números conectados — o envio real faz o balanceamento automático entre eles, você só precisa registrar quais números usar.
-- request_contact_list_selection: chame quando faltar a lista no rascunho e o assunto de lista/contatos/leads vier à tona — isso mostra um seletor visual pro usuário. Não peça pro usuário digitar o nome da lista.
+- update_campaign_draft: chame toda vez que entender uma informação nova relevante pro disparo (mensagem, WhatsApp, agendamento). Use "instanceName" pra um único número, ou "instanceNames" (lista) quando o corretor quiser dividir o disparo entre 2+ números conectados — o envio real faz o balanceamento automático entre eles, você só precisa registrar quais números usar.
+- request_contact_list_selection: chame quando faltar a lista no rascunho e o assunto de lista/contatos/leads vier à tona pela primeira vez — isso mostra um seletor visual pro usuário. Se depois disso o usuário confirmar por TEXTO (ex: "sim", "essa mesma", citar o nome da lista) em vez de clicar no seletor, chame update_campaign_draft com "contactListName" pra registrar — nunca diga "lista selecionada" sem ter chamado uma dessas duas.
 - request_media_upload: chame se quiser oferecer anexar imagem/vídeo/áudio ao disparo.
 - request_timing_confirmation: chame quando lista e mensagem já estiverem definidas e faltar confirmar o tempo entre mensagens/tamanho dos lotes — isso mostra um seletor visual com valores recomendados, mas quem decide é o usuário. NUNCA pergunte esses números em texto nem assuma que ele aceitou o valor recomendado sem passar por esse seletor.
 - request_schedule_confirmation: chame sempre que o usuário mencionar agendar/data/hora pro disparo — NÃO tente converter "amanhã de manhã" pra ISO você mesmo, sempre mostre o seletor.
@@ -814,6 +831,8 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - Se o usuário disser que "já tem" WhatsApp conectado (sem citar qual), chame get_whatsapp_instances antes de perguntar mais nada. Se só existir um conectado, já use esse via update_campaign_draft e confirme pelo nome — NÃO pergunte "qual número" como se houvesse várias opções quando só tem uma.
 - Se o usuário pedir pra conectar "mais um" WhatsApp mesmo já tendo um conectado, NÃO diga que já está conectado e recuse — chame suggest_connect_whatsapp normalmente; o botão vai gerar o QR Code de um número novo (respeitando o limite do plano dele).
 - NUNCA diga que um QR Code, seletor ou botão "apareceu"/"já está na tela" a menos que você tenha chamado a tool correspondente NESSE MESMO turno — isso inclui repetir a mesma alegação depois. Se o usuário disser que não está vendo nada (QR Code, seletor, botão), isso significa que a tool não foi chamada ou precisa ser chamada de novo: chame de novo nesse turno, nunca insista que "já apareceu".
+- NUNCA diga "lista selecionada"/"mensagem definida" a menos que o rascunho já tenha esse campo preenchido (veja "JÁ DEFINIDO" acima) — se o usuário só confirmou por texto, chame update_campaign_draft com contactListName ANTES de confirmar isso na resposta, nunca depois.
+- NUNCA diga "WhatsApp vinculado"/"podemos prosseguir com esse número" a menos que o rascunho já tenha instanceId definido. Se o usuário acabou de conectar um número (evento do sistema ou confirmação em texto), chame update_campaign_draft com o instanceName desse número ANTES de dizer que está tudo pronto.
 - Nunca contradiga o "JÁ DEFINIDO" na sua resposta em texto.
 - Mensagens que começam com "[EVENTO DO SISTEMA — não é fala do usuário]" não foram digitadas pelo usuário — são notificações automáticas de uma ação que ele fez pela interface (escolheu uma lista, anexou mídia). Reaja normalmente continuando a conversa a partir disso, seguindo a REGRA DE OURO acima — nunca pare depois de um evento desses sem fazer a próxima pergunta ou confirmar que está tudo pronto.
 
@@ -1510,7 +1529,14 @@ async function callLLM(
       const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken, forceText);
       return { ...result, provider: 'openrouter', model: OPENROUTER_MODEL };
     } catch (error: any) {
-      console.warn('[AgentService] OpenRouter falhou, tentando próximo provedor:', error.message);
+      console.warn('[AgentService] OpenRouter (pago) falhou, tentando modelo grátis:', error.message);
+    }
+
+    try {
+      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_FREE_MODEL, workingMessages, onToken, forceText);
+      return { ...result, provider: 'openrouter', model: OPENROUTER_FREE_MODEL };
+    } catch (error: any) {
+      console.warn('[AgentService] OpenRouter (grátis) falhou, tentando próximo provedor:', error.message);
     }
   }
 
@@ -1524,6 +1550,10 @@ async function callLLM(
     }
   } else if (!geminiClient && !OPENROUTER_API_KEY) {
     throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY, GROQ_API_KEY ou GEMINI_API_KEY)');
+  }
+
+  if (!geminiClient) {
+    throw new Error('Todos os provedores de IA configurados falharam.');
   }
 
   const result = await callGeminiCompletion(workingMessages, onToken);
@@ -2048,6 +2078,17 @@ export async function chat(
     console.error(`[AgentService] Error for user ${userId}:`, error.message);
 
     const fallbackReply = 'Desculpa, tive um problema ao processar sua mensagem. Pode tentar de novo?';
+    logAgentTurn({
+      userId,
+      sessionId: currentSessionId,
+      userMessage,
+      toolCalls: [],
+      iterations: 0,
+      hitIterationLimit: false,
+      finalReply: `${fallbackReply} [ERROR: ${error.message}]`,
+      provider: 'error',
+      model: 'error',
+    });
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', fallbackReply);
     // Mesmo numa falha de IA, o rascunho já salvo não pode sumir da tela — só

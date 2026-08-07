@@ -4,9 +4,15 @@
 //
 // Requer AGENT_TEST_USER_ID no .env — um usuário real já existente no banco.
 // Roda com: npm run test:agent
+//
+// Usa um modelo gratuito do OpenRouter (não a mesma conta paga/mesma cota de Gemini/Groq
+// da produção) pra nunca mais competir pela cota de fallback que usuários reais dependem.
+// Precisa vir ANTES do require de agentService — import seria hoisted e leria a env var tarde
+// demais (OPENROUTER_MODEL é lido uma única vez, no module-load).
+process.env.OPENROUTER_MODEL_OVERRIDE = process.env.OPENROUTER_MODEL_OVERRIDE || 'openai/gpt-oss-20b:free';
 
-import { chat, createSession, deleteSession } from '../src/services/agentService';
-import { getRecentAgentTurns } from '../src/services/agentLogService';
+const { chat, createSession, deleteSession } = require('../src/services/agentService') as typeof import('../src/services/agentService');
+const { getRecentAgentTurns } = require('../src/services/agentLogService') as typeof import('../src/services/agentLogService');
 
 const userId = process.env.AGENT_TEST_USER_ID;
 
