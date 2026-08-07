@@ -43,9 +43,24 @@
   --color-brand-green-400: #4ADE80;
   --color-brand-green-500: #22C55E;
   --color-brand-green-600: #16A34A;
+
+  --color-brand-lime-400: #E2FF6E;
+  --color-brand-lime-500: #D4FF3F;
+  --color-brand-lime-600: #A8D400;
+
+  /* Tokens do azul/navy — mesma paleta usada na landing, agora também a cor de marca
+     (--primary) do produto inteiro. */
+  --color-landing-sky-deep: #0B3B82;
+  --color-landing-sky: #2E7CF6;
+  --color-landing-sky-light: #7FB3FF;
+  --color-landing-lime: #D4FF3F;
+  --color-landing-lime-dark: #A8D400;
+  --color-landing-navy: #0A0E1A;
+  --color-landing-ink: #0F1424;
+  --color-landing-mist: #F5F7FA;
 }
 
-/* Modern Clean Zinc + Indigo Palette */
+/* Paleta azul/navy + lima — design system do produto inteiro (era roxo/índigo) */
 :root {
   --background: #ffffff;
   --foreground: #09090b;
@@ -56,8 +71,8 @@
   --popover: #ffffff;
   --popover-foreground: #09090b;
 
-  --primary: #8A5BF5;
-  /* Brand Purple */
+  --primary: #2E7CF6;
+  /* Brand Sky Blue */
   --primary-foreground: #ffffff;
 
   --secondary: #f4f4f5;
@@ -74,13 +89,13 @@
 
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #8A5BF5;
+  --ring: #2E7CF6;
 
   --radius: 0.5rem;
 
-  --gradient-purple: linear-gradient(135deg, #6E29DA 0%, #8A5BF5 100%);
+  --gradient-purple: linear-gradient(135deg, #0B3B82 0%, #2E7CF6 100%);
   --gradient-green: linear-gradient(135deg, #4ADE80 0%, #22C55E 100%);
-  --gradient-hero: linear-gradient(180deg, #FAF5FF 0%, #FFFFFF 100%);
+  --gradient-hero: linear-gradient(180deg, #EFF5FF 0%, #FFFFFF 100%);
 }
 
 body {
@@ -89,9 +104,9 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-/* Custom Landing Page Utilities */
+/* Custom Utilities */
 .text-brand-purple {
-  background: linear-gradient(135deg, #6E29DA 0%, #8A5BF5 100%);
+  background: linear-gradient(135deg, #0B3B82 0%, #2E7CF6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -156,5 +171,16 @@ body {
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
   opacity: 0.2;
+}
+
+/* Tipografia de marca — Bricolage Grotesque (display) + Manrope (corpo), aplicadas
+   globalmente via frontend/app/layout.tsx. .font-display fica disponível em qualquer
+   página pra títulos com mais personalidade. */
+.font-display {
+  font-family: var(--font-display), sans-serif;
+}
+
+.landing-sky-gradient {
+  background: radial-gradient(120% 100% at 50% 0%, var(--color-landing-sky-light) 0%, var(--color-landing-sky) 45%, var(--color-landing-sky-deep) 100%);
 }
 

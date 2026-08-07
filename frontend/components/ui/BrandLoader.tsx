@@ -31,8 +31,8 @@ export function BrandLoader({ size = "md", label, className, fullScreen }: Brand
       <svg width={width} height={height} viewBox="0 0 174 117" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Carregando">
         <defs>
           <linearGradient id={gradientId} x1="423.5" y1="-41.5" x2="246" y2="177" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#6E29DA" />
-            <stop offset="1" stopColor="#8A5BF5" />
+            <stop stopColor="#0B3B82" />
+            <stop offset="1" stopColor="#2E7CF6" />
           </linearGradient>
           <clipPath id={clipId}>
             <motion.rect

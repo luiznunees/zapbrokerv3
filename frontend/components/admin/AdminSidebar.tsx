@@ -50,7 +50,7 @@ export default function AdminSidebar() {
             <div className="p-4 border-b border-zinc-800">
                 <div className="flex items-center gap-2 mb-4 mt-2">
                     <BrandLogo className="h-6 w-auto text-white" monochrome />
-                    <span className="text-xs font-bold bg-gradient-to-r from-primary to-indigo-500 px-2 py-0.5 rounded text-white">ADMIN</span>
+                    <span className="text-xs font-bold bg-gradient-to-r from-primary to-sky-500 px-2 py-0.5 rounded text-white">ADMIN</span>
                 </div>
             </div>
 

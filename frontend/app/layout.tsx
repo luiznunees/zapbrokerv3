@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Bricolage_Grotesque, Manrope } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display" });
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "ZapBroker - Venda no Piloto Automático",
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
-  themeColor: "#8A5BF5",
+  themeColor: "#2E7CF6",
 };
 
 export default function RootLayout({
@@ -31,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
+      <body className={`${manrope.className} ${bricolage.variable} ${manrope.variable}`}>
         <ThemeProvider>
           {children}
           <ToastProvider />

@@ -23,8 +23,8 @@ export function BrandIcon({ className, monochrome = false }: BrandProps) {
             {!monochrome && (
                 <defs>
                     <linearGradient id="paint_icon_linear" x1="423.5" y1="-41.5" x2="246" y2="177" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#6E29DA" />
-                        <stop offset="1" stopColor="#8A5BF5" />
+                        <stop stopColor="#0B3B82" />
+                        <stop offset="1" stopColor="#2E7CF6" />
                     </linearGradient>
                 </defs>
             )}
@@ -54,8 +54,8 @@ export function BrandLogo({ className, monochrome = false }: BrandProps) {
             {!monochrome && (
                 <defs>
                     <linearGradient id="paint_logo_linear" x1="423.5" y1="-41.5" x2="246" y2="177" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#6E29DA" />
-                        <stop offset="1" stopColor="#8A5BF5" />
+                        <stop stopColor="#0B3B82" />
+                        <stop offset="1" stopColor="#2E7CF6" />
                     </linearGradient>
                 </defs>
             )}

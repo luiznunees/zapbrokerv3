@@ -1,6 +1,6 @@
 "use client"
 
-// Shared brand primitives for auth screens — same color (primary/indigo gradient),
+// Shared brand primitives for auth screens — same color (primary/sky-blue gradient),
 // typography scale and control styling everywhere, even when each page's layout differs.
 export function AuthInput({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
     return (
@@ -42,11 +42,11 @@ export function GradientBlobs({ className = '' }: { className?: string }) {
     return (
         <div className={`absolute inset-0 overflow-hidden ${className}`}>
             <div className="absolute -top-10 -left-10 w-64 h-64 rounded-full bg-white/30 blur-3xl" />
-            <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-indigo-900/30 blur-3xl" />
-            <div className="absolute top-1/3 left-1/4 w-56 h-56 rounded-full bg-purple-300/40 blur-3xl" />
+            <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-blue-900/30 blur-3xl" />
+            <div className="absolute top-1/3 left-1/4 w-56 h-56 rounded-full bg-sky-300/40 blur-3xl" />
         </div>
     )
 }
 
-export const AUTH_PAGE_BG = 'bg-[#eef0fb]'
-export const AUTH_GRADIENT = 'bg-gradient-to-br from-primary via-indigo-500 to-primary/60'
+export const AUTH_PAGE_BG = 'bg-[#eef2fb]'
+export const AUTH_GRADIENT = 'bg-gradient-to-br from-primary via-sky-500 to-primary/60'
