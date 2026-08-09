@@ -1,15 +1,31 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import { Menu, X, ArrowUpRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const [isScrolled, setIsScrolled] = useState(false)
+
+    useEffect(() => {
+        const onScroll = () => setIsScrolled(window.scrollY > 12)
+        onScroll()
+        window.addEventListener('scroll', onScroll, { passive: true })
+        return () => window.removeEventListener('scroll', onScroll)
+    }, [])
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-landing-navy/95 backdrop-blur-md border-b border-white/10">
+        <header
+            className={cn(
+                'fixed inset-x-0 top-0 z-50 w-full transition-colors duration-300',
+                isScrolled || isMenuOpen
+                    ? 'bg-landing-navy/95 backdrop-blur-md border-b border-white/10'
+                    : 'bg-transparent border-b border-transparent'
+            )}
+        >
             <div className="container mx-auto max-w-6xl px-4 md:px-6">
                 <div className="flex items-center justify-between h-16">
                     <BrandLogo className="h-6 w-auto text-white" monochrome />

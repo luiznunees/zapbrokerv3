@@ -36,7 +36,7 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false,
 }));
 
-const productionOrigins = ['https://zapbroker.dev', 'https://www.zapbroker.dev'];
+const productionOrigins = ['https://zapbroker.dev', 'https://www.zapbroker.dev', 'https://app.zapbroker.dev'];
 const devOrigins = ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'http://192.168.0.242:3000'];
 
 app.use(cors({
