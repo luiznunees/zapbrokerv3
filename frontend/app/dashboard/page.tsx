@@ -41,6 +41,7 @@ type Action = {
 type WhatsAppQrState = {
   instanceId: string
   qrCode: string | null
+  pairingCode: string | null
   status: WhatsAppQrStatus
 }
 
@@ -479,7 +480,17 @@ export default function DashboardPage() {
   const regenerateWhatsAppQr = async (messageId: string, instanceId: string) => {
     try {
       const data = await api.instances.connect(instanceId)
-      updateWhatsAppState(messageId, { qrCode: data.base64 || null, status: "connecting" })
+      updateWhatsAppState(messageId, { qrCode: data.base64 || null, pairingCode: null, status: "connecting" })
+      startWhatsAppPolling(messageId, instanceId)
+    } catch {
+      updateWhatsAppState(messageId, { status: "expired" })
+    }
+  }
+
+  const requestWhatsAppPairingCode = async (messageId: string, instanceId: string, phoneNumber: string) => {
+    try {
+      const data = await api.instances.connect(instanceId, phoneNumber)
+      updateWhatsAppState(messageId, { pairingCode: data.pairingCode || null, qrCode: null, status: "connecting" })
       startWhatsAppPolling(messageId, instanceId)
     } catch {
       updateWhatsAppState(messageId, { status: "expired" })
@@ -660,6 +671,7 @@ export default function DashboardPage() {
         resultMessage.whatsapp = {
           instanceId: response.result.instanceId,
           qrCode: response.result.qrCode || null,
+          pairingCode: response.result.pairingCode || null,
           status: response.result.alreadyConnected ? "connected" : "connecting",
         }
       }
@@ -980,8 +992,10 @@ export default function DashboardPage() {
                           {msg.whatsapp && (
                             <ChatWhatsAppQR
                               qrCode={msg.whatsapp.qrCode}
+                              pairingCode={msg.whatsapp.pairingCode}
                               status={msg.whatsapp.status}
                               onRegenerate={() => regenerateWhatsAppQr(msg.id, msg.whatsapp!.instanceId)}
+                              onRequestPairingCode={(phoneNumber) => requestWhatsAppPairingCode(msg.id, msg.whatsapp!.instanceId, phoneNumber)}
                             />
                           )}
 

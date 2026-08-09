@@ -7,12 +7,27 @@ export interface QRCodeModalProps {
     isOpen: boolean;
     onClose: () => void;
     qrCode: string | null;
+    pairingCode?: string | null;
     isLoading: boolean;
     onRetry: () => void;
+    onRequestPairingCode: (phoneNumber: string) => void;
 }
 
-export function QRCodeModal({ isOpen, onClose, qrCode, isLoading, onRetry }: QRCodeModalProps) {
+function isMobileDevice() {
+    if (typeof navigator === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, onRetry, onRequestPairingCode }: QRCodeModalProps) {
     const [isTimedOut, setIsTimedOut] = React.useState(false);
+    const [mode, setMode] = React.useState<'qrcode' | 'code'>('qrcode');
+    const [phoneNumber, setPhoneNumber] = React.useState('');
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setMode(isMobileDevice() ? 'code' : 'qrcode');
+        }
+    }, [isOpen]);
 
     React.useEffect(() => {
         if (isOpen && qrCode) {
@@ -46,8 +61,71 @@ export function QRCodeModal({ isOpen, onClose, qrCode, isLoading, onRetry }: QRC
                         </button>
                     </div>
 
+                    <div className="px-6 pt-4">
+                        <div className="flex bg-accent/50 rounded-lg p-1">
+                            <button
+                                onClick={() => setMode('qrcode')}
+                                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${mode === 'qrcode' ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}
+                            >
+                                QR Code
+                            </button>
+                            <button
+                                onClick={() => setMode('code')}
+                                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${mode === 'code' ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}
+                            >
+                                Código
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="p-8 flex flex-col items-center justify-center text-center space-y-6">
-                        {isLoading ? (
+                        {mode === 'code' ? (
+                            pairingCode ? (
+                                <div className="space-y-4">
+                                    <p className="text-3xl font-bold tracking-[0.3em] text-foreground bg-accent/50 rounded-xl py-4 px-6">
+                                        {pairingCode}
+                                    </p>
+                                    <div>
+                                        <p className="text-sm font-medium text-foreground">
+                                            1. No celular com o WhatsApp, vá em Configurações {'>'} Aparelhos Conectados
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            2. Toque em "Conectar um Aparelho" {'>'} "Conectar com número de telefone"
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            3. Digite o código acima
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => onRequestPairingCode(phoneNumber)}
+                                        className="text-xs underline text-muted-foreground"
+                                    >
+                                        Gerar novo código
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 w-full">
+                                    <p className="text-sm text-muted-foreground">
+                                        Digite o número de WhatsApp que será conectado (com DDI e DDD):
+                                    </p>
+                                    <input
+                                        type="tel"
+                                        inputMode="numeric"
+                                        placeholder="5511999999999"
+                                        value={phoneNumber}
+                                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                                        className="w-full text-center text-lg font-medium bg-accent/50 border border-border rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                    <button
+                                        onClick={() => onRequestPairingCode(phoneNumber)}
+                                        disabled={isLoading || phoneNumber.length < 10}
+                                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-all"
+                                    >
+                                        {isLoading ? 'Gerando...' : 'Gerar Código'}
+                                    </button>
+                                </div>
+                            )
+                        ) : isLoading ? (
                             <div className="py-8">
                                 <BrandLoader size="md" label="Gerando QR Code seguro..." />
                             </div>

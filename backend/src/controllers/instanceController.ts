@@ -51,7 +51,8 @@ export const connect = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
-        const result = await instanceService.connectInstance(userId, id);
+        const { number } = req.query;
+        const result = await instanceService.connectInstance(userId, id, typeof number === 'string' ? number : undefined);
         res.status(200).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });

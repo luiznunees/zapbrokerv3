@@ -40,7 +40,7 @@ export const createInstance = async (userId: string, name: string) => {
     return data;
 };
 
-export const connectInstance = async (userId: string, instanceId: string) => {
+export const connectInstance = async (userId: string, instanceId: string, phoneNumber?: string) => {
     const { data: instance } = await supabase
         .from('instances')
         .select('*')
@@ -52,10 +52,10 @@ export const connectInstance = async (userId: string, instanceId: string) => {
         throw new Error('Instance not found');
     }
 
-    // Connect (Get QR Code)
-    const base64 = await evolutionService.getSessionScreen(instance.evolution_id);
+    // Connect (Get QR Code or Pairing Code)
+    const { base64, pairingCode } = await evolutionService.getSessionScreen(instance.evolution_id, phoneNumber);
 
-    return { base64: base64 };
+    return { base64, pairingCode };
 };
 
 export const getInstances = async (userId: string) => {

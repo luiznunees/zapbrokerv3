@@ -48,16 +48,19 @@ export const startSession = async (instanceName: string) => {
     return { status: 'started' };
 };
 
-export const getSessionScreen = async (instanceName: string) => {
+export const getSessionScreen = async (instanceName: string, phoneNumber?: string) => {
     try {
-        // GET /instance/connect/{instance}
-        const response = await api.get(`/instance/connect/${instanceName}`);
-        // Evolution returns { base64: "..." } or { qrcode: { base64: "..." } }
+        // GET /instance/connect/{instance}?number={phone}
+        const response = await api.get(`/instance/connect/${instanceName}`, {
+            params: phoneNumber ? { number: phoneNumber } : undefined
+        });
+        // Evolution returns { base64: "..." } or { qrcode: { base64: "..." } }, and { pairingCode: "..." } when a number is passed
         const base64 = response.data.base64 || response.data.qrcode?.base64;
-        return base64;
+        const pairingCode = response.data.pairingCode || response.data.qrcode?.pairingCode;
+        return { base64: base64 || null, pairingCode: pairingCode || null };
     } catch (error: any) {
         console.error('Error getting Evolution QR:', error.response?.data || error.message);
-        return null;
+        return { base64: null, pairingCode: null };
     }
 };
 

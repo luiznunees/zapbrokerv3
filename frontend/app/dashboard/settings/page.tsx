@@ -48,6 +48,7 @@ export default function SettingsPage() {
     const [loadingInstances, setLoadingInstances] = useState(true);
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
     const [qrCode, setQrCode] = useState<string | null>(null);
+    const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [qrLoading, setQrLoading] = useState(false);
     const [connectingInstanceId, setConnectingInstanceId] = useState<string | null>(null);
     const [isNewInstanceModalOpen, setIsNewInstanceModalOpen] = useState(false);
@@ -188,16 +189,20 @@ export default function SettingsPage() {
         }
     };
 
-    const handleConnect = async (instanceId: string) => {
+    const handleConnect = async (instanceId: string, phoneNumber?: string) => {
         setConnectingInstanceId(instanceId);
         setIsQRModalOpen(true);
         setQrLoading(true);
         setQrCode(null);
+        setPairingCode(null);
 
         try {
-            const data = await api.instances.connect(instanceId);
+            const data = await api.instances.connect(instanceId, phoneNumber);
             if (data.base64) {
                 setQrCode(data.base64);
+            }
+            if (data.pairingCode) {
+                setPairingCode(data.pairingCode);
             }
         } catch (error) {
             console.error('Failed to connect');
@@ -572,8 +577,10 @@ export default function SettingsPage() {
                                 setConnectingInstanceId(null);
                             }}
                             qrCode={qrCode}
+                            pairingCode={pairingCode}
                             isLoading={qrLoading}
                             onRetry={() => connectingInstanceId && handleConnect(connectingInstanceId)}
+                            onRequestPairingCode={(phoneNumber) => connectingInstanceId && handleConnect(connectingInstanceId, phoneNumber)}
                         />
 
                     </div>

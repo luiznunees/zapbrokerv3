@@ -75,7 +75,7 @@ export const api = {
     instances: {
         list: () => fetchAPI('/instances'),
         create: (name: string) => fetchAPI('/instances', { method: 'POST', body: JSON.stringify({ name }) }),
-        connect: (id: string) => fetchAPI(`/instances/${id}/connect`),
+        connect: (id: string, phoneNumber?: string) => fetchAPI(`/instances/${id}/connect${phoneNumber ? `?number=${encodeURIComponent(phoneNumber)}` : ''}`),
         logout: (id: string) => fetchAPI(`/instances/${id}/logout`, { method: 'POST' }),
         delete: (id: string) => fetchAPI(`/instances/${id}`, { method: 'DELETE' }),
     },

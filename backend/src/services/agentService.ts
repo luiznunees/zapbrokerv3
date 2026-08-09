@@ -2233,12 +2233,12 @@ export async function executeAction(
           instance = await instanceService.createInstance(userId, `WhatsApp ${instances.length + 1}`);
         }
 
-        const { base64 } = await instanceService.connectInstance(userId, instance.id);
+        const { base64, pairingCode } = await instanceService.connectInstance(userId, instance.id);
 
         return {
           success: true,
           message: 'Escaneie o QR Code abaixo com seu WhatsApp para conectar:',
-          result: { type: 'whatsapp_qr', instanceId: instance.id, qrCode: base64 || null, alreadyConnected: false },
+          result: { type: 'whatsapp_qr', instanceId: instance.id, qrCode: base64 || null, pairingCode: pairingCode || null, alreadyConnected: false },
         };
       } catch (error: any) {
         console.error(`[AgentService] connect_whatsapp error for user ${userId}:`, error.message);
