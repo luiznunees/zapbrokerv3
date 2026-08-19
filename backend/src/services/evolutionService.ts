@@ -18,24 +18,34 @@ const api = axios.create({
     }
 });
 
-export const createSession = async (instanceName: string) => {
+export const createSession = async (instanceName: string, phoneNumber?: string) => {
     try {
         // Evolution v2: POST /instance/create
-        const payload = {
+        // Criar já com "number" evita o problema de pairing code/QR travado que acontece
+        // ao pedir conexão numa instância criada sem número e reconectada depois (ver
+        // /instance/connect): confirmado manualmente que esse caminho funciona de forma
+        // confiável, diferente do fluxo criar-depois-conectar.
+        const payload: Record<string, any> = {
             instanceName: instanceName,
             token: instanceName, // Using name as token for simplicity
             qrcode: true,
             integration: "WHATSAPP-BAILEYS"
         };
+        if (phoneNumber) {
+            payload.number = phoneNumber;
+        }
 
         console.log('Creating Evolution instance:', instanceName);
         const response = await api.post('/instance/create', payload);
-        return response.data;
+        const data = response.data;
+        const base64 = data.base64 || data.qrcode?.base64;
+        const pairingCode = data.pairingCode || data.qrcode?.pairingCode;
+        return { ...data, base64: base64 || null, pairingCode: pairingCode || null };
     } catch (error: any) {
         if (error.response?.data?.error === 'Instance already exists' ||
             error.response?.data?.response?.message?.includes('already exists')) {
             console.log(`Instance ${instanceName} already exists in Evolution.`);
-            return { instance: { instanceName: instanceName } };
+            return { instance: { instanceName: instanceName }, base64: null, pairingCode: null };
         }
         console.error('Error creating Evolution instance:', error.response?.data || error.message);
         throw new Error('Failed to create WhatsApp instance');

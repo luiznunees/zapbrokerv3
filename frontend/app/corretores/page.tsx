@@ -11,9 +11,12 @@ import { LpStickyBar } from "@/components/landing/lp/LpStickyBar"
 import { LpFooter } from "@/components/landing/lp/LpFooter"
 
 export const metadata: Metadata = {
-    title: "ZapBroker — Pare de perder lead por demorar pra responder",
-    description: "O agente do ZapBroker organiza sua conversa, lembra de responder e sugere follow-up — direto no seu WhatsApp. Ative em 2 minutos.",
+    title: "Pare de perder lead por demorar pra responder",
+    description: "O ZapBroker dispara mensagem pra toda sua lista de leads de uma vez — direto no seu WhatsApp. Ative em 2 minutos.",
     robots: { index: false, follow: false },
+    alternates: {
+        canonical: "/corretores",
+    },
 }
 
 export default function CorretoresLandingPage() {

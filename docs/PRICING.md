@@ -4,8 +4,6 @@
 
 Cobrança por **disparo/mês**. Um disparo = 1 envio para uma lista de leads (qualquer tamanho).
 
-Follow-ups sugeridos pelo agente **não** consomem disparo.
-
 ## Planos
 
 | Plano | Disparos/mês | Leads na base | Conexões WhatsApp | Preço |
@@ -22,7 +20,6 @@ Follow-ups sugeridos pelo agente **não** consomem disparo.
 | Leads na base | 30 | 500 | Ilimitado |
 | Conexões WhatsApp | 1 | 2 | 5 |
 | Painel web (chat com agente) | ✅ | ✅ | ✅ |
-| Agente sugere follow-ups | ✅ | ✅ | ✅ |
 | Agente sugere upgrade | ✅ | ✅ | ✅ |
 | Notificações no WhatsApp do corretor | ✅ | ✅ | ✅ |
 | Envio de áudio no painel | ✅ | ✅ | ✅ |

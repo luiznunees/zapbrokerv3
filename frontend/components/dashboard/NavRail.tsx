@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Users, Send, Settings,
-  LogOut, Plus,
+  LogOut, Plus, Wifi,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDashboard } from "@/contexts/dashboard-context"
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, href: "/dashboard", label: "Painel" },
   { icon: Users, href: "/dashboard/leads", label: "Leads" },
   { icon: Send, href: "/dashboard/campaigns", label: "Campanhas" },
+  { icon: Wifi, href: "/dashboard/connection", label: "Conectar WhatsApp" },
   // Loja de Extras oculta temporariamente — página em app/dashboard/loja/page.tsx continua intacta.
 ]
 

@@ -42,6 +42,7 @@ interface CreatePixChargeParams {
         cellphone: string;
         taxId: string;
     };
+    extraMetadata?: Record<string, string>;
 }
 
 export async function createPixCharge(
@@ -69,6 +70,7 @@ export async function createPixCharge(
             metadata: {
                 subscription_id: params.subscriptionId,
                 user_id: params.userId,
+                ...(params.extraMetadata || {}),
             },
         },
     };

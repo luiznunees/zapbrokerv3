@@ -3,6 +3,7 @@ import { supabase } from '../config/supabase';
 import { PLANS } from '../config/plans';
 import * as billingService from '../services/billingService';
 import * as emailService from '../services/emailService';
+import { sendPushToUser } from '../services/pushService';
 
 // AbacatePay has no recurring PIX today, so renewals are manual: a few days before
 // next_billing_date we generate a fresh one-time checkout and remind the customer to pay it;
@@ -50,11 +51,12 @@ async function generateUpcomingBillings() {
         }
 
         try {
+            const addonsAmount = await billingService.getAddonsAmount(sub.user_id);
             await billingService.generateBillingCheckout({
                 subscriptionId: sub.id,
                 userId: sub.user_id,
                 planId: sub.plan_id,
-                amount: plan.price,
+                amount: plan.price + addonsAmount,
                 customer: {
                     name: user.name,
                     email: user.email,
@@ -74,6 +76,12 @@ async function generateUpcomingBillings() {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const renewalUrl = `${frontendUrl}/checkout/redirect?planId=${sub.plan_id}&subscriptionId=${sub.id}`;
             await emailService.sendPaymentReminderEmail(user.email, user.name, renewalUrl);
+
+            sendPushToUser(sub.user_id, {
+                title: '⏰ Sua renovação vence em breve',
+                body: 'Pague o PIX e continue no piloto automático. Seus leads não esperam!',
+                url: `/checkout/redirect?planId=${sub.plan_id}&subscriptionId=${sub.id}`,
+            }).catch(err => console.error('[MonthlyBilling] Push error:', err.message));
 
             console.log(`[MonthlyBilling] Generated renewal checkout for subscription ${sub.id}.`);
         } catch (err: any) {
@@ -108,6 +116,12 @@ async function markOverdueSubscriptions() {
         const checkoutUrl = `${frontendUrl}/checkout/redirect?planId=${sub.plan_id}&subscriptionId=${sub.id}`;
         emailService.sendSubscriptionOverdueEmail(user.email, user.name || 'corretor(a)', checkoutUrl)
             .catch(err => console.error(`[MonthlyBilling] Failed to send overdue email for subscription ${sub.id}:`, err.message));
+
+        sendPushToUser(sub.user_id, {
+            title: '🚨 Atenção: acesso suspenso',
+            body: 'Sua renovação venceu e o ZapBroker está parado. Pague o PIX e volte a vender!',
+            url: `/checkout/redirect?planId=${sub.plan_id}&subscriptionId=${sub.id}`,
+        }).catch(err => console.error('[MonthlyBilling] Overdue push error:', err.message));
     }
 }
 

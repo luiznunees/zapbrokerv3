@@ -17,10 +17,10 @@ export function AgentShowcase() {
 
                     <div className="relative z-10">
                         <h2 className="font-display text-xl md:text-3xl font-bold tracking-tight mb-3 text-white leading-tight text-balance">
-                            O agente cuida do disparo enquanto você atende cliente
+                            Você fala, o agente monta o disparo
                         </h2>
                         <p className="text-sm text-white/70 leading-relaxed mb-5 max-w-md">
-                            Você fala o que quer no painel, igual conversa no ChatGPT. O agente monta o disparo, acompanha quem respondeu e te avisa no seu próprio WhatsApp quando algum lead precisa de atenção.
+                            Você fala o que quer no painel, igual conversa no ChatGPT. O agente monta o disparo, escreve a mensagem e te avisa no seu próprio WhatsApp quando terminar de enviar.
                         </p>
                         <Link
                             href="/login"

@@ -12,8 +12,7 @@ Corretores têm **preguiça** de criar campanhas — acham confuso, dá trabalho
 
 Um **agente conversacional** que:
 - O corretor fala o que quer em linguagem natural
-- O agente sugere o melhor momento e mensagem pra cada lead
-- O corretor só aprova, edita, ou recusa
+- O agente monta o disparo (lista, mensagem, horário) e confirma antes de enviar
 - Tudo via chat no navegador + notificações no WhatsApp
 
 ---
@@ -25,7 +24,6 @@ Um **agente conversacional** que:
 | Disparo | Envio de mensagem para uma lista de leads (antes: "campanha") |
 | Leads | Contatos do corretor (antes: "clientes") |
 | Painel | Interface web (antes: "dashboard") |
-| Lembrar lead | Follow-up sugerido pelo agente |
 | Adicionar leads | Importar contatos (CSV/XLSX/digitado) |
 | Assinar plano | Upgrade (antes: "upgrade de plano") |
 
@@ -56,34 +54,26 @@ O agente **não envia nada sozinho**. Ele sugere, o corretor aprova.
 - Agente notifica no WhatsApp:
   > "✅ Disparo 'Vila Mariana' finalizado. 45/130 leads visualizaram."
 
-**4. Agente Sugestivo**
-- Monitora disparos em andamento
-- Identifica leads que não responderam
-- Sugere: *"João não responde há 3 dias. Quer que eu lembre ele?"*
-- Corretor: [Aprovar] [Editar] [Recusar]
-- Se aprovar, agente envia o lembrete
-
-**5. Notificações no WhatsApp do Corretor**
+**4. Notificações no WhatsApp do Corretor**
 - Agente manda mensagem no WhatsApp do corretor:
   - *"✅ Disparo 'Vila Mariana' concluído — 150 mensagens enviadas"*
-  - *"💡 12 leads não responderam. Quer ver sugestões?"*
   - *"📩 João (11 99999-8888) respondeu: 'Qual o valor?'"*
 - Corretor responde do próprio WhatsApp ou vai pro painel
 
-**6. Agente Sugere Upgrade**
+**5. Agente Sugere Upgrade**
 - Quando detecta que o corretor engajou:
   > *"João, você já usou seu disparo grátis e 5 leads responderam. Quer continuar? Com R$39/mês você faz mais disparos."*
 
-**7. Memória de Contexto**
+**6. Memória de Contexto**
 - Agente guarda histórico de cada lead
 - Sabe se o lead já perguntou preço, visitou, pediu fotos
-- Usa esse contexto pra sugerir lembretes personalizados
+- Usa esse contexto pra montar a mensagem do próximo disparo
 
-**8. Envio de Áudio**
+**7. Envio de Áudio**
 - Corretor grava áudio diretamente no painel
 - Áudio fica anexado à conversa do lead
 
-**9. Anexar Arquivos**
+**8. Anexar Arquivos**
 - Corretor sobe PDFs, imagens, planilhas
 - Agente associa ao lead correto
 
@@ -138,10 +128,6 @@ O agente **não envia nada sozinho**. Ele sugere, o corretor aprova.
 ```
 11. Agente notifica no WhatsApp do corretor:
     "✅ Disparo 'Vila Mariana' finalizado. 45/130 leads visualizaram."
-
-12. Dias depois, agente sugere:
-    "💡 23 leads não responderam. Quer enviar um lembrete?"
-    [Aprovar] [Editar] [Recusar]
 ```
 
 ### 5. Gerenciar (Painel Chat)
@@ -180,13 +166,9 @@ O agente **não envia nada sozinho**. Ele sugere, o corretor aprova.
 Corretor: "O que tenho hoje?"
 Agente: "Disparo 'Casa Jardins' rodou há 2 dias.
          15 leads receberam. 5 responderam, 10 não.
-         Quer ver quem não respondeu?"
-Corretor: "Sim"
-Agente: "1. João - perguntou preço mas não voltou (3 dias)
-         2. Maria - pediu fotos, não respondeu (2 dias)
-         3. Carlos - só 'obrigado' (5 dias)
-         Sugiro lembrete pra João e Maria. Quer que eu crie?"
-Corretor: [Aprovar] [Editar mensagem] [Recusar]
+         Quer disparar de novo pra quem não respondeu?"
+Corretor: "Sim, manda pra eles"
+Agente: "Beleza! Vou montar o disparo pra esses 10 leads. Qual mensagem quer mandar?"
 ```
 
 ### Notificação no WhatsApp
@@ -194,9 +176,6 @@ Corretor: [Aprovar] [Editar mensagem] [Recusar]
 ```
 [ZapBroker] ✅ Disparo 'Cobertura Pinheiros' finalizado!
 45 mensagens enviadas. 12 leads responderam.
-
-[ZapBroker] 💡 João não respondeu há 3 dias.
-Quer que eu envie um lembrete?
 ➡️ Acesse o painel: zapbroker.dev/chat
 ```
 

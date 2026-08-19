@@ -24,8 +24,8 @@ const STEPS = [
     },
     {
         icon: BellRing,
-        title: "Agente avisa quem sumiu",
-        description: "Ele acompanha os disparos e te avisa no seu WhatsApp quando um lead não responde, sugerindo um lembrete.",
+        title: "Acompanhe quem recebeu",
+        description: "Veja no seu WhatsApp quantos leads visualizaram e quantos ainda não responderam.",
     },
 ]
 

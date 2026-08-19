@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabase } from '../config/supabase';
 import * as instanceService from './instanceService';
 import * as contactService from './contactService';
@@ -10,29 +9,12 @@ import { logAiCost } from './costService';
 import { logAgentTurn } from './agentLogService';
 import { logEvent } from './eventLogService';
 
-// Provedor principal: créditos pré-pagos (compra um bloco, vai consumindo, sem cobrança
-// recorrente) — resolve tanto o limite de tokens/minuto da Groq grátis quanto a necessidade
-// de cartão internacional (OpenRouter aceita qualquer cartão usado só na hora de recarregar).
+// Provedor principal (único): OpenRouter com modelo pago (claude-haiku-4.5). Os fallbacks
+// free (gpt-oss-20b:free, Groq llama-3.3-70b, Gemini flash-lite) foram removidos porque
+// sempre caíam em rate limit — o teste revelou que os 3 estouravam cota no mesmo dia.
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL_OVERRIDE || 'anthropic/claude-haiku-4.5';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-// Fallback 1: Groq (tier grátis, sujeito a rate limit de 12k TPM) — mantido como camada
-// extra, não custa nada deixar configurado mesmo com o OpenRouter como principal.
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-
-// Fallback 2: modelo grátis do próprio OpenRouter (mesma conta/chave, não consome saldo
-// pago nem exige cartão) — tentado se o modelo pago falhar por falta de crédito, antes
-// de gastar a cota do Groq/Gemini.
-const OPENROUTER_FREE_MODEL = 'openai/gpt-oss-20b:free';
-
-// Fallback 3 (última linha): quando OpenRouter (pago e grátis) e Groq falham, o agente cai
-// pro Gemini automaticamente em vez de devolver "tive um problema" pro usuário.
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const geminiClient = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -40,11 +22,11 @@ interface ChatMessage {
 }
 
 export interface Action {
-  type: 'suggest_followup' | 'suggest_upgrade' | 'import_leads' | 'connect_whatsapp' | 'confirm_campaign' | 'set_draft_list' | 'set_draft_media' | 'set_draft_timing'
+  type: 'suggest_upgrade' | 'import_leads' | 'connect_whatsapp' | 'confirm_campaign' | 'set_draft_list' | 'set_draft_media' | 'set_draft_timing'
     | 'cancel_scheduled_campaign' | 'disconnect_whatsapp' | 'merge_duplicate_contacts'
     | 'set_draft_schedule' | 'set_draft_instances' | 'set_draft_messages'
     | 'acknowledge_antiban_warning' | 'apply_duplicated_campaign' | 'cancel_duplicated_campaign' | 'acknowledge_quota_warning'
-    | 'create_followup' | 'set_draft_exclusions';
+    | 'set_draft_exclusions';
   title: string;
   data?: any;
 }
@@ -93,7 +75,7 @@ export interface CampaignDraft {
 export interface AgentComponent {
   type: 'list_picker' | 'file_upload' | 'timing_confirm' | 'schedule_picker' | 'instance_picker'
     | 'message_editor' | 'campaign_summary' | 'antiban_warning' | 'duplicate_campaign_confirm'
-    | 'quota_confirm' | 'followup_scheduler' | 'lead_picker' | 'contact_exclusion';
+    | 'quota_confirm' | 'lead_picker' | 'contact_exclusion';
   purpose?: string;
 }
 
@@ -234,14 +216,6 @@ const AGENT_TOOLS = [
     function: {
       name: 'request_contact_exclusion',
       description: 'Mostra um seletor visual dos leads da lista escolhida pro usuário marcar quais quer excluir desse disparo específico. Use quando o usuário disser que quer excluir alguém da lista antes de enviar.',
-      parameters: { type: 'object', properties: {}, required: [] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'request_followup_scheduler',
-      description: 'Mostra um seletor visual com os leads parados (sem resposta há alguns dias) pro usuário escolher quais querem receber um follow-up, com mensagem e horário de envio. Use quando o usuário quiser fazer follow-up de leads parados.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -1203,12 +1177,6 @@ async function executeTool(
       return { ok: true };
     }
 
-    case 'request_followup_scheduler': {
-      const stalledLeads = await campaignService.getStalledLeads(userId);
-      state.component = { type: 'followup_scheduler', purpose: JSON.stringify({ stalledLeads }) };
-      return { ok: true, stalledCount: stalledLeads.length };
-    }
-
     case 'cancel_draft':
       state.draft = null;
       await saveDraft(userId, sessionId, null);
@@ -1399,126 +1367,11 @@ async function executeTool(
 
 const MAX_TOOL_ITERATIONS = 5;
 
-// ─── Conversão pro formato do Gemini (fallback) ──────────────
-// Mantemos o histórico de mensagens sempre no formato OpenAI/Groq (é o que o
-// loop de tools em chat() já monta) e só traduzimos na hora de chamar o Gemini.
+// ─── Dispatcher ──────────────────────
 
-function toGeminiSchema(schema: any): any {
-  if (!schema || typeof schema !== 'object') return schema;
-  if (Array.isArray(schema)) return schema.map(toGeminiSchema);
-  const out: any = {};
-  for (const [key, value] of Object.entries(schema)) {
-    out[key] = key === 'type' && typeof value === 'string' ? value.toUpperCase() : toGeminiSchema(value);
-  }
-  return out;
-}
-
-function openAiToolsToGemini(tools: typeof AGENT_TOOLS) {
-  return [{
-    functionDeclarations: tools.map(t => ({
-      name: t.function.name,
-      description: t.function.description,
-      parameters: toGeminiSchema(t.function.parameters),
-    })),
-  }];
-}
-
-function safeParseJson(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
-  }
-}
-
-function openAiMessagesToGemini(messages: any[]): { systemInstruction?: string; contents: any[] } {
-  let systemInstruction: string | undefined;
-  const contents: any[] = [];
-
-  for (const m of messages) {
-    if (m.role === 'system') {
-      systemInstruction = m.content;
-    } else if (m.role === 'user') {
-      contents.push({ role: 'user', parts: [{ text: m.content }] });
-    } else if (m.role === 'assistant') {
-      const parts: any[] = [];
-      if (m.content) parts.push({ text: m.content });
-      if (m.tool_calls) {
-        for (const call of m.tool_calls) {
-          parts.push({ functionCall: { name: call.function.name, args: safeParseJson(call.function.arguments || '{}') } });
-        }
-      }
-      contents.push({ role: 'model', parts: parts.length ? parts : [{ text: '' }] });
-    } else if (m.role === 'tool') {
-      contents.push({
-        role: 'function',
-        parts: [{ functionResponse: { name: m.name || 'tool', response: safeParseJson(m.content) } }],
-      });
-    }
-  }
-
-  return { systemInstruction, contents };
-}
-
-function parseGeminiResponse(response: any): { content: string; tool_calls?: GroqToolCall[] } {
-  const parts = response?.candidates?.[0]?.content?.parts || [];
-  let content = '';
-  const toolCalls: GroqToolCall[] = [];
-
-  for (const part of parts) {
-    if (part.text) content += part.text;
-    if (part.functionCall) {
-      toolCalls.push({
-        id: `gemini_${toolCalls.length}_${Date.now()}`,
-        type: 'function',
-        function: { name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args || {}) },
-      });
-    }
-  }
-
-  return { content, tool_calls: toolCalls.length > 0 ? toolCalls : undefined };
-}
-
-function extractGeminiUsage(response: any): { inputTokens: number; outputTokens: number } {
-  const usage = response?.usageMetadata;
-  return { inputTokens: usage?.promptTokenCount || 0, outputTokens: usage?.candidatesTokenCount || 0 };
-}
-
-async function callGeminiCompletion(
-  workingMessages: any[],
-  onToken?: (token: string) => void
-): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number } }> {
-  if (!geminiClient) throw new Error('Gemini not configured');
-
-  const { systemInstruction, contents } = openAiMessagesToGemini(workingMessages);
-  const model = geminiClient.getGenerativeModel({
-    model: GEMINI_MODEL,
-    systemInstruction,
-    tools: openAiToolsToGemini(AGENT_TOOLS) as any,
-  });
-
-  if (!onToken) {
-    const result = await model.generateContent({ contents });
-    return { ...parseGeminiResponse(result.response), usage: extractGeminiUsage(result.response) };
-  }
-
-  const emitSafeToken = createStreamSanitizer(onToken);
-  const result = await model.generateContentStream({ contents });
-  let content = '';
-  for await (const chunk of result.stream) {
-    const text = chunk.text();
-    if (text) {
-      content += text;
-      emitSafeToken(text);
-    }
-  }
-  const finalResponse = await result.response;
-  const { tool_calls } = parseGeminiResponse(finalResponse);
-  return { content, tool_calls, usage: extractGeminiUsage(finalResponse) };
-}
-
-// ─── Dispatcher com fallback automático ──────────────────────
-
+// Provedores free (OpenRouter grátis, Groq, Gemini) foram removidos: sempre caíam em
+// rate limit (free-models-per-day zerado, TPM 12000, cota free 10-20/dia). O agente
+// usa apenas o OpenRouter pago (OPENROUTER_MODEL_OVERRIDE).
 async function callLLM(
   workingMessages: any[],
   onToken?: (token: string) => void,
@@ -1529,35 +1382,11 @@ async function callLLM(
       const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken, forceText);
       return { ...result, provider: 'openrouter', model: OPENROUTER_MODEL };
     } catch (error: any) {
-      console.warn('[AgentService] OpenRouter (pago) falhou, tentando modelo grátis:', error.message);
-    }
-
-    try {
-      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_FREE_MODEL, workingMessages, onToken, forceText);
-      return { ...result, provider: 'openrouter', model: OPENROUTER_FREE_MODEL };
-    } catch (error: any) {
-      console.warn('[AgentService] OpenRouter (grátis) falhou, tentando próximo provedor:', error.message);
+      throw new Error(`Erro na comunicação com a IA: ${error.message}`);
     }
   }
 
-  if (GROQ_API_KEY) {
-    try {
-      const result = await callOpenAiCompatibleCompletion(GROQ_API_URL, GROQ_API_KEY, GROQ_MODEL, workingMessages, onToken, forceText);
-      return { ...result, provider: 'groq', model: GROQ_MODEL };
-    } catch (error: any) {
-      if (!geminiClient) throw error;
-      console.warn('[AgentService] Groq falhou, usando Gemini como fallback:', error.message);
-    }
-  } else if (!geminiClient && !OPENROUTER_API_KEY) {
-    throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY, GROQ_API_KEY ou GEMINI_API_KEY)');
-  }
-
-  if (!geminiClient) {
-    throw new Error('Todos os provedores de IA configurados falharam.');
-  }
-
-  const result = await callGeminiCompletion(workingMessages, onToken);
-  return { ...result, provider: 'gemini', model: GEMINI_MODEL };
+  throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY)');
 }
 
 async function callOpenAiCompatibleCompletion(
@@ -1918,7 +1747,7 @@ async function continueAfterAction(
   sessionId: string,
   eventDescription: string
 ): Promise<{ reply: string; actions: Action[]; draft: CampaignDraft | null; component: AgentComponent | null }> {
-  if (!OPENROUTER_API_KEY && !GROQ_API_KEY && !geminiClient) {
+  if (!OPENROUTER_API_KEY) {
     return { reply: '', actions: [], draft: await loadDraft(userId, sessionId), component: null };
   }
 
@@ -1979,8 +1808,8 @@ export async function chat(
     currentSessionId = session.id;
   }
 
-  if (!OPENROUTER_API_KEY && !GROQ_API_KEY && !geminiClient) {
-    const reply = 'Olá! 👋 Para eu poder ajudar, preciso que você configure a chave da IA (OPENROUTER_API_KEY, GROQ_API_KEY ou GEMINI_API_KEY) no arquivo .env do sistema. Peça pro seu desenvolvedor ou administrador adicionar essa chave.';
+  if (!OPENROUTER_API_KEY) {
+    const reply = 'Olá! 👋 Para eu poder ajudar, preciso que você configure a chave da IA (OPENROUTER_API_KEY) no arquivo .env do sistema. Peça pro seu desenvolvedor ou administrador adicionar essa chave.';
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', reply);
     return {
@@ -2110,7 +1939,7 @@ export async function chat(
 }
 
 export async function getSuggestions(userId: string): Promise<Array<{ icon: string; title: string; desc: string; action: string }>> {
-  if (!OPENROUTER_API_KEY && !GROQ_API_KEY) {
+  if (!OPENROUTER_API_KEY) {
     return [
       { icon: 'rocket', title: 'Criar campanha', desc: 'Comece um disparo para seus leads', action: 'start_dispatch' },
       { icon: 'upload', title: 'Importar contatos', desc: 'Adicione leads à sua base', action: 'import_leads' },
@@ -2136,7 +1965,7 @@ Gere exatamente 3 sugestões contextualizadas para o usuário com base nos dados
 REGRAS:
 - Se o usuário NÃO tem leads: sugira importar contatos.
 - Se tem leads mas NUNCA criou campanha: sugira criar a primeira campanha.
-- Se tem campanhas criadas: sugira analisar resultados ou criar follow-up.
+- Se tem campanhas criadas: sugira analisar resultados ou criar um novo disparo.
 - Se NÃO tem WhatsApp conectado: sugira conectar.
 - Se já tem WhatsApp conectado e leads: incentive a criar campanha.
 - Nunca sugira upgrade de plano.
@@ -2144,7 +1973,7 @@ REGRAS:
 - As sugestões devem ser curtas, diretas e em português.
 
 Retorne APENAS um JSON array sem markdown, sem texto extra:
-[{ "icon": "rocket|upload|wifi|target|trending|alert|send", "title": "Título curto", "desc": "Descrição de uma linha", "action": "start_dispatch|import_leads|connect_whatsapp|view_campaigns|suggest_followup|follow_up_stalled" }]
+[{ "icon": "rocket|upload|wifi|target|trending|alert|send", "title": "Título curto", "desc": "Descrição de uma linha", "action": "start_dispatch|import_leads|connect_whatsapp|view_campaigns" }]
 
 Dados do usuário:
 - Nome: ${ctx.userName}
@@ -2155,16 +1984,15 @@ Dados do usuário:
       }
     ];
 
-    const [apiUrl, apiKey, model] = OPENROUTER_API_KEY
-      ? [OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL]
-      : [GROQ_API_URL, GROQ_API_KEY as string, GROQ_MODEL];
+    const [apiUrl, apiKey, model] = [OPENROUTER_API_URL, OPENROUTER_API_KEY as string, OPENROUTER_MODEL];
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
-        ...(apiUrl === OPENROUTER_API_URL ? { 'HTTP-Referer': 'https://zapbroker.dev', 'X-Title': 'ZapBroker' } : {}),
+        'HTTP-Referer': 'https://zapbroker.dev',
+        'X-Title': 'ZapBroker',
       },
       body: JSON.stringify({
         model,
@@ -2685,99 +2513,6 @@ export async function executeAction(
         console.error(`[AgentService] acknowledge_quota_warning error for user ${userId}:`, error.message);
         return { success: false, message: 'Não consegui confirmar isso agora. Tenta de novo?' };
       }
-    }
-
-    case 'create_followup': {
-      const contactIds: string[] = Array.isArray(data?.contactIds) ? data.contactIds : [];
-      const message = typeof data?.message === 'string' ? data.message.trim() : '';
-      const scheduledAt = data?.scheduledAt ?? undefined;
-      if (contactIds.length === 0 || !message) {
-        return { success: false, message: 'Faltou escolher os leads e escrever a mensagem de follow-up.' };
-      }
-
-      try {
-        const instances = await instanceService.getInstances(userId);
-        const connected = instances.find((i: any) => i.status === 'connected');
-        if (!connected) {
-          return { success: false, message: 'Você precisa de um WhatsApp conectado pra enviar o follow-up.' };
-        }
-
-        // Os leads parados podem vir de listas diferentes — createCampaign exige uma lista só,
-        // então agrupamos por lista e disparamos só pros contatos escolhidos de cada uma
-        // (via exclusão invertida: exclui todo mundo da lista que NÃO foi escolhido).
-        const { data: contactRows, error: contactsError } = await supabase
-          .from('contacts')
-          .select('id, list_id')
-          .in('id', contactIds);
-        if (contactsError) throw new Error(contactsError.message);
-
-        const byList = new Map<string, string[]>();
-        for (const row of contactRows || []) {
-          if (!row.list_id) continue;
-          const arr = byList.get(row.list_id) ?? [];
-          arr.push(row.id);
-          byList.set(row.list_id, arr);
-        }
-        if (byList.size === 0) {
-          return { success: false, message: 'Não consegui identificar a lista desses leads.' };
-        }
-
-        // Cada grupo de lista vira uma campanha de verdade — consome cota mensal de
-        // campanhas igual a um disparo normal (mesma checagem de confirm_campaign),
-        // pra não virar um jeito de burlar o limite do plano.
-        const planId = await getUserPlanId(userId);
-        const availability = await QuotaService.checkAvailability(userId, planId, byList.size);
-        if (!availability.available) {
-          return {
-            success: false,
-            message: `Esse follow-up precisaria de ${byList.size} campanha(s), mas você só tem ${availability.remaining} disponível(is) este mês (limite: ${availability.limit}).`,
-          };
-        }
-
-        let createdCount = 0;
-        for (const [listId, selectedIds] of byList) {
-          const { data: allInList, error: allError } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('list_id', listId);
-          if (allError) throw new Error(allError.message);
-
-          const excludedContactIds = (allInList || []).map(c => c.id).filter(id => !selectedIds.includes(id));
-
-          await campaignService.createCampaign(
-            userId,
-            `Follow-up - ${new Date().toLocaleDateString('pt-BR')}`,
-            [message],
-            listId,
-            [connected.id],
-            scheduledAt,
-            5, 30, 60, 'text', undefined, false, 5,
-            excludedContactIds
-          );
-          createdCount += selectedIds.length;
-        }
-
-        return {
-          success: true,
-          message: `Follow-up criado pra ${createdCount} lead(s)! Vou avisar por aqui conforme for enviando.`,
-          result: { redirect: '/dashboard/campaigns' },
-        };
-      } catch (error: any) {
-        console.error(`[AgentService] create_followup error for user ${userId}:`, error.message);
-        return { success: false, message: `Não consegui criar o follow-up: ${error.message}` };
-      }
-    }
-
-    case 'suggest_followup': {
-      return {
-        success: true,
-        message: 'Vamos criar um follow-up! É só me contar pra qual lista e o que você quer mandar.',
-        result: {
-          redirect: '/dashboard/campaigns',
-          action: 'open_followup_modal',
-          data: data || {},
-        },
-      };
     }
 
     case 'confirm_campaign': {

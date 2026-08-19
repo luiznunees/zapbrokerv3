@@ -8,7 +8,7 @@ import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 export const create = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const { name } = req.body;
+        const { name, phoneNumber } = req.body;
 
         // 1. Check User's Plan
         const { data: subscription } = await supabase
@@ -40,7 +40,7 @@ export const create = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        const result = await instanceService.createInstance(userId, name);
+        const result = await instanceService.createInstance(userId, name, typeof phoneNumber === 'string' ? phoneNumber : undefined);
         res.status(201).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });

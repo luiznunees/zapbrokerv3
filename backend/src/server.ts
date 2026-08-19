@@ -59,6 +59,13 @@ const authLimiter = rateLimit({
     message: 'Too many login attempts, please try again later.'
 });
 
+// Webhooks must be registered BEFORE express.json() so their raw-body
+// middleware (express.raw) can still see the original payload. If the global
+// JSON parser runs first, it consumes the body and webhooks get an empty
+// buffer, breaking signature verification (Svix/HMAC) and JSON parsing.
+import webhookRoutes from './routes/webhookRoutes';
+app.use('/webhooks', webhookRoutes);
+
 app.use(express.json());
 
 // Apply auth limiter to auth routes
@@ -80,6 +87,12 @@ app.use('/uploads', authenticateToken, uploadRoutes);
 import instanceRoutes from './routes/instanceRoutes';
 app.use('/instances', instanceRoutes);
 
+import dedicatedNumberRoutes from './routes/dedicatedNumberRoutes';
+app.use('/dedicated-numbers', dedicatedNumberRoutes);
+
+import pushRoutes from './routes/pushRoutes';
+app.use('/push', pushRoutes);
+
 import contactRoutes from './routes/contactRoutes';
 app.use('/contact-lists', contactRoutes);
 
@@ -88,9 +101,6 @@ app.use('/api', apiContactRoutes);
 
 import campaignRoutes from './routes/campaignRoutes';
 app.use('/campaigns', campaignRoutes);
-
-import webhookRoutes from './routes/webhookRoutes';
-app.use('/webhooks', webhookRoutes);
 
 import quotaRoutes from './routes/quotaRoutes';
 app.use('/quotas', quotaRoutes);
@@ -111,6 +121,9 @@ startSubscriptionRenewalJob();
 
 import { startMonthlyBillingJob } from './jobs/monthlyBilling';
 startMonthlyBillingJob();
+
+import { startReengagementJob } from './jobs/reengagementPush';
+startReengagementJob();
 
 import './workers/campaignWorker'; // Start BullMQ Worker
 

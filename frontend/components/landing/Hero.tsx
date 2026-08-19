@@ -15,7 +15,7 @@ export function Hero() {
                 </h1>
 
                 <p className="text-base md:text-lg text-white/70 mb-8 leading-relaxed max-w-xl mx-auto">
-                    O ZapBroker envia campanhas no automático, acompanha quem não respondeu e sugere lembretes. Você aprova tudo em um clique.
+                    O ZapBroker dispara mensagem pra toda sua lista de leads de uma vez, direto no seu WhatsApp. Sem trocar de chip, sem digitar um por um.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
@@ -80,7 +80,7 @@ export function Hero() {
                 <div className="hidden lg:block absolute right-[14%] bottom-0 w-44 rotate-[4deg] hover:rotate-0 transition-transform duration-300">
                     <div className="rounded-2xl bg-landing-navy text-white shadow-2xl shadow-black/30 p-4">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-white/50 mb-2">Sem digitar nada</p>
-                        <p className="text-sm font-semibold leading-snug">O agente escreve, você só aprova.</p>
+                        <p className="text-sm font-semibold leading-snug">Uma mensagem, a lista inteira.</p>
                     </div>
                 </div>
             </div>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Creative 4 — Disparo em Massa (Instagram Story Ad, 9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0A0E1A;
+    --navy-soft: #131a2e;
+    --sky: #2E7CF6;
+    --sky-deep: #0B3B82;
+    --lime: #D4FF3F;
+    --mist: #F5F7FA;
+    --ink: #0F1424;
+    --whatsapp: #25D366;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; }
+  body {
+    font-family: 'Manrope', sans-serif;
+    background:
+      radial-gradient(1100px 700px at 50% -10%, var(--sky-deep) 0%, transparent 60%),
+      var(--navy);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ---------- Instagram Stories chrome ---------- */
+  .ig-progress { position: absolute; top: 24px; left: 24px; right: 24px; display: flex; gap: 6px; z-index: 5; }
+  .ig-progress i { flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.28); overflow: hidden; }
+  .ig-progress i.filled::after { content: ''; display: block; width: 62%; height: 100%; background: #fff; border-radius: 4px; }
+
+  .ig-header { position: absolute; top: 48px; left: 24px; right: 24px; display: flex; align-items: center; gap: 14px; z-index: 5; }
+  .ig-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--sky); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(255,255,255,0.9); }
+  .ig-avatar svg { width: 22px; height: 22px; }
+  .ig-who { display: flex; flex-direction: column; line-height: 1.25; }
+  .ig-who .name { font-weight: 800; font-size: 21px; }
+  .ig-who .meta { font-size: 16px; color: rgba(255,255,255,0.55); font-weight: 600; }
+  .ig-actions { margin-left: auto; display: flex; align-items: center; gap: 22px; color: rgba(255,255,255,0.85); }
+  .ig-actions svg { width: 26px; height: 26px; display: block; }
+
+  .ig-bottombar { position: absolute; bottom: 40px; left: 24px; right: 24px; z-index: 5; display: flex; align-items: center; gap: 18px; }
+  .ig-input { flex: 1; height: 68px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.4); display: flex; align-items: center; padding: 0 28px; font-size: 21px; font-weight: 600; color: rgba(255,255,255,0.7); }
+  .ig-bottombar svg { width: 30px; height: 30px; color: #fff; flex-shrink: 0; }
+  .ig-sponsored { position: absolute; bottom: 122px; left: 24px; font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.45); letter-spacing: 0.02em; z-index: 5; }
+
+  /* ---------- Content ---------- */
+  .stage {
+    position: absolute; inset: 0;
+    padding: 148px 76px 220px;
+    display: flex; flex-direction: column;
+  }
+
+  .stat-pill {
+    align-self: flex-start;
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    padding: 12px 24px 12px 14px;
+    font-size: 22px; font-weight: 700; color: rgba(255,255,255,0.92);
+  }
+  .stat-pill .dot { width: 34px; height: 34px; border-radius: 50%; background: var(--whatsapp); display: flex; align-items: center; justify-content: center; }
+  .stat-pill .dot svg { width: 18px; height: 18px; fill: #fff; }
+  .stat-pill b { font-variant-numeric: tabular-nums; }
+
+  h1 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 800;
+    font-size: 74px;
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin-top: 34px;
+    max-width: 9.4em;
+  }
+  h1 em { font-style: normal; color: var(--lime); }
+
+  .cta-row {
+    margin-top: 30px;
+    display: inline-flex; align-self: flex-start;
+    align-items: center; gap: 16px;
+    background: var(--lime);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 22px 34px;
+    font-weight: 800; font-size: 30px;
+    box-shadow: 0 18px 40px -12px rgba(212,255,63,0.4);
+  }
+  .cta-row .cursor { width: 34px; height: 34px; }
+
+  /* ---------- Phone mock ---------- */
+  .phone-wrap {
+    position: relative;
+    margin-top: 66px;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+  .avatars {
+    position: absolute; right: 8px; top: -18px; z-index: 3;
+  }
+  .avatars .a {
+    position: absolute; width: 108px; height: 108px; border-radius: 50%;
+    border: 5px solid var(--navy);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.35);
+  }
+  .avatars .a1 { top: 0; right: 0; background: linear-gradient(140deg, #FFD9A0, #F5A15A); }
+  .avatars .a2 { top: 132px; right: 96px; width: 88px; height: 88px; background: linear-gradient(140deg, #A7C7FF, #4C7EE0); }
+  .avatars .a3 { top: 250px; right: -6px; width: 92px; height: 92px; background: linear-gradient(140deg, #C9F2C9, #5CB86B); }
+  .avatars .badge { position: absolute; bottom: -6px; right: -6px; width: 36px; height: 36px; border-radius: 50%; background: var(--whatsapp); border: 3px solid var(--navy); display: flex; align-items: center; justify-content: center; }
+  .avatars .badge svg { width: 18px; height: 18px; fill: #fff; }
+
+  .phone {
+    width: 620px;
+    background: linear-gradient(180deg, #1c2438, #0d1220);
+    border-radius: 52px;
+    padding: 20px;
+    box-shadow: 0 50px 90px -30px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .screen {
+    background: var(--mist);
+    border-radius: 34px;
+    overflow: hidden;
+    color: var(--ink);
+  }
+  .chat-head {
+    background: var(--sky-deep);
+    color: #fff;
+    padding: 22px 26px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .chat-head .back { font-size: 26px; opacity: 0.85; }
+  .chat-head .av { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; }
+  .chat-head .who .n { font-weight: 800; font-size: 24px; }
+  .chat-head .who .s { font-size: 16px; color: rgba(255,255,255,0.7); font-weight: 600; }
+  .chat-head .icons { margin-left: auto; display: flex; gap: 20px; opacity: 0.85; }
+  .chat-head .icons svg { width: 24px; height: 24px; }
+
+  .chat-body { padding: 30px 26px 34px; }
+  .day { text-align: center; font-size: 14px; font-weight: 700; color: rgba(15,20,36,0.4); margin-bottom: 22px; letter-spacing: 0.04em; }
+
+  .bubble {
+    background: #fff;
+    border-radius: 22px;
+    border-top-left-radius: 6px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 2px 10px rgba(15,20,36,0.06);
+    max-width: 92%;
+  }
+  .bubble .thumb {
+    height: 210px; border-radius: 14px; margin-bottom: 14px;
+    background: linear-gradient(160deg, #DCE9FF 0%, #F5F7FA 55%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .bubble .thumb svg { width: 130px; height: 130px; }
+  .bubble .thumb .price {
+    position: absolute; left: 14px; bottom: 14px;
+    background: var(--ink); color: var(--lime);
+    font-weight: 800; font-size: 20px; padding: 8px 16px; border-radius: 999px;
+  }
+  .bubble p.msg { font-size: 21px; line-height: 1.5; font-weight: 600; color: var(--ink); }
+  .bubble p.msg b { color: var(--sky-deep); }
+  .bubble .meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 10px; font-size: 14px; color: rgba(15,20,36,0.4); font-weight: 700; }
+  .bubble .meta svg { width: 18px; height: 18px; }
+
+  .bubble-btn {
+    margin-top: 16px; background: var(--sky); color: #fff; text-align: center;
+    font-weight: 800; font-size: 20px; padding: 16px; border-radius: 16px;
+  }
+
+  .reply {
+    margin-top: 22px; margin-left: auto; max-width: 70%;
+    background: var(--sky); color: #fff;
+    border-radius: 22px; border-top-right-radius: 6px;
+    padding: 16px 20px; font-size: 20px; font-weight: 700;
+  }
+  .reply .meta { justify-content: flex-end; color: rgba(255,255,255,0.75); margin-top: 8px; }
+
+  .link-badge {
+    position: absolute; left: -18px; bottom: 96px; z-index: 4;
+    background: #fff; color: var(--ink);
+    display: flex; align-items: center; gap: 10px;
+    border-radius: 999px; padding: 14px 22px 14px 16px;
+    font-weight: 800; font-size: 22px;
+    box-shadow: 0 20px 40px -14px rgba(0,0,0,0.5);
+  }
+  .link-badge .ic { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: var(--lime); display: flex; align-items: center; justify-content: center; }
+  .link-badge .ic svg { width: 17px; height: 17px; }
+</style>
+</head>
+<body>
+
+  <div class="ig-progress">
+    <i class="filled"></i><i></i><i></i>
+  </div>
+
+  <div class="ig-header">
+    <div class="ig-avatar">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5 3.8 8.7 9 9 5.2-.3 9-4 9-9V7l-9-5z" fill="#0A0E1A"/><path d="M8.5 12.2l2.4 2.4 4.6-5" stroke="#D4FF3F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="ig-who">
+      <span class="name">zapbroker</span>
+      <span class="meta">Patrocinado · 3 d</span>
+    </div>
+    <div class="ig-actions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </div>
+  </div>
+
+  <div class="stage">
+
+    <div class="stat-pill">
+      <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.1.8 4 2.2 5.6L3 22l5.4-1.4c1.1.4 2.3.6 3.6.6 5.5 0 10-4.1 10-9.2S17.5 2 12 2z"/></svg></span>
+      <span><b>1.284</b> leads prontos pro disparo</span>
+    </div>
+
+    <h1>Uma mensagem.<br>Toda a <em>carteira</em>.<br>Um clique.</h1>
+
+    <div class="cta-row">
+      Dispara pra 1.284 contatos
+      <svg class="cursor" viewBox="0 0 24 24" fill="#0A0E1A"><path d="M4 2l16 8-7 2-2 7-7-17z"/></svg>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="avatars">
+        <div class="a a1">
+          <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="#0A0E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/></svg>
+          <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.1.8 4 2.2 5.6L3 22l5.4-1.4c1.1.4 2.3.6 3.6.6 5.5 0 10-4.1 10-9.2S17.5 2 12 2z"/></svg></div>
+        </div>
+        <div class="a a2">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#0A0E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/></svg>
+        </div>
+        <div class="a a3">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#0A0E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/></svg>
+          <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.1.8 4 2.2 5.6L3 22l5.4-1.4c1.1.4 2.3.6 3.6.6 5.5 0 10-4.1 10-9.2S17.5 2 12 2z"/></svg></div>
+        </div>
+      </div>
+
+      <div class="link-badge">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        zapbroker.dev
+      </div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="chat-head">
+            <span class="back">‹</span>
+            <div class="av">FC</div>
+            <div class="who">
+              <div class="n">Fernanda Costa</div>
+              <div class="s">visto por último hoje</div>
+            </div>
+            <div class="icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.8 2.2z"/></svg>
+            </div>
+          </div>
+          <div class="chat-body">
+            <div class="day">HOJE · 09:41</div>
+            <div class="bubble">
+              <div class="thumb">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#2E7CF6" stroke-width="1.4"><path d="M3 11.5L12 4l9 7.5"/><path d="M5.5 10v9.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V10"/><path d="M9.5 20.5V14h5v6.5"/></svg>
+                <span class="price">R$ 890 mil</span>
+              </div>
+              <p class="msg">Oi Fernanda! Acabou de entrar um <b>3 quartos no Petrópolis</b>, área de lazer completa. Combina com o que você procurava?</p>
+              <div class="bubble-btn">Ver fotos e agendar visita</div>
+              <div class="meta">09:41<svg viewBox="0 0 24 24" fill="none" stroke="#2E7CF6" stroke-width="2.4" stroke-linecap="round"><path d="M2 12l5 5L18 6"/><path d="M9 12l5 5L25 6" transform="translate(-2)"/></svg></div>
+            </div>
+            <div class="reply">
+              Manda mais fotos! Posso ver amanhã de manhã?
+              <div class="meta">09:44</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ig-sponsored">Patrocinado</div>
+  <div class="ig-bottombar">
+    <div class="ig-input">Enviar mensagem…</div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a1 1 0 0 0-1-.2L3.4 10.8a1 1 0 0 0 .1 1.9l6.7 2 2 6.7a1 1 0 0 0 1.9.1l6.4-16.4a1 1 0 0 0-.2-1z"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6c-1.9-1.7-4.9-1.6-6.6.3L12 7.3l-2.2-2.4c-1.7-1.9-4.7-2-6.6-.3-2 1.8-2.1 4.9-.2 6.8L12 20.5l9-9.1c1.9-1.9 1.8-5-.2-6.8z"/></svg>
+  </div>
+
+</body>
+</html>

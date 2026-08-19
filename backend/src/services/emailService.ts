@@ -171,7 +171,7 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
             
             <div style="margin: 30px 0; background: #f3f0ff; padding: 20px; border-radius: 12px; border-left: 4px solid ${BRAND_COLOR};">
                 <ul style="list-style: none; padding: 0; margin: 0; space-y: 10px;">
-                    <li style="margin-bottom: 15px;">✅ <strong>Conecte seu WhatsApp:</strong> <br/><a href="https://zapbroker.dev/dashboard/settings?tab=connection" style="color: ${BRAND_COLOR}">Acessar Configurações</a></li>
+                    <li style="margin-bottom: 15px;">✅ <strong>Conecte seu WhatsApp:</strong> <br/><a href="https://zapbroker.dev/dashboard/connection" style="color: ${BRAND_COLOR}">Acessar Configurações</a></li>
                     <li style="margin-bottom: 15px;">📈 <strong>Importe seus Leads:</strong> <br/><a href="https://zapbroker.dev/dashboard/leads" style="color: ${BRAND_COLOR}">Ir para o Kanban</a></li>
                     <li style="margin-bottom: 0;">🚀 <strong>Primeira Campanha:</strong> <br/><a href="https://zapbroker.dev/dashboard/campaigns" style="color: ${BRAND_COLOR}">Criar Disparo</a></li>
                 </ul>

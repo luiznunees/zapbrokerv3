@@ -18,8 +18,8 @@ const FEATURES = [
     },
     {
         icon: BellRing,
-        title: "Agente Avisa Quem Sumiu",
-        description: "Ele acompanha os disparos e te avisa no seu WhatsApp quando um lead não responde, sugerindo um lembrete."
+        title: "Acompanhe Quem Recebeu",
+        description: "Veja no seu WhatsApp quantos leads visualizaram e quantos ainda não responderam."
     }
 ]
 

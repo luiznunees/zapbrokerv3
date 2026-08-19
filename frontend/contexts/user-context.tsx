@@ -33,6 +33,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     refetch()
   }, [refetch])
 
+  // Heartbeat: mantém last_active_at fresco no backend enquanto o painel está
+  // aberto (base do re-engajamento). A cada 5 min.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      api.auth.me().catch(() => {})
+    }, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   return <UserCtx.Provider value={{ user, loading, refetch }}>{children}</UserCtx.Provider>
 }
 

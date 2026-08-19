@@ -270,33 +270,6 @@ export const getStalledLeadsCount = async (userId: string, days: number = 3) => 
     return count || 0;
 };
 
-export const getStalledLeads = async (userId: string, days: number = 3, limit: number = 20) => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-
-    const { data, error } = await supabase
-        .from('campaign_messages')
-        .select('id, lead_status, updated_at, contact_id, campaigns!inner(user_id, name), contacts(id, name, phone)')
-        .eq('campaigns.user_id', userId)
-        .not('lead_status', 'in', '(REPLIED,CONVERTED,LOST)')
-        .lt('updated_at', cutoff.toISOString())
-        .order('updated_at', { ascending: true })
-        .limit(limit);
-
-    if (error) throw new Error(error.message);
-
-    return (data || [])
-        .filter((row: any) => row.contacts)
-        .map((row: any) => ({
-            contactId: row.contacts.id,
-            name: row.contacts.name,
-            phone: row.contacts.phone,
-            leadStatus: row.lead_status,
-            updatedAt: row.updated_at,
-            campaignName: row.campaigns?.name,
-        }));
-};
-
 export const getKanbanBoard = async (userId: string, campaignId: string) => {
     // Verify campaign ownership
     const { data: campaign } = await supabase

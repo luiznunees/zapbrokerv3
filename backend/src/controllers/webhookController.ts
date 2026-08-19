@@ -1,6 +1,26 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { getIO } from '../services/socketService';
+import { sendPushToUser } from '../services/pushService';
+
+// Avisa o corretor por push quando um lead responde a campanha.
+async function notifyLeadReplied(campaignId: string) {
+    try {
+        const { data: campaign } = await supabase
+            .from('campaigns')
+            .select('user_id, name')
+            .eq('id', campaignId)
+            .maybeSingle();
+        if (!campaign?.user_id) return;
+        sendPushToUser(campaign.user_id, {
+            title: '💬 Um lead te respondeu!',
+            body: `Opa, alguém respondeu na campanha "${campaign.name || 'ativa'}". Bora fechar venda! 🤝`,
+            url: `/dashboard/campaigns/${campaignId}/kanban`,
+        }).catch(err => console.error('[Webhook] Lead replied push error:', err));
+    } catch (err) {
+        console.error('[Webhook] notifyLeadReplied error:', err);
+    }
+}
 
 export const handleWahaWebhook = async (req: Request, res: Response) => {
     try {
@@ -100,6 +120,7 @@ export const handleWahaWebhook = async (req: Request, res: Response) => {
                             } catch (e) {
                                 console.error('Socket emit error:', e);
                             }
+                            await notifyLeadReplied(lastCampaignMsg.campaign_id);
                         }
                     }
                 }
@@ -257,6 +278,7 @@ export const handleEvolutionWebhook = async (req: Request, res: Response) => {
                         } catch (e) {
                             console.error('Socket emit error:', e);
                         }
+                        await notifyLeadReplied(lastCampaignMsg.campaign_id);
                     }
                 }
             }

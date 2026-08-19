@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "meta-ads": {
+      "type": "local",
+      "command": ["npx", "-y", "meta-ads-mcp"],
+      "enabled": true,
+      "environment": {
+        "META_ACCESS_TOKEN": "{env:META_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

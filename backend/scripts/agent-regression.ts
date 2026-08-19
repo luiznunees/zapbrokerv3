@@ -9,7 +9,7 @@
 // da produção) pra nunca mais competir pela cota de fallback que usuários reais dependem.
 // Precisa vir ANTES do require de agentService — import seria hoisted e leria a env var tarde
 // demais (OPENROUTER_MODEL é lido uma única vez, no module-load).
-process.env.OPENROUTER_MODEL_OVERRIDE = process.env.OPENROUTER_MODEL_OVERRIDE || 'openai/gpt-oss-20b:free';
+process.env.OPENROUTER_MODEL_OVERRIDE = process.env.OPENROUTER_MODEL_OVERRIDE || 'anthropic/claude-haiku-4.5';
 
 const { chat, createSession, deleteSession } = require('../src/services/agentService') as typeof import('../src/services/agentService');
 const { getRecentAgentTurns } = require('../src/services/agentLogService') as typeof import('../src/services/agentLogService');

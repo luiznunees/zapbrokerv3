@@ -78,45 +78,138 @@ export const addContact = async (userId: string, listId: string, name: string, p
     return data;
 };
 
+// Regex for Brazilian Phone Numbers (tolerates space between DDD and the mobile "9")
+const PHONE_REGEX = /(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\s?\d|[2-9])\d{3})[-.\s]?(\d{4}))/g;
+
+const isMobile = (m: RegExpMatchArray) => (m[3] || '').replace(/\s/g, '').startsWith('9');
+const normalizePhone = (m: RegExpMatchArray) => `55${m[2] || ''}${m[3] || ''}${m[4]}`.replace(/\D/g, '');
+
+// Insert a line break before labels glued to the previous value (ex: "65Cel.:" -> "65\nCel.:")
+const LABEL_BREAK_RE = /([^\n])(?=(?:CPF|CNPJ|C\.?P\.?F|Cel(?:ular)?\.?|Tel(?:efone)?\.?|Fone\.?|Email|E-mail|Nome|Telefone|Celular|Endere[çc]o|Bairro|Cidade|CEP|Unidade|Bloco|Torre)\s*[:.])/gi;
+
+const FIELD_PATTERNS: Array<{ key: 'nome' | 'cpf' | 'cel' | 'tel' | 'email' | 'outro'; re: RegExp }> = [
+    { key: 'nome', re: /^(?:nome\s+(?:do\s+)?(?:propriet[áa]rio|cond[óo]mino)|nome|propriet[áa]rio|cond[óo]mino|cliente|respons[áa]vel)\s*[:.-]*\s*/i },
+    { key: 'cpf', re: /^(?:cpf|cnpj|c\.?p\.?f\.?|cpf\s*\/?\s*cnpj)\s*[:.-]*\s*/i },
+    { key: 'cel', re: /^(?:cel(?:ular)?|whatsapp|wpp)\s*[:.-]*\s*/i },
+    { key: 'tel', re: /^(?:tel(?:efone)?|fone|fixo)\s*[:.-]*\s*/i },
+    { key: 'email', re: /^(?:e-?mail|email)\s*[:.-]*\s*/i },
+    { key: 'outro', re: /^(?:endere[çc]o|bairro|cidade|cep|unidade|apto|apartamento|bloco|torre|andar|vaga|nascimento|data\s+de)/i },
+];
+
+const cleanName = (raw: string) => {
+    if (!raw) return '';
+    let n = raw
+        .replace(/\s+/g, ' ')
+        .replace(/\S+@\S+/g, ' ')
+        .replace(/\b(?:cpf|cnpj|c\.?p\.?f\.?)\s*[:.]*\s*[\d.\-/]{8,}/gi, ' ')
+        .replace(/\b(?:cel(?:ular)?|tel(?:efone)?|fone|wpp|whatsapp)\s*[:.]*\s*\(?\d[\d\s().\-]{7,}\)?/gi, ' ')
+        .replace(/\b(?:q\s?\d+|l\s?\d+|qd\.?\s?\d+|lt\.?\s?\d+|lote\s?\d+|quadra\s?\d+|bloco\s?\d+|apto?\s?\d+|ap\s?\d+|torre\s?\d+|unidade\s?\d+)\b/gi, ' ')
+        .replace(/\b(?:nome|propriet[áa]rio|cond[óo]mino|cliente|respons[áa]vel)\s*[:.]*\s*/gi, ' ')
+        .replace(/\b(?:endere[çc]o|bairro|cidade|cep|unidade|apto|apartamento|bloco|torre|andar|vaga)\s*[:.]*\s*/gi, ' ')
+        .replace(/[^A-Za-zÀ-ÿ0-9\s.'’]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return n.replace(/^[-:;|•\s]+|[-:;|•\s]+$/g, '').trim();
+};
+
 // Helper to extract contacts from text
 const extractContactsFromText = (text: string, listId: string) => {
-    // Regex for Brazilian Phone Numbers
-    const PHONE_REGEX = /(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\d|[2-9])\d{3})[-.\s]?(\d{4}))/g;
-    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+    let normalized = text.replace(/\r/g, '\n');
+    normalized = normalized.replace(LABEL_BREAK_RE, '$1\n');
+
+    const lines = normalized.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
     const contacts: any[] = [];
     const seenPhones = new Set();
 
-    lines.forEach(line => {
-        const matches = [...line.matchAll(PHONE_REGEX)];
-        if (matches.length > 0) {
-            const match = matches[0];
-            const fullMatch = match[0];
-            const ddd = match[2] || '';
-            const part1 = match[3];
-            const part2 = match[4];
+    const addContact = (name: string, phone: string) => {
+        const clean = cleanName(name);
+        const finalName = (clean.length > 1 ? clean : 'Contato Importado (PDF)').substring(0, 100);
+        if (phone.length >= 10 && !seenPhones.has(phone)) {
+            seenPhones.add(phone);
+            contacts.push({ list_id: listId, name: finalName, phone });
+        }
+    };
 
-            // Normalize: 55 + DDD + Number
-            let normalizedPhone = `55${ddd}${part1}${part2}`.replace(/\D/g, '');
+    const hasAnyLabel = lines.some(line => FIELD_PATTERNS.some(f => f.re.test(line)));
 
-            // Avoid duplicates in the same import
-            if (seenPhones.has(normalizedPhone)) return;
-            seenPhones.add(normalizedPhone);
+    // Fallback: no labels found — extract per line, preferring mobile numbers
+    if (!hasAnyLabel) {
+        for (const line of lines) {
+            const matches = [...line.matchAll(PHONE_REGEX)];
+            if (matches.length === 0) continue;
+            const best = matches.sort((a, b) => (isMobile(b) ? 1 : 0) - (isMobile(a) ? 1 : 0))[0];
+            const normalizedPhone = normalizePhone(best);
+            addContact(line.replace(best[0], ''), normalizedPhone);
+        }
+        return contacts;
+    }
 
-            // Guess Name
-            let name = line.replace(fullMatch, '').trim();
-            name = name.replace(/^[-:;|•\s]+|[-:;|•\s]+$/g, '');
-            if (!name) name = "Contato Importado (PDF)";
+    // Labeled records — group lines that belong to the same person
+    let current: any = null;
+    const finalize = () => {
+        if (!current) return;
+        const phone = current.cel || current.tel || '';
+        addContact(current.name || '', phone);
+        current = null;
+    };
 
-            // Basic validation
-            if (name.length > 2 && normalizedPhone.length >= 10) {
-                contacts.push({
-                    list_id: listId,
-                    name: name.substring(0, 100), // Limit length
-                    phone: normalizedPhone
-                });
+    for (const line of lines) {
+        let matched = false;
+
+        for (const f of FIELD_PATTERNS) {
+            const m = line.match(f.re);
+            if (!m) continue;
+            matched = true;
+            const value = line.slice(m[0].length).trim();
+
+            if (f.key === 'nome') {
+                if (current && current.name && (current.cel || current.tel)) finalize();
+                if (!current) current = {};
+                current.name = (current.name ? current.name + ' ' : '') + value;
+            } else if (f.key === 'cpf') {
+                if (current && current.cpf && current.name && (current.cel || current.tel)) finalize();
+                if (!current) current = {};
+                current.cpf = value.replace(/\D/g, '');
+            } else if (f.key === 'cel' || f.key === 'tel') {
+                const field = f.key;
+                const phones = [...value.matchAll(PHONE_REGEX)];
+                const normalized = phones.length > 0 ? normalizePhone(phones[0]) : value.replace(/\D/g, '');
+                if (current && current[field] && current.name) finalize();
+                if (!current) current = {};
+                if (!current[field]) current[field] = normalized;
+            } else if (f.key === 'email') {
+                if (!current) current = {};
+            } else {
+                // 'outro' — ignore
+            }
+            break;
+        }
+
+        if (!matched) {
+            // Unlabeled line — could be the person's name or a phone by itself
+            const linePhones = [...line.matchAll(PHONE_REGEX)];
+            const isJustPhone = linePhones.length > 0 && line.replace(PHONE_REGEX, '').trim().length < 4;
+
+            if (isJustPhone) {
+                if (!current) current = {};
+                if (!current.cel && linePhones.some(p => isMobile(p))) current.cel = normalizePhone(linePhones.find(p => isMobile(p))!);
+                else if (!current.tel) current.tel = normalizePhone(linePhones[0]);
+            } else if (!current) {
+                // A line before the first labeled record that has no phone and is a title/header — skip it
+                const looksLikeHeader = /^[A-ZÀ-ÖØ-Ý0-9\s.,/()'"-]+$/.test(line) && linePhones.length === 0;
+                if (!looksLikeHeader) current = { name: line };
+            } else if (!current.name) {
+                current.name = line;
+            } else if (current.cel || current.tel) {
+                finalize();
+                current = { name: line };
+            } else {
+                current.name = (current.name + ' ' + line).trim();
             }
         }
-    });
+    }
+    finalize();
+
     return contacts;
 };
 
@@ -132,8 +225,9 @@ export const importContactsFromPdf = async (userId: string, filePath: string, or
     let contacts: any[] = [];
 
     try {
-        const data = await pdf(dataBuffer);
-        const text = data.text;
+        // Rebuild the text preserving table columns (pdf-parse's data.text
+        // glues columns together without spaces, e.g. "2TALLITA" or "311PORTO").
+        const text = await extractPdfTextWithLayout(dataBuffer, pdf);
 
         // 3. Extract
         contacts = extractContactsFromText(text, newList.id);
@@ -158,6 +252,64 @@ export const importContactsFromPdf = async (userId: string, filePath: string, or
     }
 
     return { list: newList, count: contacts.length };
+};
+
+// Rebuilds PDF text using each text item's coordinates so that table columns
+// are separated by spaces instead of being glued together.
+const extractPdfTextWithLayout = async (dataBuffer: Buffer, pdf: any) => {
+    let text = '';
+
+    const renderPage = (pageData: any) => {
+        const renderOptions = {
+            normalizeWhitespace: false,
+            disableCombineTextItems: false
+        };
+
+        return pageData.getTextContent(renderOptions).then((textContent: any) => {
+            // Collect items with x/y coordinates
+            const items = textContent.items
+                .filter((item: any) => item.str && item.str.trim().length > 0)
+                .map((item: any) => ({
+                    x: item.transform[4],
+                    y: item.transform[5],
+                    str: item.str
+                }));
+
+            // Group into rows by y (tolerance of 2 units)
+            const rows: any[][] = [];
+            for (const item of items) {
+                const row = rows.find(r => Math.abs(r[0].y - item.y) < 2);
+                if (row) row.push(item);
+                else rows.push([item]);
+            }
+
+            const lines = rows
+                .map((row) => {
+                    // Sort left to right
+                    row.sort((a, b) => a.x - b.x);
+
+                    let line = '';
+                    let prevEndX = -Infinity;
+                    for (const item of row) {
+                        if (line && item.x - prevEndX > 2) line += ' ';
+                        line += item.str;
+                        prevEndX = item.x + (item.str.length * 4); // approximate char width
+                    }
+                    return line;
+                })
+                .join('\n');
+
+            text += (text ? '\n' : '') + lines;
+            return lines;
+        });
+    };
+
+    const result = await pdf(dataBuffer, {
+        pagerender: renderPage,
+        version: 'default'
+    });
+
+    return text || result.text || '';
 };
 
 export const importContactsFromCsv = async (userId: string, filePath: string, originalFilename: string) => {

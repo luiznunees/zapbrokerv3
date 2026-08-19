@@ -1,5 +1,12 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+
+export const metadata: Metadata = {
+    title: "LGPD e Proteção de Dados",
+    description: "Conformidade do ZapBroker com a LGPD (Lei nº 13.709/2018) no tratamento de dados de corretores e leads.",
+    alternates: { canonical: "/lgpd" },
+}
 
 export default function LGPDPage() {
     return (

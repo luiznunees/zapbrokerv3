@@ -142,6 +142,13 @@ export const getProfile = async (req: any, res: Response) => {
         // req.user is populated by authMiddleware (from Supabase)
         const user = req.user;
 
+        // Touch de atividade: marca quando o corretor acessou o app por último.
+        // Base do re-engajamento (notificações de quem parou de usar).
+        await supabase
+            .from('users')
+            .update({ last_active_at: new Date() })
+            .eq('id', user.id);
+
         // We might want to fetch additional data from our 'users' table if needed
         // For now, return what we have or fetch from DB to be sure
         // The frontend expects { user: Usuario, tenant: any }

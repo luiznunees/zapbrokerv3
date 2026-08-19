@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Creative 5 — Agente de IA (Instagram Story Ad, 9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0A0E1A;
+    --sky: #2E7CF6;
+    --sky-deep: #0B3B82;
+    --lime: #D4FF3F;
+    --mist: #F5F7FA;
+    --ink: #0F1424;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; }
+  body {
+    font-family: 'Manrope', sans-serif;
+    background:
+      radial-gradient(1100px 700px at 50% -10%, var(--sky-deep) 0%, transparent 60%),
+      var(--navy);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ---------- Instagram Stories chrome ---------- */
+  .ig-progress { position: absolute; top: 24px; left: 24px; right: 24px; display: flex; gap: 6px; z-index: 5; }
+  .ig-progress i { flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.28); overflow: hidden; }
+  .ig-progress i.filled::after { content: ''; display: block; width: 62%; height: 100%; background: #fff; border-radius: 4px; }
+
+  .ig-header { position: absolute; top: 48px; left: 24px; right: 24px; display: flex; align-items: center; gap: 14px; z-index: 5; }
+  .ig-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--sky); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(255,255,255,0.9); }
+  .ig-avatar svg { width: 22px; height: 22px; }
+  .ig-who { display: flex; flex-direction: column; line-height: 1.25; }
+  .ig-who .name { font-weight: 800; font-size: 21px; }
+  .ig-who .meta { font-size: 16px; color: rgba(255,255,255,0.55); font-weight: 600; }
+  .ig-actions { margin-left: auto; display: flex; align-items: center; gap: 22px; color: rgba(255,255,255,0.85); }
+  .ig-actions svg { width: 26px; height: 26px; display: block; }
+
+  .ig-bottombar { position: absolute; bottom: 40px; left: 24px; right: 24px; z-index: 5; display: flex; align-items: center; gap: 18px; }
+  .ig-input { flex: 1; height: 68px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.4); display: flex; align-items: center; padding: 0 28px; font-size: 21px; font-weight: 600; color: rgba(255,255,255,0.7); }
+  .ig-bottombar svg { width: 30px; height: 30px; color: #fff; flex-shrink: 0; }
+  .ig-sponsored { position: absolute; bottom: 122px; left: 24px; font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.45); letter-spacing: 0.02em; z-index: 5; }
+
+  /* ---------- Content ---------- */
+  .stage {
+    position: absolute; inset: 0;
+    padding: 148px 76px 220px;
+    display: flex; flex-direction: column;
+  }
+
+  .stat-pill {
+    align-self: flex-start;
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    padding: 12px 24px 12px 14px;
+    font-size: 22px; font-weight: 700; color: rgba(255,255,255,0.92);
+  }
+  .stat-pill .dot { width: 34px; height: 34px; border-radius: 50%; background: var(--lime); display: flex; align-items: center; justify-content: center; }
+  .stat-pill .dot svg { width: 19px; height: 19px; fill: var(--ink); }
+
+  h1 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 800;
+    font-size: 72px;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin-top: 34px;
+    max-width: 9.6em;
+  }
+  h1 em { font-style: normal; color: var(--lime); }
+
+  .cta-row {
+    margin-top: 30px;
+    display: inline-flex; align-self: flex-start;
+    align-items: center; gap: 16px;
+    background: var(--lime);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 22px 34px;
+    font-weight: 800; font-size: 30px;
+    box-shadow: 0 18px 40px -12px rgba(212,255,63,0.4);
+  }
+  .cta-row .cursor { width: 34px; height: 34px; }
+
+  /* ---------- Phone mock (agent chat UI) ---------- */
+  .phone-wrap {
+    position: relative;
+    margin-top: 58px;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .link-badge {
+    position: absolute; right: -6px; top: -10px; z-index: 4;
+    background: #fff; color: var(--ink);
+    display: flex; align-items: center; gap: 10px;
+    border-radius: 999px; padding: 14px 22px 14px 16px;
+    font-weight: 800; font-size: 21px;
+    box-shadow: 0 20px 40px -14px rgba(0,0,0,0.5);
+  }
+  .link-badge .ic { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: var(--lime); display: flex; align-items: center; justify-content: center; }
+  .link-badge .ic svg { width: 16px; height: 16px; }
+
+  .phone {
+    width: 640px;
+    background: linear-gradient(180deg, #1c2438, #0d1220);
+    border-radius: 52px;
+    padding: 20px;
+    box-shadow: 0 50px 90px -30px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .screen {
+    background: var(--mist);
+    border-radius: 34px;
+    overflow: hidden;
+    color: var(--ink);
+  }
+  .chat-head {
+    background: var(--ink);
+    color: #fff;
+    padding: 24px 28px 22px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .chat-head .mark { width: 46px; height: 46px; border-radius: 14px; background: var(--sky); display: flex; align-items: center; justify-content: center; }
+  .chat-head .mark svg { width: 24px; height: 24px; }
+  .chat-head .who .n { font-weight: 800; font-size: 24px; }
+  .chat-head .who .s { font-size: 15px; color: var(--lime); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .chat-head .who .s::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); display: inline-block; }
+
+  .chat-body { padding: 30px 26px 30px; display: flex; flex-direction: column; gap: 22px; }
+
+  .msg-user {
+    align-self: flex-end; max-width: 78%;
+    background: var(--sky); color: #fff;
+    border-radius: 22px; border-top-right-radius: 6px;
+    padding: 16px 20px; font-size: 22px; font-weight: 700; line-height: 1.4;
+  }
+
+  .msg-agent {
+    align-self: flex-start; max-width: 92%;
+    background: #fff;
+    border-radius: 22px; border-top-left-radius: 6px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 10px rgba(15,20,36,0.06);
+  }
+  .msg-agent .lead-line { font-size: 20px; line-height: 1.5; font-weight: 600; color: var(--ink); }
+  .msg-agent .lead-line b { color: var(--sky-deep); }
+  .msg-agent ul { list-style: none; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg-agent li { font-size: 19px; font-weight: 700; color: rgba(15,20,36,0.65); display: flex; align-items: center; gap: 10px; }
+  .msg-agent li::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #F5A15A; flex-shrink: 0; }
+  .msg-agent .ask { margin-top: 14px; font-size: 20px; font-weight: 700; color: var(--ink); }
+
+  .suggestion {
+    align-self: flex-start; max-width: 92%;
+    background: var(--mist); border: 1.5px dashed rgba(15,20,36,0.18);
+    border-radius: 22px; padding: 18px 20px;
+  }
+  .suggestion .tag { font-size: 14px; font-weight: 800; letter-spacing: 0.06em; color: var(--sky-deep); text-transform: uppercase; margin-bottom: 8px; }
+  .suggestion .text { font-size: 19px; font-weight: 600; line-height: 1.45; color: var(--ink); }
+  .suggestion .actions { margin-top: 16px; display: flex; gap: 10px; }
+  .suggestion .btn { flex: 1; text-align: center; border-radius: 12px; padding: 13px 0; font-weight: 800; font-size: 17px; }
+  .suggestion .btn.approve { background: var(--ink); color: var(--lime); }
+  .suggestion .btn.edit { background: #fff; color: var(--ink); border: 1.5px solid rgba(15,20,36,0.18); }
+</style>
+</head>
+<body>
+
+  <div class="ig-progress">
+    <i class="filled"></i><i></i><i></i>
+  </div>
+
+  <div class="ig-header">
+    <div class="ig-avatar">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5 3.8 8.7 9 9 5.2-.3 9-4 9-9V7l-9-5z" fill="#0A0E1A"/><path d="M8.5 12.2l2.4 2.4 4.6-5" stroke="#D4FF3F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="ig-who">
+      <span class="name">zapbroker</span>
+      <span class="meta">Patrocinado · 3 d</span>
+    </div>
+    <div class="ig-actions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </div>
+  </div>
+
+  <div class="stage">
+
+    <div class="stat-pill">
+      <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm1 13.5l-4.5-4.5L9.9 10.5 13 13.6l5.1-5.1L19.5 10z"/></svg></span>
+      <span>Uma mensagem, a carteira inteira</span>
+    </div>
+
+    <h1>Você fala.<br>O agente <em>dispara</em>.<br>Pra todo mundo.</h1>
+
+    <div class="cta-row">
+      Dispara com o agente
+      <svg class="cursor" viewBox="0 0 24 24" fill="#0A0E1A"><path d="M4 2l16 8-7 2-2 7-7-17z"/></svg>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="link-badge">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        zapbroker.dev
+      </div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="chat-head">
+            <div class="mark">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5 3.8 8.7 9 9 5.2-.3 9-4 9-9V7l-9-5z" fill="#fff"/><path d="M8.5 12.2l2.4 2.4 4.6-5" stroke="#2E7CF6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="who">
+              <div class="n">Agente ZapBroker</div>
+              <div class="s">online agora</div>
+            </div>
+          </div>
+          <div class="chat-body">
+            <div class="msg-user">dispara pra quem não visitou ainda esse mês</div>
+
+            <div class="msg-agent">
+              <p class="lead-line"><b>142 leads</b> encontrados na lista "Sem visita":</p>
+              <ul>
+                <li>Vila Mariana — 58 leads</li>
+                <li>Pinheiros — 47 leads</li>
+                <li>Moema — 37 leads</li>
+              </ul>
+              <p class="ask">Confirma o envio pra todos agora?</p>
+            </div>
+
+            <div class="suggestion">
+              <div class="tag">Disparo pronto</div>
+              <div class="text">"Oi! Separei mais opções que podem te interessar na sua região 👀 Quer dar uma olhada?"</div>
+              <div class="actions">
+                <div class="btn approve">Enviar agora</div>
+                <div class="btn edit">Agendar</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ig-sponsored">Patrocinado</div>
+  <div class="ig-bottombar">
+    <div class="ig-input">Enviar mensagem…</div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a1 1 0 0 0-1-.2L3.4 10.8a1 1 0 0 0 .1 1.9l6.7 2 2 6.7a1 1 0 0 0 1.9.1l6.4-16.4a1 1 0 0 0-.2-1z"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6c-1.9-1.7-4.9-1.6-6.6.3L12 7.3l-2.2-2.4c-1.7-1.9-4.7-2-6.6-.3-2 1.8-2.1 4.9-.2 6.8L12 20.5l9-9.1c1.9-1.9 1.8-5-.2-6.8z"/></svg>
+  </div>
+
+</body>
+</html>

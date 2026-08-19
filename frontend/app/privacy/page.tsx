@@ -1,5 +1,12 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+
+export const metadata: Metadata = {
+    title: "Política de Privacidade",
+    description: "Política de privacidade do ZapBroker — como tratamos seus dados e os dados dos seus leads.",
+    alternates: { canonical: "/privacy" },
+}
 
 export default function PrivacyPage() {
     return (

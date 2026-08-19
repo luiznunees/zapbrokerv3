@@ -43,7 +43,7 @@ function readLocalMediaAsBase64(mediaUrl: string, fallbackMimetype: string): { m
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay, sequentialMode, blockDelay } = job.data;
 
-    // 0. CHECK PAUSE STATUS
+    // 0. CHECK PAUSE/CANCEL STATUS
     const { data: campaignData, error: campaignError } = await supabase
         .from('campaigns')
         .select('status')
@@ -59,6 +59,12 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             .eq('id', job.data.id); // Use the message ID passed in job
 
         return; // Exit worker
+    }
+
+    if (campaignData?.status === 'CANCELLED') {
+        console.log(`[CampaignWorker] Campaign ${campaignId} is CANCELLED. Aborting job ${job.id}.`);
+        // Não reverte pra PENDING: campanha cancelada não volta a disparar.
+        return;
     }
 
     console.log(`[CampaignWorker] Processing job ${job.id} for campaign ${campaignId}, contact ${contactId}`);

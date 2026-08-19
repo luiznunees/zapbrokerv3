@@ -86,16 +86,6 @@ export const list = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const getStalledCount = async (req: AuthRequest, res: Response) => {
-    try {
-        const userId = req.user.id;
-        const count = await campaignService.getStalledLeadsCount(userId);
-        res.status(200).json({ count });
-    } catch (error: any) {
-        res.status(400).json({ error: error.message });
-    }
-};
-
 export const getKanban = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;

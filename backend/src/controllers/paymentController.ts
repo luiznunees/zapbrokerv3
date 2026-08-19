@@ -53,11 +53,12 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
         // AbacatePay has no recurring PIX today — every cycle (this first payment included)
         // is a one-time checkout; the monthly billing job generates the same kind of checkout
         // for renewals via billingService.generateBillingCheckout.
+        const addonsAmount = await billingService.getAddonsAmount(userId);
         const { brCode, brCodeBase64, expiresAt } = await billingService.generateBillingCheckout({
             subscriptionId: subscription.id,
             userId,
             planId,
-            amount: plan.price,
+            amount: plan.price + addonsAmount,
             customer: {
                 name: user.nome || user.email,
                 email: user.email,

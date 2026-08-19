@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import * as evolutionService from './evolutionService';
 import * as eventLogService from './eventLogService';
 
-export const createInstance = async (userId: string, name: string) => {
+export const createInstance = async (userId: string, name: string, phoneNumber?: string) => {
     // Evolution API: Instance name acts as the ID/Token
     const instanceName = name.replace(/\s+/g, '-').toLowerCase() + '-' + userId.substring(0, 4);
 
@@ -22,7 +22,9 @@ export const createInstance = async (userId: string, name: string) => {
         }
     }
 
-    await evolutionService.createSession(instanceName);
+    // Criar já com o número (quando informado) evita o pairing code/QR travado do
+    // fluxo criar-depois-conectar — ver connectInstance abaixo.
+    const { base64, pairingCode } = await evolutionService.createSession(instanceName, phoneNumber);
 
     // 2. Save to DB
     const { data, error } = await supabase
@@ -37,7 +39,7 @@ export const createInstance = async (userId: string, name: string) => {
         throw new Error(error.message);
     }
 
-    return data;
+    return { ...data, base64, pairingCode };
 };
 
 export const connectInstance = async (userId: string, instanceId: string, phoneNumber?: string) => {
@@ -50,6 +52,23 @@ export const connectInstance = async (userId: string, instanceId: string, phoneN
 
     if (!instance) {
         throw new Error('Instance not found');
+    }
+
+    // Sessão pendente/travada de uma tentativa anterior faz a Evolution devolver
+    // pairingCode/base64 nulos silenciosamente, ou um código velho ainda vinculado ao
+    // socket antigo (que o celular rejeita com "não foi possível conectar"). Desloga e
+    // espera o estado realmente virar 'close' antes de pedir um QR/código novo, pra
+    // garantir que o código gerado esteja atrelado a um socket novo de verdade.
+    await evolutionService.logoutSession(instance.evolution_id);
+
+    const maxWaitMs = 5000;
+    const pollIntervalMs = 300;
+    let waited = 0;
+    while (waited < maxWaitMs) {
+        const state = await evolutionService.checkSessionStatus(instance.evolution_id);
+        if (state === 'close' || state === 'not_found') break;
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        waited += pollIntervalMs;
     }
 
     // Connect (Get QR Code or Pairing Code)

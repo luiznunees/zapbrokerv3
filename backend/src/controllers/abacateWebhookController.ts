@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { supabase } from '../config/supabase';
 import * as eventLogService from '../services/eventLogService';
 import * as billingService from '../services/billingService';
+import * as dedicatedNumberService from '../services/dedicatedNumberService';
 
 function getAbacateHmacKey(): string {
     const key = process.env.ABACATE_WEBHOOK_HMAC_KEY;
@@ -214,6 +215,18 @@ export const handleAbacateWebhook = async (req: Request, res: Response) => {
             const metadata = charge.metadata || {};
             const subscriptionId = metadata.subscription_id || charge.externalId;
             const paymentExternalId = charge.id;
+
+            // Cobrança de número dedicado (PIX pro-rata): ativa a linha só depois do pagamento confirmar.
+            if (metadata.purpose === 'dedicated_number') {
+                try {
+                    await dedicatedNumberService.activateDedicatedNumberFromPayment(metadata.dedicated_number_id || subscriptionId, paymentExternalId);
+                    console.log(`PIX ${paymentExternalId} paid — dedicated number activated.`);
+                } catch (err: any) {
+                    console.error('Failed to activate dedicated number after payment:', err.message);
+                    return res.status(500).send('Internal Server Error');
+                }
+                return res.status(200).send('OK');
+            }
 
             if (subscriptionId && paymentExternalId) {
                 await billingService.activateSubscriptionFromPayment(subscriptionId, paymentExternalId);

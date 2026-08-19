@@ -10,7 +10,7 @@ const QUESTIONS = [
     },
     {
         q: "Preciso trocar de número ou app?",
-        a: "Não. Continua sendo o seu WhatsApp, no seu número. O ZapBroker só organiza e sugere as mensagens.",
+        a: "Não. Continua sendo o seu WhatsApp, no seu número. O ZapBroker só organiza o disparo pra sua lista.",
     },
     {
         q: "Preciso de conhecimento técnico?",

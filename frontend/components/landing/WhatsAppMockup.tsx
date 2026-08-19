@@ -10,7 +10,7 @@ export function WhatsAppMockup() {
                 </div>
                 <div className="flex-1">
                     <p className="text-sm font-semibold leading-tight">ZapBroker</p>
-                    <p className="text-[11px] text-white/70 leading-tight">agente no seu WhatsApp</p>
+                    <p className="text-[11px] text-white/70 leading-tight">disparo no seu WhatsApp</p>
                 </div>
             </div>
 
@@ -35,23 +35,19 @@ export function WhatsAppMockup() {
                     </div>
                 </div>
 
-                {/* Suggestion needing approval */}
+                {/* New dispatch confirmation */}
                 <div className="flex justify-start">
                     <div className="max-w-[85%] bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
                         <p className="text-[13px] text-zinc-800 leading-snug">
-                            💡 João não respondeu há 3 dias. Quer que eu envie um lembrete?
+                            📤 Disparo <strong>"Cobertura Pinheiros"</strong> agendado para 130 leads.
                         </p>
-                        <div className="flex gap-2 mt-2">
-                            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-brand-green-500 text-white">Aprovar</span>
-                            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-500">Recusar</span>
-                        </div>
                         <span className="block text-right text-[10px] text-zinc-400 mt-1">14:03</span>
                     </div>
                 </div>
 
                 <div className="flex justify-end">
                     <div className="bg-brand-green-500/10 text-brand-green-700 dark:text-brand-green-400 text-[11px] font-semibold px-3 py-1.5 rounded-full inline-flex items-center gap-1.5">
-                        Você aprova, o agente envia
+                        Uma mensagem, toda a lista
                     </div>
                 </div>
             </div>

@@ -2,7 +2,27 @@ import { supabase } from '../config/supabase';
 import * as abacatePayService from './abacatePayService';
 import * as emailService from './emailService';
 import * as eventLogService from './eventLogService';
-import { PLANS } from '../config/plans';
+import { sendPushToUser } from './pushService';
+import { PLANS, ADDONS } from '../config/plans';
+
+// Soma o valor de todos os add-ons ativos do usuário ao valor base do plano.
+// "Número dedicado" (R$ 29,90) é cobrado por quantidade: 2 números ativos = R$ 59,80.
+// Chamado pelo primeiro checkout (createSubscription) e pelas renovações mensais (monthlyBilling).
+export async function getAddonsAmount(userId: string): Promise<number> {
+    const { data: dedicated, error } = await supabase
+        .from('dedicated_numbers')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+
+    if (error) {
+        console.warn('[Billing] Erro ao contar dedicated_numbers:', error.message);
+        return 0;
+    }
+
+    const activeCount = dedicated?.length || 0;
+    return activeCount * ADDONS['dedicated_number'].price;
+}
 
 interface GenerateBillingCheckoutParams {
     subscriptionId: string;
@@ -118,5 +138,12 @@ export async function activateSubscriptionFromPayment(subscriptionId: string, pa
                 new Date(subRow.next_billing_date)
             ).catch(err => console.error('[BillingService] Failed to send payment confirmed email:', err.message));
         }
+
+        // Notificação push — recibo na hora no celular.
+        sendPushToUser(subRow.user_id, {
+            title: '✅ Pagamento confirmado!',
+            body: 'Pix aprovado e tudo certo por aqui. Bora disparar no automático 🚀',
+            url: '/dashboard',
+        }).catch(err => console.error('[BillingService] Push error:', err.message));
     }
 }

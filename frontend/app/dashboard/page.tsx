@@ -25,7 +25,6 @@ import { ChatCampaignSummaryConfirm } from "@/components/dashboard/ChatCampaignS
 import { ChatAntiBanWarningConfirm } from "@/components/dashboard/ChatAntiBanWarningConfirm"
 import { ChatDuplicateCampaignConfirm } from "@/components/dashboard/ChatDuplicateCampaignConfirm"
 import { ChatQuotaConfirm } from "@/components/dashboard/ChatQuotaConfirm"
-import { ChatFollowUpScheduler } from "@/components/dashboard/ChatFollowUpScheduler"
 import { ChatLeadPicker } from "@/components/dashboard/ChatLeadPicker"
 import { ChatContactExclusionPicker } from "@/components/dashboard/ChatContactExclusionPicker"
 import { ChatOnboardingBriefing, type OnboardingResult } from "@/components/dashboard/ChatOnboardingBriefing"
@@ -48,7 +47,7 @@ type WhatsAppQrState = {
 type AgentComponent = {
   type: "list_picker" | "file_upload" | "timing_confirm" | "schedule_picker" | "instance_picker"
     | "message_editor" | "campaign_summary" | "antiban_warning" | "duplicate_campaign_confirm"
-    | "quota_confirm" | "followup_scheduler" | "lead_picker" | "contact_exclusion" | "onboarding_briefing"
+    | "quota_confirm" | "lead_picker" | "contact_exclusion" | "onboarding_briefing"
   purpose?: string
 }
 
@@ -102,8 +101,6 @@ const DIRECT_ACTIONS = new Set(["connect_whatsapp", "import_leads"])
 const ACTION_MESSAGES: Record<string, string> = {
   start_dispatch: "Quero criar uma campanha de disparo agora.",
   view_campaigns: "Quero ver como estão minhas campanhas.",
-  suggest_followup: "Quero criar um follow-up para leads que não responderam.",
-  follow_up_stalled: "Quero criar um follow-up para os leads que estão parados.",
 }
 const WHATSAPP_QR_TIMEOUT_MS = 30_000
 const WHATSAPP_POLL_INTERVAL_MS = 3_000
@@ -124,7 +121,7 @@ export default function DashboardPage() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { user } = useUser()
-  const [stats, setStats] = useState({ leads: 0, campaigns: 0, remaining: 0, stalledLeads: 0 })
+  const [stats, setStats] = useState({ leads: 0, campaigns: 0, remaining: 0 })
   const [statusBar, setStatusBar] = useState<{
     connectedInstances: number
     totalInstances: number
@@ -171,13 +168,12 @@ export default function DashboardPage() {
 
     const loadInitial = async () => {
       try {
-        const [countData, campaignsData, quotaData, sessionData, stalledData, profileData, instancesData, listsData] =
+        const [countData, campaignsData, quotaData, sessionData, profileData, instancesData, listsData] =
           await Promise.all([
             api.contacts.getCount().catch(() => ({ count: 0 })),
             api.campaigns.list().catch(() => []),
             api.quotas.current().catch(() => ({ remainingMessages: 0 })),
             api.sessions.list().catch(() => []),
-            api.campaigns.getStalledCount().catch(() => ({ count: 0 })),
             api.auth.me().catch(() => null),
             api.instances.list().catch(() => []),
             api.contacts.list().catch(() => []),
@@ -187,7 +183,6 @@ export default function DashboardPage() {
           leads: countData.count || 0,
           campaigns: campaignsData.length || 0,
           remaining: quotaData.remainingMessages || 0,
-          stalledLeads: stalledData.count || 0,
         })
         setSessions(sessionData || [])
 
@@ -594,11 +589,6 @@ export default function DashboardPage() {
     handleAction({ type: "set_draft_exclusions", data: { sessionId: currentSessionId, ...values }, label: "Salvar exclusões" })
   }
 
-  const handleCreateFollowUp = (values: { contactIds: string[]; message: string; scheduledAt: string | null }) => {
-    if (!currentSessionId) return
-    handleAction({ type: "create_followup", data: { sessionId: currentSessionId, ...values }, label: "Criar follow-up" })
-  }
-
   const handleSelectLead = async (lead: { id: string; name: string; phone: string }) => {
     if (!currentSessionId) return
     const userMsg: Message = { id: `user-${Date.now()}`, role: "user", content: `Esse aqui: ${lead.name}`, timestamp: new Date() }
@@ -799,7 +789,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
 
   return (
     <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
@@ -1051,10 +1040,6 @@ export default function DashboardPage() {
 
                           {msg.component?.type === "contact_exclusion" && (
                             <ChatContactExclusionPicker purpose={msg.component.purpose} onConfirm={handleConfirmExclusions} disabled={isLoading} />
-                          )}
-
-                          {msg.component?.type === "followup_scheduler" && (
-                            <ChatFollowUpScheduler purpose={msg.component.purpose} onConfirm={handleCreateFollowUp} disabled={isLoading} />
                           )}
 
                           {msg.component?.type === "lead_picker" && (

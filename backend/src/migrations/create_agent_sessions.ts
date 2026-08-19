@@ -144,6 +144,98 @@ create policy "Users can view their own agent turn logs" on agent_turn_logs
   for select using (auth.uid() = user_id);
 `;
 
+const DEDICATED_NUMBERS_SQL = `
+create table if not exists dedicated_numbers (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) not null,
+  salvy_id text,
+  phone_number text,
+  area_code integer,
+  status text not null default 'pending_payment',
+  canceled_at timestamptz,
+  pending_checkout_id text,
+  pending_checkout_qrcode text,
+  pending_checkout_brcode text,
+  pending_checkout_expires_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_dedicated_numbers_user_id on dedicated_numbers(user_id);
+create index if not exists idx_dedicated_numbers_salvy_id on dedicated_numbers(salvy_id);
+
+alter table dedicated_numbers enable row level security;
+
+drop policy if exists "Users can view their own dedicated numbers" on dedicated_numbers;
+create policy "Users can view their own dedicated numbers" on dedicated_numbers
+  for select using (auth.uid() = user_id);
+drop policy if exists "Users can insert their own dedicated numbers" on dedicated_numbers;
+create policy "Users can insert their own dedicated numbers" on dedicated_numbers
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update their own dedicated numbers" on dedicated_numbers;
+create policy "Users can update their own dedicated numbers" on dedicated_numbers
+  for update using (auth.uid() = user_id);
+
+create table if not exists dedicated_number_sms (
+  id uuid primary key default gen_random_uuid(),
+  dedicated_number_id uuid references dedicated_numbers(id) on delete cascade not null,
+  salvy_sms_id text,
+  body text,
+  origin text,
+  verification_code text,
+  received_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_dedicated_number_sms_number on dedicated_number_sms(dedicated_number_id);
+
+alter table dedicated_number_sms enable row level security;
+
+drop policy if exists "Users can view their own dedicated number sms" on dedicated_number_sms;
+create policy "Users can view their own dedicated number sms" on dedicated_number_sms
+  for select using (auth.uid() = (select user_id from dedicated_numbers where id = dedicated_number_id));
+`;
+
+const CAMPAIGN_INSTANCES_SQL = `
+create table if not exists campaign_instances (
+    campaign_id uuid not null references campaigns(id) on delete cascade,
+    instance_id uuid not null references instances(id) on delete cascade,
+    position int not null default 0,
+    primary key (campaign_id, instance_id)
+);
+
+create index if not exists idx_campaign_instances_campaign on campaign_instances(campaign_id);
+`;
+
+const PUSH_SUBSCRIPTIONS_SQL = `
+alter table users add column if not exists last_active_at timestamptz;
+alter table users add column if not exists last_reengagement_at timestamptz;
+
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade not null,
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz default now(),
+  last_sent_at timestamptz,
+  unique (endpoint)
+);
+
+create index if not exists idx_push_subscriptions_user_id on push_subscriptions(user_id);
+
+alter table push_subscriptions enable row level security;
+
+drop policy if exists "Users can view their own push subscriptions" on push_subscriptions;
+create policy "Users can view their own push subscriptions" on push_subscriptions
+  for select using (auth.uid() = user_id);
+drop policy if exists "Users can insert their own push subscriptions" on push_subscriptions;
+create policy "Users can insert their own push subscriptions" on push_subscriptions
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can delete their own push subscriptions" on push_subscriptions;
+create policy "Users can delete their own push subscriptions" on push_subscriptions
+  for delete using (auth.uid() = user_id);
+`;
+
 export async function runMigrations() {
   console.log('[Migrations] Verificando tabela agent_sessions...');
 
@@ -282,5 +374,41 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar agent_turn_logs:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: DEDICATED_NUMBERS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar dedicated_numbers/dedicated_number_sms automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente o SQL de dedicated_numbers (ver create_agent_sessions.ts).');
+    } else {
+      console.log('[Migrations] Tabelas dedicated_numbers/dedicated_number_sms verificadas/criadas.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar dedicated_numbers:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: CAMPAIGN_INSTANCES_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar campaign_instances automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: backend/migrations/campaign_instances.sql');
+    } else {
+      console.log('[Migrations] Tabela campaign_instances verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar campaign_instances:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: PUSH_SUBSCRIPTIONS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar push_subscriptions/last_active_at automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente o SQL de push_subscriptions (ver create_agent_sessions.ts).');
+    } else {
+      console.log('[Migrations] Tabela push_subscriptions e colunas last_active_at/last_reengagement_at verificadas/criadas.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar push_subscriptions:', err.message);
   }
 }

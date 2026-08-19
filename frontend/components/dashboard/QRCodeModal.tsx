@@ -13,19 +13,16 @@ export interface QRCodeModalProps {
     onRequestPairingCode: (phoneNumber: string) => void;
 }
 
-function isMobileDevice() {
-    if (typeof navigator === 'undefined') return false;
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
 export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, onRetry, onRequestPairingCode }: QRCodeModalProps) {
     const [isTimedOut, setIsTimedOut] = React.useState(false);
+    // QR code é o caminho confiável (o código de pareamento por texto tem bug conhecido
+    // no Baileys/Evolution API — costuma ser recusado pelo WhatsApp mesmo gerado certo).
     const [mode, setMode] = React.useState<'qrcode' | 'code'>('qrcode');
     const [phoneNumber, setPhoneNumber] = React.useState('');
 
     React.useEffect(() => {
         if (isOpen) {
-            setMode(isMobileDevice() ? 'code' : 'qrcode');
+            setMode('qrcode');
         }
     }, [isOpen]);
 
@@ -82,6 +79,9 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                         {mode === 'code' ? (
                             pairingCode ? (
                                 <div className="space-y-4">
+                                    <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-lg py-2 px-3">
+                                        ⚠️ Esse método às vezes falha por instabilidade do WhatsApp. Se der erro ao digitar, use o QR Code — é mais confiável.
+                                    </p>
                                     <p className="text-3xl font-bold tracking-[0.3em] text-foreground bg-accent/50 rounded-xl py-4 px-6">
                                         {pairingCode}
                                     </p>

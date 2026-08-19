@@ -15,7 +15,6 @@ import { upload } from '../middlewares/uploadMiddleware';
 
 router.post('/', upload.single('media'), checkQuota, campaignController.create);
 router.get('/', campaignController.list);
-router.get('/stalled-count', campaignController.getStalledCount);
 router.get('/:id', campaignController.getDetails);
 router.post('/:id/pause', campaignController.pause);
 router.post('/:id/resume', campaignController.resume);

@@ -74,10 +74,19 @@ export const api = {
     },
     instances: {
         list: () => fetchAPI('/instances'),
-        create: (name: string) => fetchAPI('/instances', { method: 'POST', body: JSON.stringify({ name }) }),
+        create: (name: string, phoneNumber?: string) => fetchAPI('/instances', { method: 'POST', body: JSON.stringify({ name, phoneNumber }) }),
         connect: (id: string, phoneNumber?: string) => fetchAPI(`/instances/${id}/connect${phoneNumber ? `?number=${encodeURIComponent(phoneNumber)}` : ''}`),
         logout: (id: string) => fetchAPI(`/instances/${id}/logout`, { method: 'POST' }),
         delete: (id: string) => fetchAPI(`/instances/${id}`, { method: 'DELETE' }),
+    },
+    dedicatedNumbers: {
+        list: () => fetchAPI('/dedicated-numbers'),
+        checkout: (areaCode: number, cpf: string, cellphone: string) => fetchAPI('/dedicated-numbers/checkout', { method: 'POST', body: JSON.stringify({ areaCode, cpf, cellphone }) }),
+        checkoutStatus: (id: string) => fetchAPI(`/dedicated-numbers/checkout/${id}/status`),
+        sms: (id: string) => fetchAPI(`/dedicated-numbers/${id}/sms`),
+        cancel: (id: string) => fetchAPI(`/dedicated-numbers/${id}`, { method: 'DELETE' }),
+        areaCodes: () => fetchAPI('/dedicated-numbers/area-codes'),
+        simulateSms: (id: string, rawText: string) => fetchAPI(`/dedicated-numbers/${id}/simulate-sms`, { method: 'POST', body: JSON.stringify({ rawText }) }),
     },
     contacts: {
         list: () => fetchAPI('/contact-lists'),
@@ -116,7 +125,6 @@ export const api = {
     },
     campaigns: {
         list: () => fetchAPI('/campaigns'),
-        getStalledCount: () => fetchAPI('/campaigns/stalled-count'),
         getDetails: (id: string) => fetchAPI(`/campaigns/${id}`),
         create: (formData: FormData) => fetchAPI('/campaigns', {
             method: 'POST',
@@ -240,6 +248,16 @@ export const api = {
             body: JSON.stringify({ actionType, data })
         }),
         suggestions: () => fetchAPI('/agent/suggestions'),
+    },
+    push: {
+        subscribe: (endpoint: string, keys: { p256dh: string; auth: string }) => fetchAPI('/push/subscribe', {
+            method: 'POST',
+            body: JSON.stringify({ endpoint, keys }),
+        }),
+        unsubscribe: (endpoint: string) => fetchAPI('/push/unsubscribe', {
+            method: 'DELETE',
+            body: JSON.stringify({ endpoint }),
+        }),
     },
     // Generic methods to support legacy/direct usage (e.g. api.get('/...'))
     get: (endpoint: string, options?: RequestInit) => fetchAPI(endpoint, { ...options, method: 'GET' }),
