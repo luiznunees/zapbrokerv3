@@ -443,6 +443,24 @@ export default function DashboardPage() {
     )
   }
 
+  const checkWhatsAppConnection = async (messageId: string, instanceId: string) => {
+    const instances = await api.instances.list()
+    const instance = instances.find((i: any) => i.id === instanceId)
+    if (instance?.status === "connected") {
+      stopWhatsAppPolling(messageId)
+      updateWhatsAppState(messageId, { status: "connected" })
+      if (currentSessionId && currentDraft?.instanceId !== instanceId) {
+        await handleAction({
+          type: "set_draft_instances",
+          data: { sessionId: currentSessionId, instanceIds: [instanceId], instanceNames: [instance.name] },
+          label: instance.name,
+        })
+      }
+      return true
+    }
+    return false
+  }
+
   const startWhatsAppPolling = (messageId: string, instanceId: string) => {
     stopWhatsAppPolling(messageId)
     const startedAt = Date.now()
@@ -454,23 +472,24 @@ export default function DashboardPage() {
         return
       }
       try {
-        const instances = await api.instances.list()
-        const instance = instances.find((i: any) => i.id === instanceId)
-        if (instance?.status === "connected") {
-          stopWhatsAppPolling(messageId)
-          updateWhatsAppState(messageId, { status: "connected" })
-          if (currentSessionId && currentDraft?.instanceId !== instanceId) {
-            handleAction({
-              type: "set_draft_instances",
-              data: { sessionId: currentSessionId, instanceIds: [instanceId], instanceNames: [instance.name] },
-              label: instance.name,
-            })
-          }
-        }
+        await checkWhatsAppConnection(messageId, instanceId)
       } catch {
         // silencioso — tenta de novo no próximo tick
       }
     }, WHATSAPP_POLL_INTERVAL_MS)
+  }
+
+  const confirmWhatsAppConnected = async (messageId: string, instanceId: string) => {
+    try {
+      const connected = await checkWhatsAppConnection(messageId, instanceId)
+      if (!connected) {
+        updateWhatsAppState(messageId, { status: "connecting" })
+        startWhatsAppPolling(messageId, instanceId)
+      }
+    } catch {
+      updateWhatsAppState(messageId, { status: "connecting" })
+      startWhatsAppPolling(messageId, instanceId)
+    }
   }
 
   const regenerateWhatsAppQr = async (messageId: string, instanceId: string) => {
@@ -993,6 +1012,7 @@ export default function DashboardPage() {
                               status={msg.whatsapp.status}
                               onRegenerate={() => regenerateWhatsAppQr(msg.id, msg.whatsapp!.instanceId)}
                               onRequestPairingCode={(phoneNumber) => requestWhatsAppPairingCode(msg.id, msg.whatsapp!.instanceId, phoneNumber)}
+                              onAlreadyConnected={() => confirmWhatsAppConnected(msg.id, msg.whatsapp!.instanceId)}
                             />
                           )}
 

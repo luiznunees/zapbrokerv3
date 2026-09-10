@@ -12,6 +12,7 @@ interface ChatWhatsAppQRProps {
   status: WhatsAppQrStatus
   onRegenerate: () => void
   onRequestPairingCode: (phoneNumber: string) => void
+  onAlreadyConnected?: () => void
   regenerating?: boolean
 }
 
@@ -34,7 +35,7 @@ function isMobileDevice() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 }
 
-export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRequestPairingCode, regenerating }: ChatWhatsAppQRProps) {
+export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRequestPairingCode, onAlreadyConnected, regenerating }: ChatWhatsAppQRProps) {
   const isConnected = status === "connected"
   const isExpired = status === "expired"
   const [mode, setMode] = useState<"qrcode" | "code">(isMobileDevice() ? "code" : "qrcode")
@@ -165,6 +166,15 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
               <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Aguardando conexão...
             </div>
+          )}
+
+          {!isExpired && (mode === "qrcode" ? !!qrCode : !!pairingCode) && onAlreadyConnected && (
+            <button
+              onClick={onAlreadyConnected}
+              className="mt-2 w-full bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-semibold py-2 rounded-lg transition-colors"
+            >
+              Já conectei
+            </button>
           )}
 
           <ol className="mt-3 space-y-1">

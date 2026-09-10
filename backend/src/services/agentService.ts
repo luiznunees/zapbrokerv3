@@ -830,6 +830,9 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - Personalização: o placeholder {nome} dentro de uma mensagem é substituído automaticamente pelo nome de cada lead no envio. Ofereça isso proativamente quando ajudar a escrever/melhorar uma mensagem (ex: "Oi {nome}, tudo bem?") — não é necessário perguntar, só avise que vai personalizar.
 - Se faltar WhatsApp conectado, avise e chame suggest_connect_whatsapp antes de seguir com o disparo.
 - Se o usuário disser que "já tem" WhatsApp conectado (sem citar qual), chame get_whatsapp_instances antes de perguntar mais nada. Se só existir um conectado, já use esse via update_campaign_draft e confirme pelo nome — NÃO pergunte "qual número" como se houvesse várias opções quando só tem uma.
+- NUNCA pergunte "qual número de WhatsApp você quer usar" quando houver 0 ou 1 conectado. Com 0 conectado: avise que não tem número conectado e chame suggest_connect_whatsapp. Com 1 conectado: use ele direto via update_campaign_draft e só confirme pelo nome. Pergunta "qual você quer usar" só existe se houver 2+ conectados.
+- CONCISÃO (vale pra qualquer contexto): responda curto — no máximo 3 frases, preferindo uma frase curta + uma pergunta. Não recapitule o que já está definido no rascunho, não descreva o que o usuário acabou de ver na tela, não faça resumo do que acabou de acontecer. Exceções: quando o usuário pedir explicitamente algo longo (reescrever/aprovar uma mensagem, análise detalhada). Quando receber "[Anexo disponível: ...]" (mídia anexada) ou confirmação de conexão, responda em UMA linha curta ("Mídia vinculada. Falta X." / "Número conectado! Falta X.").
+- UM ASSUNTO POR VEZ: nunca pergunte dois itens de uma vez na mesma mensagem ("preciso da lista, do email e do número"). Pergunte só o que falta primeiro, espere a resposta, e só então pergunte o próximo. Exceção: quando o rascunho estiver pronto, informe curto e aponte o botão de confirmar — sem enumeração.
 - Se o usuário pedir pra conectar "mais um" WhatsApp mesmo já tendo um conectado, NÃO diga que já está conectado e recuse — chame suggest_connect_whatsapp normalmente; o botão vai gerar o QR Code de um número novo (respeitando o limite do plano dele).
 - NUNCA diga que um QR Code, seletor ou botão "apareceu"/"já está na tela" a menos que você tenha chamado a tool correspondente NESSE MESMO turno — isso inclui repetir a mesma alegação depois. Se o usuário disser que não está vendo nada (QR Code, seletor, botão), isso significa que a tool não foi chamada ou precisa ser chamada de novo: chame de novo nesse turno, nunca insista que "já apareceu".
 - NUNCA diga "lista selecionada"/"mensagem definida" a menos que o rascunho já tenha esse campo preenchido (veja "JÁ DEFINIDO" acima) — se o usuário só confirmou por texto, chame update_campaign_draft com contactListName ANTES de confirmar isso na resposta, nunca depois.
@@ -1504,7 +1507,9 @@ async function callOpenAiCompatibleCompletion(
 
       if (delta.content) {
         content += delta.content;
-        emitSafeToken(delta.content);
+        // Não emite token a token: se este turno terminar em tool call, esse texto é só
+        // narração e jamais deve chegar ao cliente (senão aparece o efeito "digita e apaga").
+        // Só sai se a resposta final do turno for texto puro (ver fim do stream).
       }
 
       if (delta.tool_calls) {
@@ -1522,6 +1527,12 @@ async function callOpenAiCompatibleCompletion(
   const toolCalls: GroqToolCall[] = Object.values(toolCallsAcc)
     .filter((tc): tc is { id: string; name?: string; arguments: string } => Boolean(tc.id))
     .map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name || '', arguments: tc.arguments } }));
+
+  // Texto só é liberado pro cliente quando o turno fechou em resposta final (sem tool call).
+  // Turnos de narração ("Vou verificar...") acompanhados de tool call são descartados aqui.
+  if (toolCalls.length === 0 && content) {
+    emitSafeToken(content);
+  }
 
   return { content, tool_calls: toolCalls.length > 0 ? toolCalls : undefined, usage };
 }
