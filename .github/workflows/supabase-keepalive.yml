@@ -1,0 +1,38 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # a cada 3 dias às 06:00 UTC (bem dentro da janela de 7 dias da Supabase)
+    - cron: '0 6 */3 * *'
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Projeto Supabase a manter acordado'
+        required: false
+        default: 'zapbroker'
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping PostgREST (query real no banco = atividade)
+        run: |
+          code=$(curl -s -o /tmp/supabase-ping.json -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/keepalive?select=pinged_at&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          if [ "$code" != "200" ]; then
+            echo "Keep-alive falhou com HTTP $code"
+            cat /tmp/supabase-ping.json
+            exit 1
+          fi
+          echo "OK — projeto acordado. Resposta: $(cat /tmp/supabase-ping.json)"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Aviso de manutenção
+        run: |
+          echo "Aviso: o GitHub desativa workflows agendados automaticamente"
+          echo "após 60 dias sem atividade no repositório. Se este job parar"
+          echo "de rodar, o projeto Free pausa de novo em 7 dias."
