@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { HelpCircle, MessageCircle, BookOpen, X, Download } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import { HowItWorksModal } from '@/components/dashboard/HowItWorksModal'
 import { InstallAppModal } from '@/components/dashboard/InstallAppModal'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
@@ -43,7 +44,7 @@ export default function SupportButton() {
                             Como funciona
                         </button>
                         <a
-                            href="https://wa.me/5551980985330?text=Olá,%20tenho%20interesse%20no%20ZapBroker!"
+                            href="https://wa.me/5551994851661?text=Olá,%20tenho%20interesse%20no%20ZapBroker!"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-accent transition-colors text-left"
@@ -63,7 +64,9 @@ export default function SupportButton() {
                 </button>
             </div>
 
-            {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+            <AnimatePresence>
+                {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+            </AnimatePresence>
             {showInstallSteps && <InstallAppModal onClose={() => setShowInstallSteps(false)} />}
         </>
     )

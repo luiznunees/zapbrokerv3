@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
                                         Reenviar email
                                     </button>
                                     <a
-                                        href="https://wa.me/5551980985330?text=Olá,%20não%20recebi%20o%20email%20de%20recuperação%20de%20senha"
+                                        href="https://wa.me/5551994851661?text=Olá,%20não%20recebi%20o%20email%20de%20recuperação%20de%20senha"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-emerald-700 font-semibold hover:underline"

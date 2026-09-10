@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const WHATSAPP_SALES_NUMBER = "5551980985330"
+const WHATSAPP_SALES_NUMBER = "5551994851661"
 
 function buildWhatsAppLink(message: string) {
   return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(message)}`

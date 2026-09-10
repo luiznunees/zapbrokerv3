@@ -134,7 +134,7 @@ export default function PaymentGuard({ children }: { children: React.ReactNode }
                         Verificar novamente
                     </button>
                     <a
-                        href="https://wa.me/5551980985330?text=Olá,%20paguei%20o%20PIX%20mas%20meu%20plano%20ainda%20não%20foi%20confirmado"
+                        href="https://wa.me/5551994851661?text=Olá,%20paguei%20o%20PIX%20mas%20meu%20plano%20ainda%20não%20foi%20confirmado"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-5 py-2.5 border border-border rounded-full font-bold text-sm text-foreground hover:bg-primary/5 transition-colors"

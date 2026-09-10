@@ -10,7 +10,7 @@ export function Footer() {
                     <div className="col-span-2 md:col-span-1 space-y-2">
                         <BrandLogo className="h-5 w-auto text-white" monochrome />
                         <p className="text-xs text-white/50 leading-relaxed max-w-xs">
-                            Automação inteligente de WhatsApp para corretores de imóveis de alta performance.
+                            Disparo em massa no WhatsApp feito pra corretor de imóveis.
                         </p>
                     </div>
 
@@ -36,8 +36,8 @@ export function Footer() {
                         <h4 className="font-black mb-2 text-xs text-white uppercase tracking-wider">Fale com a gente</h4>
                         <ul className="space-y-1.5 text-xs text-white/50">
                             <li>
-                                <a href="https://wa.me/5551980985330?text=Olá,%20tenho%20uma%20dúvida%20sobre%20o%20ZapBroker" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-landing-lime transition-colors">
-                                    <Phone className="w-3 h-3 text-landing-lime" /> (51) 98098-5330
+                                <a href="https://wa.me/5551994851661?text=Olá,%20tenho%20uma%20dúvida%20sobre%20o%20ZapBroker" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-landing-lime transition-colors">
+                                    <Phone className="w-3 h-3 text-landing-lime" /> (51) 99485-1661
                                 </a>
                             </li>
                             <li>
@@ -59,12 +59,12 @@ export function Footer() {
 
 export function CTA() {
     return (
-        <section className="py-8 bg-white">
+        <section className="py-12 md:py-16 bg-white">
             <div className="container mx-auto px-4 md:px-6">
                 <div className="relative rounded-3xl landing-sky-gradient p-8 md:p-10 overflow-hidden">
                     <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
                         <h2 className="font-display text-2xl md:text-3xl font-bold text-white text-center md:text-left leading-tight max-w-md text-balance">
-                            Pronto para multiplicar suas captações e fechar mais negócios?
+                            Pronto pra parar de perder lead por falta de resposta?
                         </h2>
 
                         <Link

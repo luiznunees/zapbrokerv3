@@ -32,7 +32,8 @@ import { useDashboard } from "@/contexts/dashboard-context"
 import { useUser } from "@/contexts/user-context"
 
 type Action = {
-  label: string
+  label?: string
+  title?: string
   type: string
   data?: any
 }
@@ -1053,9 +1054,9 @@ export default function DashboardPage() {
                                   key={i}
                                   onClick={() => handleAction(action)}
                                   disabled={isLoading}
-                                  className="px-4 py-1.5 text-xs font-medium rounded-full glass text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                                  className="px-4 py-1.5 text-xs font-medium rounded-full glass text-primary transition-[background-color,color,transform] duration-150 hover:bg-primary hover:text-white active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 motion-reduce:active:scale-100"
                                 >
-                                  {action.label}
+                                  {action.label || action.title}
                                 </button>
                               ))}
                             </div>

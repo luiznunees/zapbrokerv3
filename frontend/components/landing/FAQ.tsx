@@ -11,7 +11,7 @@ const QUESTIONS = [
     },
     {
         q: "A IA realmente personaliza as mensagens?",
-        a: "Sim. O agente guarda o histórico de cada lead — se já perguntou preço, pediu fotos, visitou — e usa isso pra ajudar você a escrever mensagens e lembretes sob medida pra cada um."
+        a: "Sim. Você conversa com o agente sobre o disparo — qual imóvel, qual lista, que tom usar — e ele monta a mensagem com você antes de enviar pra toda a lista de uma vez."
     },
     {
         q: "Preciso de conhecimento técnico?",
@@ -39,7 +39,7 @@ export function FAQ() {
             <div className="container mx-auto px-4 md:px-6 max-w-3xl">
                 <div className="text-center mb-8">
                     <p className="text-xs font-bold text-landing-sky uppercase tracking-widest mb-2">Dúvidas frequentes</p>
-                    <h2 className="font-display text-2xl md:text-4xl font-bold tracking-tight text-landing-navy">
+                    <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight text-landing-navy">
                         Tire suas dúvidas
                     </h2>
                 </div>
@@ -73,7 +73,7 @@ export function FAQ() {
 
                 <div className="flex justify-center mt-6">
                     <Link
-                        href="https://wa.me/5551980985330?text=Olá,%20tenho%20uma%20dúvida%20sobre%20o%20ZapBroker"
+                        href="https://wa.me/5551994851661?text=Olá,%20tenho%20uma%20dúvida%20sobre%20o%20ZapBroker"
                         target="_blank"
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-landing-navy/10 text-sm font-medium text-landing-navy/80 hover:bg-landing-navy/5 transition-colors"
                     >

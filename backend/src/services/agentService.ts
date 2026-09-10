@@ -9,12 +9,27 @@ import { logAiCost } from './costService';
 import { logAgentTurn } from './agentLogService';
 import { logEvent } from './eventLogService';
 
-// Provedor principal (único): OpenRouter com modelo pago (claude-haiku-4.5). Os fallbacks
+// Provedor de produção (único): OpenRouter com modelo pago (claude-haiku-4.5). Os fallbacks
 // free (gpt-oss-20b:free, Groq llama-3.3-70b, Gemini flash-lite) foram removidos porque
 // sempre caíam em rate limit — o teste revelou que os 3 estouravam cota no mesmo dia.
+//
+// AI_PROVIDER=mistral é uma saída de teste local (sem custo) enquanto a conta OpenRouter
+// não tem crédito — nunca deve estar setado em produção. Ausente/diferente de "mistral" =
+// comportamento normal (OpenRouter).
+const USE_MISTRAL = process.env.AI_PROVIDER === 'mistral';
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL_OVERRIDE || 'anthropic/claude-haiku-4.5';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-small-latest';
+const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+
+const AI_API_KEY = USE_MISTRAL ? MISTRAL_API_KEY : OPENROUTER_API_KEY;
+const AI_MODEL = USE_MISTRAL ? MISTRAL_MODEL : OPENROUTER_MODEL;
+const AI_API_URL = USE_MISTRAL ? MISTRAL_API_URL : OPENROUTER_API_URL;
+const AI_PROVIDER_NAME = USE_MISTRAL ? 'mistral' : 'openrouter';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -511,6 +526,17 @@ function messageReferencesContacts(text: string): boolean {
   return /\b(lista|listas|contato|contatos|lead|leads)\b/i.test(text);
 }
 
+function userWantsToConnectWhatsApp(text: string): boolean {
+  const t = text.toLowerCase();
+  const verb = /\b(conectar|conecta|conecte|conecto|vincular|vincule|parear|pareia|sincronizar|escanear|scanear)\b/.test(t);
+  const whatsappHint = /\b(whatsapp|zap|wpp|n[uú]mero|qr|qr ?code|chip|aparelho)\b/.test(t);
+  if (verb && whatsappHint) return true;
+  if (/\b(conectar|conecta|conecte|conecto)\b/.test(t)) {
+    return !/\b(lead|leads|contato|contatos|campanha|mensagem|mensagens|cliente|clientes|lista|listas|pix|promo[cç][aã]o)\b/.test(t);
+  }
+  return false;
+}
+
 function extractQuotedMessage(text: string): string | null {
   const matches = [...text.matchAll(/["“]([^"”]{8,})["”]/g)].map(m => m[1].trim());
   if (matches.length === 0) return null;
@@ -769,7 +795,7 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - request_message_variations_editor: use se o usuário quiser adicionar mais variações da mensagem ou reorganizar as que já existem (a primeira mensagem continua sendo capturada por texto normalmente).
 - request_contact_exclusion: use se o usuário disser que quer excluir algum lead específico da lista antes desse disparo.
 - cancel_draft: chame se o usuário quiser cancelar o disparo em andamento.
-- suggest_connect_whatsapp / suggest_confirm_campaign / suggest_upgrade / suggest_import_leads: mostram um botão de ação pro usuário. Você nunca executa essas ações sozinho — só sugere o botão; a execução real depende do clique do usuário.
+- suggest_connect_whatsapp / suggest_confirm_campaign / suggest_upgrade / suggest_import_leads: mostram um botão de ação pro usuário. Você nunca executa essas ações sozinho — só sugere o botão; a execução real depende do clique do usuário. IMPORTANTE: o botão só existe se VOCÊ chamar a tool. Se o usuário quiser conectar o WhatsApp (ex: "conectar", "conecta", "vincular número", "qr code", "parear", "conectar whatsapp"), chame suggest_connect_whatsapp SEMPRE e JAMAIS escreva "clica no botão que vai aparecer", "apareceu um botão aí pra você" ou similar sem ter de fato chamado a tool na mesma resposta.
 - compare_campaign_performance: use pra responder qualquer pergunta comparativa sobre desempenho de campanhas ("essa foi boa?", "qual campanha performou melhor?").
 - remember_user_fact: use quando aprender algo duradouro e útil sobre esse corretor (preferências, rotina, região) que vale lembrar em conversas futuras — não use pra dados de um disparo específico.
 - find_contact: use quando o usuário perguntar sobre um lead específico pelo nome/telefone — nunca invente dados de contato.
@@ -1377,16 +1403,16 @@ async function callLLM(
   onToken?: (token: string) => void,
   forceText: boolean = false
 ): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number }; provider: string; model: string }> {
-  if (OPENROUTER_API_KEY) {
+  if (AI_API_KEY) {
     try {
-      const result = await callOpenAiCompatibleCompletion(OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_MODEL, workingMessages, onToken, forceText);
-      return { ...result, provider: 'openrouter', model: OPENROUTER_MODEL };
+      const result = await callOpenAiCompatibleCompletion(AI_API_URL, AI_API_KEY, AI_MODEL, workingMessages, onToken, forceText);
+      return { ...result, provider: AI_PROVIDER_NAME, model: AI_MODEL };
     } catch (error: any) {
       throw new Error(`Erro na comunicação com a IA: ${error.message}`);
     }
   }
 
-  throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY)');
+  throw new Error('Nenhum provedor de IA configurado (OPENROUTER_API_KEY ou MISTRAL_API_KEY)');
 }
 
 async function callOpenAiCompatibleCompletion(
@@ -1747,7 +1773,7 @@ async function continueAfterAction(
   sessionId: string,
   eventDescription: string
 ): Promise<{ reply: string; actions: Action[]; draft: CampaignDraft | null; component: AgentComponent | null }> {
-  if (!OPENROUTER_API_KEY) {
+  if (!AI_API_KEY) {
     return { reply: '', actions: [], draft: await loadDraft(userId, sessionId), component: null };
   }
 
@@ -1808,7 +1834,7 @@ export async function chat(
     currentSessionId = session.id;
   }
 
-  if (!OPENROUTER_API_KEY) {
+  if (!AI_API_KEY) {
     const reply = 'Olá! 👋 Para eu poder ajudar, preciso que você configure a chave da IA (OPENROUTER_API_KEY) no arquivo .env do sistema. Peça pro seu desenvolvedor ou administrador adicionar essa chave.';
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', reply);
@@ -1877,6 +1903,13 @@ export async function chat(
       state.component = { type: 'list_picker' };
     }
 
+    // Mesma rede de segurança pra connexão de WhatsApp: se o modelo só narrou ("clica no
+    // botão que vai aparecer") sem chamar suggest_connect_whatsapp, garante o botão mesma
+    // assim — o botão não existe se a tool não for chamada.
+    if (!state.actions.length && userWantsToConnectWhatsApp(userMessage)) {
+      state.actions.push({ type: 'connect_whatsapp', title: 'Conectar WhatsApp' });
+    }
+
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', finalReply);
 
@@ -1939,7 +1972,7 @@ export async function chat(
 }
 
 export async function getSuggestions(userId: string): Promise<Array<{ icon: string; title: string; desc: string; action: string }>> {
-  if (!OPENROUTER_API_KEY) {
+  if (!AI_API_KEY) {
     return [
       { icon: 'rocket', title: 'Criar campanha', desc: 'Comece um disparo para seus leads', action: 'start_dispatch' },
       { icon: 'upload', title: 'Importar contatos', desc: 'Adicione leads à sua base', action: 'import_leads' },
@@ -1984,7 +2017,7 @@ Dados do usuário:
       }
     ];
 
-    const [apiUrl, apiKey, model] = [OPENROUTER_API_URL, OPENROUTER_API_KEY as string, OPENROUTER_MODEL];
+    const [apiUrl, apiKey, model] = [AI_API_URL, AI_API_KEY as string, AI_MODEL];
 
     const response = await fetch(apiUrl, {
       method: 'POST',
