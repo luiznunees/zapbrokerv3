@@ -796,6 +796,7 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - request_contact_exclusion: use se o usuário disser que quer excluir algum lead específico da lista antes desse disparo.
 - cancel_draft: chame se o usuário quiser cancelar o disparo em andamento.
 - suggest_connect_whatsapp / suggest_confirm_campaign / suggest_upgrade / suggest_import_leads: mostram um botão de ação pro usuário. Você nunca executa essas ações sozinho — só sugere o botão; a execução real depende do clique do usuário. IMPORTANTE: o botão só existe se VOCÊ chamar a tool. Se o usuário quiser conectar o WhatsApp (ex: "conectar", "conecta", "vincular número", "qr code", "parear", "conectar whatsapp"), chame suggest_connect_whatsapp SEMPRE e JAMAIS escreva "clica no botão que vai aparecer", "apareceu um botão aí pra você" ou similar sem ter de fato chamado a tool na mesma resposta.
+- ENVIO DE DISPARO: o envio NÃO acontece pelo chat — só pelo botão "Confirmar disparo" que você gera com suggest_confirm_campaign. Quando o usuário pedir pra enviar ("enviar", "pode mandar", "agora", "dispara", "pode ir"), chame suggest_confirm_campaign e responda que é só clicar em "Confirmar disparo". JAMAIS diga que o disparo "saiu", "foi enviado", "está rodando" ou "os leads estão recebendo" sem o usuário ter clicado em Confirmar disparo — até lá, nada foi enviado.
 - compare_campaign_performance: use pra responder qualquer pergunta comparativa sobre desempenho de campanhas ("essa foi boa?", "qual campanha performou melhor?").
 - remember_user_fact: use quando aprender algo duradouro e útil sobre esse corretor (preferências, rotina, região) que vale lembrar em conversas futuras — não use pra dados de um disparo específico.
 - find_contact: use quando o usuário perguntar sobre um lead específico pelo nome/telefone — nunca invente dados de contato.
@@ -1908,6 +1909,18 @@ export async function chat(
     // assim — o botão não existe se a tool não for chamada.
     if (!state.actions.length && userWantsToConnectWhatsApp(userMessage)) {
       state.actions.push({ type: 'connect_whatsapp', title: 'Conectar WhatsApp' });
+    }
+
+    // Rede de segurança do envio: se o usuário pediu explicitamente pra disparar e o rascunho
+    // está pronto, garante o resumo + botão "Confirmar disparo" mesmo se o modelo respondeu só
+    // com texto ("seu disparo saiu!") sem chamar suggest_confirm_campaign.
+    if (
+      !state.actions.some((a) => a.type === 'confirm_campaign' || a.type === 'suggest_upgrade') &&
+      state.draft?.readyToSend &&
+      /\b(enviar|envia|manda|mande|mandar|disparar|dispara|disparo|pode ir|pode mandar|pode lan[cç]ar|pode enviar|lan[cç]a)\b/i.test(userMessage)
+    ) {
+      state.component = { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
+      state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
     }
 
     await persistMessage(userId, currentSessionId, 'user', userMessage);

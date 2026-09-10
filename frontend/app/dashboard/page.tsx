@@ -647,7 +647,14 @@ export default function DashboardPage() {
     if (isConfirmCampaign) setIsConfirmingCampaign(true)
     setIsLoading(true)
     try {
-      const response = await api.agent.execute(action.type, action.data)
+      // Botões emitidos pelo agente (suggest_* ) chegam só com { type, title } — sem a
+      // sessão, que o backend exige. Os componentes visuais já enviam sessionId no data;
+      // aqui injeta o da conversa atual quando vier faltando.
+      const actionData = action.data?.sessionId
+        ? action.data
+        : { ...(action.data || {}), sessionId: currentSessionId }
+
+      const response = await api.agent.execute(action.type, actionData)
 
       const resultMessage: Message = {
         id: `agent-${Date.now()}`,
