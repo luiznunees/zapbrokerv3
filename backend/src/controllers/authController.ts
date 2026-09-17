@@ -5,6 +5,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import { AppError } from '../utils/AppError';
 
 import * as eventLogService from '../services/eventLogService';
+import { notifyAdmins } from '../services/pushService';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -52,6 +53,15 @@ export const register = async (req: Request, res: Response) => {
             userId: user.user.id,
             metadata: { email, planId: planId || null, viaInvite: !!inviteData },
         });
+
+        notifyAdmins({
+            title: '🎉 Novo cadastro no ZapBroker',
+            body: inviteData?.trial_days
+                ? `${email} entrou no teste grátis de ${inviteData.trial_days} dias`
+                : inviteData
+                    ? `${email} entrou via convite`
+                    : `${email}${planId ? ` escolheu o plano ${planId}` : ' se cadastrou'}`,
+        }).catch(() => {});
 
         // 1.1 Process Invite (Mark as used and Create Subscription)
         if (inviteData && user.user) {

@@ -133,7 +133,7 @@ export function AnimatedAIChat({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute bottom-full left-0 mb-2 w-64 rounded-2xl glass-floating shadow-2xl p-1.5 z-20"
+                  className="absolute bottom-full left-0 mb-2 w-64 rounded-2xl bg-popover border border-border shadow-2xl p-1.5 z-20"
                 >
                   {ATTACH_OPTIONS.map((opt) => (
                     <button

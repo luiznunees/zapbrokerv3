@@ -70,3 +70,14 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
         await sendPushToUser(userId, payload);
     }
 }
+
+// Avisa quem tem role 'admin' (painel /admin) — usado pra eventos que o fundador quer saber
+// na hora (novo cadastro, etc.), sem depender de abrir o Discord.
+export async function notifyAdmins(payload: PushPayload): Promise<void> {
+    if (!pushEnabled()) return;
+
+    const { data: admins, error } = await supabase.from('users').select('id').eq('role', 'admin');
+    if (error || !admins?.length) return;
+
+    await sendPushToUsers(admins.map(a => a.id), { url: '/admin/users', ...payload });
+}
