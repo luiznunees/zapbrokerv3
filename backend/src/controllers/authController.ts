@@ -72,10 +72,15 @@ export const register = async (req: Request, res: Response) => {
         // 1.1 Process Invite (Mark as used and Create Subscription)
         if (inviteData && user.user) {
             // Mark invite as used
-            await supabase
+            const { error: markUsedError } = await supabase
                 .from('admin_invites')
                 .update({ is_used: true, used_by: user.user.id })
                 .eq('id', inviteData.id);
+
+            if (markUsedError) {
+                console.error('Register: failed to mark invite as used:', markUsedError.message);
+                throw new Error('Falha ao processar o convite (marcar como usado). Tenta de novo em alguns segundos.');
+            }
 
             // Convite de teste grátis (trial_days setado): assinatura ativa mas com prazo —
             // o cron de renewQuotas.ts expira sozinho quando trial_ends_at passar. Sem
@@ -86,7 +91,7 @@ export const register = async (req: Request, res: Response) => {
                 : null;
 
             // Create Subscription
-            await supabase
+            const { error: subscriptionError } = await supabase
                 .from('subscriptions')
                 .insert([{
                     user_id: user.user.id,
@@ -96,6 +101,11 @@ export const register = async (req: Request, res: Response) => {
                     next_billing_date: isTrial ? null : new Date(new Date().setFullYear(new Date().getFullYear() + 100)), // 100 years for invited plans (lifetime/freemium)
                     trial_ends_at: trialEndsAt,
                 }]);
+
+            if (subscriptionError) {
+                console.error('Register: failed to create subscription from invite:', subscriptionError.message);
+                throw new Error('Falha ao ativar sua assinatura do convite. Tenta de novo em alguns segundos ou fala com quem te convidou.');
+            }
 
             const inviteSession = await authService.loginUser(email, password);
             return res.status(201).json({
@@ -233,7 +243,7 @@ export const getProfile = async (req: any, res: Response) => {
         // Fetch subscription status and plan info
         const { data: subscription } = await supabase
             .from('subscriptions')
-            .select('status, next_billing_date, plan_id, pix_cpf, pix_cellphone')
+            .select('status, next_billing_date, trial_ends_at, plan_id, pix_cpf, pix_cellphone')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -251,12 +261,15 @@ export const getProfile = async (req: any, res: Response) => {
 
             if (subscription.status === 'active') {
                 const now = new Date();
-                const nextBilling = new Date(subscription.next_billing_date);
-                if (nextBilling > now) {
-                    subscriptionStatus = 'active';
-                } else {
-                    subscriptionStatus = 'expired';
-                }
+                // Convites de teste grátis deixam next_billing_date null de propósito (pra não
+                // entrar na fila de cobrança PIX) — usar trial_ends_at nesse caso. new Date(null)
+                // vira epoch (1970), então sem essa distinção todo teste grátis aparecia "vencido".
+                const deadline = subscription.trial_ends_at
+                    ? new Date(subscription.trial_ends_at)
+                    : subscription.next_billing_date
+                        ? new Date(subscription.next_billing_date)
+                        : null;
+                subscriptionStatus = !deadline || deadline > now ? 'active' : 'expired';
             } else {
                 subscriptionStatus = subscription.status;
             }
