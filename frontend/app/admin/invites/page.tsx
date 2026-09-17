@@ -9,17 +9,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Copy, Check, Sparkles } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
+const TRIAL_DAYS = 15
+
 export default function AdminInvitesPage() {
-    const [planId, setPlanId] = useState('free')
+    const [planId, setPlanId] = useState('trial')
     const [generatedLink, setGeneratedLink] = useState('')
+    const [generatedIsTrial, setGeneratedIsTrial] = useState(false)
     const [copied, setCopied] = useState(false)
     const [loading, setLoading] = useState(false)
+
+    const isTrial = planId === 'trial'
 
     const handleGenerate = async () => {
         setLoading(true)
         try {
-            const res = await api.admin.createInvite(planId)
+            const res = await api.admin.createInvite(isTrial ? 'pro' : planId, isTrial ? TRIAL_DAYS : undefined)
             setGeneratedLink(res.link)
+            setGeneratedIsTrial(isTrial)
         } catch (error) {
             console.error('Failed to generate invite:', error)
             alert('Failed to generate invite')
@@ -57,11 +63,17 @@ export default function AdminInvitesPage() {
                                 <SelectValue placeholder="Selecione o plano" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="free">Freemium (Grátis)</SelectItem>
-                                <SelectItem value="starter">Starter</SelectItem>
-                                <SelectItem value="pro">Pro</SelectItem>
+                                <SelectItem value="trial">Teste grátis — {TRIAL_DAYS} dias (Pro)</SelectItem>
+                                <SelectItem value="free">Freemium (Grátis, sem prazo)</SelectItem>
+                                <SelectItem value="starter">Starter (sem prazo)</SelectItem>
+                                <SelectItem value="pro">Pro (sem prazo)</SelectItem>
                             </SelectContent>
                         </Select>
+                        <p className="text-xs text-zinc-500">
+                            {isTrial
+                                ? `Acesso completo ao plano Pro por ${TRIAL_DAYS} dias. Expira automaticamente depois disso, sem cobrança.`
+                                : 'Acesso permanente ao plano escolhido, sem cobrança — pra convidados fixos.'}
+                        </p>
                     </div>
 
                     <Button
@@ -74,7 +86,9 @@ export default function AdminInvitesPage() {
 
                     {generatedLink && (
                         <div className="animate-in fade-in slide-in-from-top-4 pt-4 border-t border-zinc-800">
-                            <Label className="text-zinc-300 mb-2 block">Link Gerado (Expira em 24h)</Label>
+                            <Label className="text-zinc-300 mb-2 block">
+                                Link gerado — uso único{generatedIsTrial ? ` (${TRIAL_DAYS} dias de teste grátis)` : ''}
+                            </Label>
                             <div className="flex gap-2">
                                 <Input
                                     value={generatedLink}

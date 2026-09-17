@@ -61,6 +61,14 @@ export const register = async (req: Request, res: Response) => {
                 .update({ is_used: true, used_by: user.user.id })
                 .eq('id', inviteData.id);
 
+            // Convite de teste grátis (trial_days setado): assinatura ativa mas com prazo —
+            // o cron de renewQuotas.ts expira sozinho quando trial_ends_at passar. Sem
+            // next_billing_date pra não entrar na fila de cobrança PIX do monthlyBilling.ts.
+            const isTrial = !!inviteData.trial_days;
+            const trialEndsAt = isTrial
+                ? new Date(Date.now() + inviteData.trial_days * 24 * 60 * 60 * 1000)
+                : null;
+
             // Create Subscription
             await supabase
                 .from('subscriptions')
@@ -69,7 +77,8 @@ export const register = async (req: Request, res: Response) => {
                     plan_id: inviteData.plan_id,
                     status: 'active',
                     start_date: new Date(),
-                    next_billing_date: new Date(new Date().setFullYear(new Date().getFullYear() + 100)) // 100 years for invited plans (lifetime/freemium)
+                    next_billing_date: isTrial ? null : new Date(new Date().setFullYear(new Date().getFullYear() + 100)), // 100 years for invited plans (lifetime/freemium)
+                    trial_ends_at: trialEndsAt,
                 }]);
 
             const inviteSession = await authService.loginUser(email, password);
@@ -77,7 +86,9 @@ export const register = async (req: Request, res: Response) => {
                 user: inviteSession.user,
                 token: inviteSession.token,
                 session: inviteSession.session,
-                message: 'Conta criada com sucesso via convite!'
+                message: isTrial
+                    ? `Conta criada! Você tem ${inviteData.trial_days} dias de teste grátis.`
+                    : 'Conta criada com sucesso via convite!'
             });
         }
 

@@ -44,19 +44,18 @@ export const banUser = async (req: AuthRequest, res: Response) => {
 
 export const createInvite = async (req: AuthRequest, res: Response) => {
     try {
-        const { planId } = req.body; // e.g., 'free', 'pro'
+        const { planId, trialDays } = req.body; // e.g., 'free', 'pro'; trialDays: 15 pra teste grátis
         const userId = req.user.id;
 
-        const invite = await adminService.generateInvite(planId || 'free', userId);
+        const invite = await adminService.generateInvite(planId || 'free', userId, trialDays);
         eventLogService.logEvent({
             type: 'admin.invite_created',
             severity: 'info',
-            message: `Admin ${userId} criou convite (plano ${planId || 'free'})`,
+            message: `Admin ${userId} criou convite (plano ${planId || 'free'}${trialDays ? `, teste grátis ${trialDays}d` : ''})`,
             userId,
-            metadata: { planId: planId || 'free', inviteCode: invite.code },
+            metadata: { planId: planId || 'free', inviteCode: invite.code, trialDays: trialDays || null },
         });
 
-        // Return full link format
         // Return full link format
         const link = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/signup?invite=${invite.code}`;
 

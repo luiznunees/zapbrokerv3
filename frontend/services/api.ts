@@ -162,7 +162,7 @@ export const api = {
         stats: () => fetchAPI('/admin/stats'),
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
-        createInvite: (planId: string) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId }) }),
+        createInvite: (planId: string, trialDays?: number) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays }) }),
         logs: (severity?: string) => {
             const params = new URLSearchParams()
             if (severity) params.set('severity', severity)

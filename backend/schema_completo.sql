@@ -211,7 +211,9 @@ create table if not exists admin_invites (
   created_by uuid references users(id),
   used_by uuid references users(id),
   used_at timestamp with time zone,
-  created_at timestamp with time zone default now()
+  created_at timestamp with time zone default now(),
+  is_used boolean not null default false,
+  trial_days integer
 );
 
 -- 3.15 Agent sessions (AI chat grouping)

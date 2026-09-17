@@ -98,7 +98,7 @@ export const banUser = async (userId: string) => {
     return { success: true };
 };
 
-export const generateInvite = async (planId: string, createdBy: string) => {
+export const generateInvite = async (planId: string, createdBy: string, trialDays?: number) => {
     // Generate a unique code
     const code = uuidv4().substring(0, 8).toUpperCase(); // Short code
 
@@ -107,7 +107,8 @@ export const generateInvite = async (planId: string, createdBy: string) => {
         .insert([{
             code,
             plan_id: planId,
-            created_by: createdBy // If we add this column, or just ignore
+            created_by: createdBy, // If we add this column, or just ignore
+            trial_days: trialDays || null,
         }])
         .select()
         .single();

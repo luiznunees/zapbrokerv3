@@ -236,6 +236,10 @@ create policy "Users can delete their own push subscriptions" on push_subscripti
   for delete using (auth.uid() = user_id);
 `;
 
+const TRIAL_INVITES_SQL = `
+alter table admin_invites add column if not exists trial_days integer;
+`;
+
 export async function runMigrations() {
   console.log('[Migrations] Verificando tabela agent_sessions...');
 
@@ -410,5 +414,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar push_subscriptions:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: TRIAL_INVITES_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar trial_days automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: alter table admin_invites add column if not exists trial_days integer;');
+    } else {
+      console.log('[Migrations] Coluna admin_invites.trial_days verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar coluna trial_days:', err.message);
   }
 }
