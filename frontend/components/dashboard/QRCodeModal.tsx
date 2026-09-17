@@ -2,6 +2,7 @@ import { X, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
+import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone';
 
 export interface QRCodeModalProps {
     isOpen: boolean;
@@ -119,7 +120,7 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                                     {onCheckNow && <CheckNowButton checking={checking} onClick={handleCheckNow} />}
                                     {checkedNotYet && <NotYetHint />}
                                     <button
-                                        onClick={() => onRequestPairingCode(phoneNumber)}
+                                        onClick={() => onRequestPairingCode(toFullPhoneDigits(phoneNumber))}
                                         className="text-xs underline text-muted-foreground"
                                     >
                                         Gerar novo código
@@ -128,18 +129,18 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                             ) : (
                                 <div className="space-y-4 w-full">
                                     <p className="text-sm text-muted-foreground">
-                                        Digite o número de WhatsApp que será conectado (com DDI e DDD):
+                                        Digite o número de WhatsApp que será conectado:
                                     </p>
                                     <input
                                         type="tel"
                                         inputMode="numeric"
-                                        placeholder="5511999999999"
-                                        value={phoneNumber}
-                                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                                        placeholder="+55 (11) 91234-5678"
+                                        value={formatPhoneWithDdi(phoneNumber)}
+                                        onChange={(e) => setPhoneNumber(extractLocalPhoneDigits(e.target.value))}
                                         className="w-full text-center text-lg font-medium bg-accent/50 border border-border rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary"
                                     />
                                     <button
-                                        onClick={() => onRequestPairingCode(phoneNumber)}
+                                        onClick={() => onRequestPairingCode(toFullPhoneDigits(phoneNumber))}
                                         disabled={isLoading || phoneNumber.length < 10}
                                         className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-all"
                                     >

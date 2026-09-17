@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Smartphone, CheckCircle2, RefreshCw, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from "@/lib/phone"
 
 export type WhatsAppQrStatus = "connecting" | "connected" | "expired"
 
@@ -122,13 +123,13 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
                 <input
                   type="tel"
                   inputMode="numeric"
-                  placeholder="5511999999999"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                  placeholder="+55 (11) 91234-5678"
+                  value={formatPhoneWithDdi(phoneNumber)}
+                  onChange={(e) => setPhoneNumber(extractLocalPhoneDigits(e.target.value))}
                   className="w-full text-center text-sm font-medium bg-black/20 border border-emerald-500/20 rounded-lg py-2 px-3 text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                 />
                 <button
-                  onClick={() => onRequestPairingCode(phoneNumber)}
+                  onClick={() => onRequestPairingCode(toFullPhoneDigits(phoneNumber))}
                   disabled={regenerating || phoneNumber.length < 10}
                   className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50 text-emerald-300 text-xs font-semibold py-2 rounded-lg transition-colors"
                 >

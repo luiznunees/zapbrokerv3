@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 
 import { api } from '@/services/api'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
+import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 import { BrandLoader } from '@/components/ui/BrandLoader'
 
@@ -84,7 +85,7 @@ export default function ConnectionPage() {
         try {
             setLoadingInstances(true);
             setErrorMessage(null); // Clear previous errors
-            const phone = newInstancePhone.trim() || undefined;
+            const phone = toFullPhoneDigits(newInstancePhone) || undefined;
             const created = await api.instances.create(newInstanceName, phone);
             setNewInstanceName('');
             setNewInstancePhone('');
@@ -314,9 +315,9 @@ export default function ConnectionPage() {
                                         <input
                                             type="tel"
                                             inputMode="numeric"
-                                            value={newInstancePhone}
-                                            onChange={(e) => setNewInstancePhone(e.target.value.replace(/\D/g, ''))}
-                                            placeholder="5511999999999 (com DDI e DDD)"
+                                            value={formatPhoneWithDdi(newInstancePhone)}
+                                            onChange={(e) => setNewInstancePhone(extractLocalPhoneDigits(e.target.value))}
+                                            placeholder="+55 (11) 91234-5678"
                                             className="w-full px-4 py-2.5 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
                                         />
                                         <p className="text-xs text-muted-foreground mt-2">Informar aqui gera o QR/código de pareamento já na criação — mais confiável do que conectar depois.</p>

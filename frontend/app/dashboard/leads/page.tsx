@@ -15,6 +15,7 @@ import {
 } from '@solar-icons/react'
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
+import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
 import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip'
 import { HelpBadge } from '@/components/ui/HelpBadge'
@@ -111,6 +112,7 @@ export default function LeadsPage() {
         try {
             await api.contacts.create({
                 ...newContactData,
+                phone: toFullPhoneDigits(newContactData.phone),
                 listId: selectedList.id
             })
             // Refresh contacts
@@ -260,11 +262,12 @@ export default function LeadsPage() {
                                 <div>
                                     <label className="block text-sm font-bold text-muted-foreground mb-2">WhatsApp</label>
                                     <input
-                                        type="text"
-                                        value={newContactData.phone}
-                                        onChange={(e) => setNewContactData(prev => ({ ...prev, phone: e.target.value }))}
+                                        type="tel"
+                                        inputMode="numeric"
+                                        value={formatPhoneWithDdi(newContactData.phone)}
+                                        onChange={(e) => setNewContactData(prev => ({ ...prev, phone: extractLocalPhoneDigits(e.target.value) }))}
                                         className="w-full px-5 py-3 bg-accent/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                        placeholder="ex: 5511999999999"
+                                        placeholder="+55 (11) 91234-5678"
                                         disabled={isSubmitting}
                                     />
                                 </div>
