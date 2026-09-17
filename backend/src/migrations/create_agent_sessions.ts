@@ -249,30 +249,23 @@ const USER_FK_CASCADE_SQL = `
 do $$
 declare
   r record;
-  fix record;
 begin
-  for fix in
-    select * from (values
-      ('agent_messages', 'cascade'),
-      ('agent_sessions', 'cascade'),
-      ('agent_turn_logs', 'cascade'),
-      ('admin_invites', 'set null')
-    ) as t(tbl, rule)
+  for r in
+    select c.conname, c.conrelid::regclass::text as tbl, a.attname as col
+    from pg_constraint c
+    join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+    where c.contype = 'f'
+      and c.confrelid = 'users'::regclass
+      and c.confdeltype = 'a' -- 'a' = NO ACTION, o default quando a tabela nunca definiu on delete
   loop
-    for r in
-      select conname, a.attname as col
-      from pg_constraint c
-      join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
-      where c.contype = 'f'
-        and c.confrelid = 'users'::regclass
-        and c.conrelid = fix.tbl::regclass
-    loop
-      execute format('alter table %I drop constraint %I', fix.tbl, r.conname);
-      execute format(
-        'alter table %I add foreign key (%I) references users(id) on delete %s',
-        fix.tbl, r.col, fix.rule
-      );
-    end loop;
+    execute format('alter table %I drop constraint %I', r.tbl, r.conname);
+    execute format(
+      'alter table %I add foreign key (%I) references users(id) on delete %s',
+      r.tbl, r.col,
+      -- admin_invites é registro de auditoria (quem criou/usou o convite) — mantém a
+      -- linha e só solta a referência; todo o resto pertence ao usuário e vai junto.
+      case when r.tbl = 'admin_invites' then 'set null' else 'cascade' end
+    );
   end loop;
 end $$;
 `;
@@ -491,7 +484,7 @@ export async function runMigrations() {
     if (rpcError) {
       console.warn('[Migrations] Não foi possível corrigir FKs de users automaticamente:', rpcError.message);
     } else {
-      console.log('[Migrations] FKs pra users(id) em agent_messages/agent_sessions/agent_turn_logs/admin_invites corrigidas (cascade/set null).');
+      console.log('[Migrations] FKs pra users(id) sem "on delete" verificadas/corrigidas (cascade, exceto admin_invites que fica set null).');
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao corrigir FKs de users:', err.message);
