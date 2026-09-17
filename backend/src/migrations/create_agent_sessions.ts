@@ -240,6 +240,43 @@ const TRIAL_INVITES_SQL = `
 alter table admin_invites add column if not exists trial_days integer;
 `;
 
+// FKs pra users(id) sem "on delete" definido bloqueiam qualquer exclusão de usuário
+// (erro visto ao tentar limpar a base: "agent_messages_user_id_fkey"). Acha o nome real
+// da constraint em cada tabela (não assume o nome padrão) e recria com o rule certo —
+// cascade pra dados que pertencem ao usuário (histórico de chat), set null pra registros
+// de auditoria onde vale manter o registro mesmo sem o usuário (quem criou/usou um convite).
+const USER_FK_CASCADE_SQL = `
+do $$
+declare
+  r record;
+  fix record;
+begin
+  for fix in
+    select * from (values
+      ('agent_messages', 'cascade'),
+      ('agent_sessions', 'cascade'),
+      ('agent_turn_logs', 'cascade'),
+      ('admin_invites', 'set null')
+    ) as t(tbl, rule)
+  loop
+    for r in
+      select conname, a.attname as col
+      from pg_constraint c
+      join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+      where c.contype = 'f'
+        and c.confrelid = 'users'::regclass
+        and c.conrelid = fix.tbl::regclass
+    loop
+      execute format('alter table %I drop constraint %I', fix.tbl, r.conname);
+      execute format(
+        'alter table %I add foreign key (%I) references users(id) on delete %s',
+        fix.tbl, r.col, fix.rule
+      );
+    end loop;
+  end loop;
+end $$;
+`;
+
 const BETA_FEEDBACK_SQL = `
 create table if not exists beta_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -447,6 +484,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar coluna trial_days:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: USER_FK_CASCADE_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível corrigir FKs de users automaticamente:', rpcError.message);
+    } else {
+      console.log('[Migrations] FKs pra users(id) em agent_messages/agent_sessions/agent_turn_logs/admin_invites corrigidas (cascade/set null).');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao corrigir FKs de users:', err.message);
   }
 
   try {

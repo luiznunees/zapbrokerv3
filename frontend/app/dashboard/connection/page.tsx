@@ -7,7 +7,6 @@ import { api } from '@/services/api'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 import { BrandLoader } from '@/components/ui/BrandLoader'
-import { DedicatedNumberPanel } from '@/components/dashboard/DedicatedNumberPanel'
 
 export default function ConnectionPage() {
     const [instances, setInstances] = useState<any[]>([]);
@@ -54,6 +53,27 @@ export default function ConnectionPage() {
             console.error('Failed to fetch instances', error);
         } finally {
             setLoadingInstances(false);
+        }
+    };
+
+    // Checagem manual disparada pelo botão "Já conectei" — mesma lógica do polling, mas
+    // na hora, pra dar feedback imediato em vez de esperar o próximo ciclo de 3s.
+    const checkConnectionNow = async (): Promise<boolean> => {
+        try {
+            const data = await api.instances.list();
+            setInstances(data);
+            if (connectingInstanceId) {
+                const current = data.find((i: any) => i.id === connectingInstanceId);
+                if (current?.status === 'connected' || current?.status === 'open') {
+                    setIsQRModalOpen(false);
+                    setConnectingInstanceId(null);
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed to check connection', error);
+            return false;
         }
     };
 
@@ -157,12 +177,6 @@ export default function ConnectionPage() {
 
             <div className="bg-card border border-border rounded-xl p-6 md:p-8 shadow-sm min-h-[400px]">
                 <div className="space-y-6 animate-in fade-in">
-                    <DedicatedNumberPanel
-                        onCreateInstance={() => setIsNewInstanceModalOpen(true)}
-                        onConnect={(instanceId, phoneNumber) => handleConnect(instanceId, phoneNumber)}
-                        instances={instances}
-                    />
-
                     <div className="flex justify-between items-center mb-4">
                         <div>
                             <h3 className="text-xl font-bold">Instâncias do WhatsApp</h3>
@@ -339,6 +353,7 @@ export default function ConnectionPage() {
                         isLoading={qrLoading}
                         onRetry={() => connectingInstanceId && handleConnect(connectingInstanceId)}
                         onRequestPairingCode={(phoneNumber) => connectingInstanceId && handleConnect(connectingInstanceId, phoneNumber)}
+                        onCheckNow={checkConnectionNow}
                     />
 
                 </div>

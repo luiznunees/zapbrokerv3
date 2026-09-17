@@ -7,7 +7,6 @@ import {
     UploadMinimalistic,
     FileText,
     InfoCircle,
-    FileDownload,
     DocumentText
 } from '@solar-icons/react'
 import { api } from '@/services/api'
@@ -79,15 +78,6 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
         setStep('input')
         setFile(null)
         setImportResult(null)
-    }
-
-    const downloadTemplate = () => {
-        const link = document.createElement('a')
-        link.href = '/template_contatos.csv'
-        link.download = 'template_zapbroker.csv'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
     }
 
     if (!isOpen) return null
@@ -165,34 +155,17 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-4 mb-6">
+                        <div className="mb-6">
                             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-bold text-blue-600 mb-1">Para que serve?</h4>
-                                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                                        Ideal para <b>planilhas de contatos</b>, listas exportadas de outros sistemas (CRM, Excel, Google Sheets)
-                                        ou qualquer arquivo CSV/Excel com nomes e telefones organizados.
-                                    </p>
-                                    <button
-                                        onClick={downloadTemplate}
-                                        className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-                                    >
-                                        <FileDownload className="w-4 h-4" />
-                                        Baixar Modelo CSV
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex gap-3 items-start">
-                                <InfoCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-green-600">Não precisa seguir um modelo</h4>
-                                    <ul className="text-xs text-muted-foreground mt-2 leading-relaxed space-y-1 list-disc list-inside">
-                                        <li>A gente identifica sozinho qual coluna é nome e qual é telefone, mesmo sem cabeçalho</li>
-                                        <li>Aceita telefone com ou sem DDI, com parênteses, espaço ou traço — a gente ajusta</li>
-                                        <li>Funciona com <b>.csv</b> (vírgula ou ponto-e-vírgula) e <b>.xlsx</b> (Excel)</li>
-                                        <li>Linhas sem telefone válido são ignoradas e mostramos quantas foram</li>
-                                    </ul>
+                                    <h4 className="text-sm font-bold text-blue-600 mb-1">Sem modelo, sem formatação — a gente identifica sozinho</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Solta a planilha ou export do CRM/Excel do jeito que ela já está. A gente acha
+                                        nome e telefone sozinho (com ou sem cabeçalho) e ajusta o telefone pra qualquer
+                                        formatação. Aceita <b>.csv</b> e <b>.xlsx</b>. Linha sem telefone válido é ignorada
+                                        e mostramos quantas foram.
+                                    </p>
                                 </div>
                             </div>
                         </div>

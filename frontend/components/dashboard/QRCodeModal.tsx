@@ -1,4 +1,4 @@
-import { X, Smartphone } from 'lucide-react';
+import { X, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
@@ -11,19 +11,32 @@ export interface QRCodeModalProps {
     isLoading: boolean;
     onRetry: () => void;
     onRequestPairingCode: (phoneNumber: string) => void;
+    onCheckNow?: () => Promise<boolean> | void;
 }
 
-export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, onRetry, onRequestPairingCode }: QRCodeModalProps) {
+export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, onRetry, onRequestPairingCode, onCheckNow }: QRCodeModalProps) {
     const [isTimedOut, setIsTimedOut] = React.useState(false);
     // QR code é o caminho confiável (o código de pareamento por texto tem bug conhecido
     // no Baileys/Evolution API — costuma ser recusado pelo WhatsApp mesmo gerado certo).
     const [mode, setMode] = React.useState<'qrcode' | 'code'>('qrcode');
     const [phoneNumber, setPhoneNumber] = React.useState('');
+    const [checking, setChecking] = React.useState(false);
+    const [checkedNotYet, setCheckedNotYet] = React.useState(false);
     const shouldReduceMotion = useReducedMotion();
+
+    const handleCheckNow = async () => {
+        if (!onCheckNow || checking) return;
+        setChecking(true);
+        setCheckedNotYet(false);
+        const connected = await onCheckNow();
+        setChecking(false);
+        if (!connected) setCheckedNotYet(true);
+    };
 
     React.useEffect(() => {
         if (isOpen) {
             setMode('qrcode');
+            setCheckedNotYet(false);
         }
     }, [isOpen]);
 
@@ -103,6 +116,8 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                                             3. Digite o código acima
                                         </p>
                                     </div>
+                                    {onCheckNow && <CheckNowButton checking={checking} onClick={handleCheckNow} />}
+                                    {checkedNotYet && <NotYetHint />}
                                     <button
                                         onClick={() => onRequestPairingCode(phoneNumber)}
                                         className="text-xs underline text-muted-foreground"
@@ -168,6 +183,9 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                                         3. Toque em "Conectar um Aparelho" e aponte a câmera
                                     </p>
                                 </div>
+
+                                {onCheckNow && <CheckNowButton checking={checking} onClick={handleCheckNow} />}
+                                {checkedNotYet && <NotYetHint />}
                             </div>
                         ) : (
                             <div className="py-8 text-destructive">
@@ -215,5 +233,26 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                 </motion.div>
             )}
         </AnimatePresence>
+    );
+}
+
+function CheckNowButton({ checking, onClick }: { checking: boolean; onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={checking}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors disabled:opacity-60"
+        >
+            {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {checking ? 'Verificando...' : 'Já conectei'}
+        </button>
+    );
+}
+
+function NotYetHint() {
+    return (
+        <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-lg py-2 px-3">
+            Ainda não detectamos a conexão. Confira se completou os passos acima e tenta de novo em alguns segundos.
+        </p>
     );
 }
