@@ -104,6 +104,32 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
+/* iOS Safari dá zoom automático ao focar qualquer campo com fonte < 16px — em telas
+   estreitas isso acontece a cada toque (composer do chat, disparo rápido, telefone,
+   login/cadastro...), sensação de app quebrado. Muitos desses campos usam text-sm/text-xs
+   (14px/12px) pro visual — sobrescreve só o tamanho de fonte, sem mudar padding/altura,
+   e só até o breakpoint onde o design já usa telas largas o bastante pra isso não ocorrer. */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* iPhones com indicador de home (todos os modelos sem botão físico) reservam uma faixa
+   de gesto na base da tela — uma barra fixa colada em bottom-0 fica com os ícones
+   parcialmente por baixo dela, difícil de tocar. */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Espaço reservado embaixo do conteúdo pra não ficar por baixo do NavRail fixo no mobile
+   (altura do rail + a mesma margem de segurança que ele usa). */
+.pb-nav-safe {
+  padding-bottom: calc(4rem + max(0.5rem, env(safe-area-inset-bottom)));
+}
+
 /* Custom Utilities */
 .text-brand-purple {
   background: linear-gradient(135deg, #0B3B82 0%, #2E7CF6 100%);

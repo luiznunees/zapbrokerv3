@@ -27,10 +27,11 @@ export function NavRail() {
     <nav
       className={cn(
         "flex items-center shrink-0 z-30 bg-white border-zinc-200 shadow-sm",
-        // Mobile: fixed bottom tab bar
-        "fixed bottom-0 inset-x-0 flex-row justify-around w-full h-16 rounded-t-3xl border-t px-2",
+        // Mobile: fixed bottom tab bar — pb-safe evita que o indicador de home do iPhone
+        // fique por cima dos ícones (min-h em vez de h fixo pra não esmagar a área de toque).
+        "fixed bottom-0 inset-x-0 flex-row justify-around w-full min-h-16 pb-safe rounded-t-3xl border-t px-2",
         // Desktop (lg+): vertical rail on the left
-        "lg:static lg:flex-col lg:justify-start lg:items-center lg:py-4 lg:gap-1.5 lg:w-16 lg:h-[calc(100vh-24px)] lg:my-3 lg:ml-3 lg:rounded-3xl lg:border lg:px-0"
+        "lg:static lg:flex-col lg:justify-start lg:items-center lg:py-4 lg:gap-1.5 lg:w-16 lg:h-[calc(100vh-24px)] lg:my-3 lg:ml-3 lg:rounded-3xl lg:border lg:px-0 lg:pb-0"
       )}
     >
       <Link
