@@ -89,6 +89,26 @@ export const checkSessionStatus = async (instanceName: string) => {
     }
 };
 
+// Evolution devolve o motivo real (número inexistente no WhatsApp, instância desconectada,
+// rate limit etc.) em response.data — sem isso, todo erro de envio virava a mesma mensagem
+// genérica em campaign_messages.error_message, e não dava pra saber o que de fato aconteceu
+// sem olhar o console do servidor. Detecta o caso mais comum (número não existe no WhatsApp)
+// com uma mensagem clara; nos demais, propaga o texto que a Evolution mandou.
+function describeEvolutionError(error: any, fallback: string): string {
+    const data = error.response?.data;
+
+    const numberCheck = data?.response?.message?.find?.((m: any) => m?.exists === false);
+    if (numberCheck) {
+        return `Número não está no WhatsApp (${numberCheck.number || 'verifique o número'})`;
+    }
+
+    const detail = data?.response?.message || data?.message || data?.error;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail.length) return JSON.stringify(detail[0]).slice(0, 200);
+
+    return fallback;
+}
+
 export const sendText = async (instanceName: string, chatId: string, text: string) => {
     try {
         const payload = {
@@ -105,7 +125,7 @@ export const sendText = async (instanceName: string, chatId: string, text: strin
         return response.data;
     } catch (error: any) {
         console.error('Error sending text via Evolution:', error.response?.data || error.message);
-        throw new Error('Failed to send text message');
+        throw new Error(describeEvolutionError(error, 'Failed to send text message'));
     }
 };
 
@@ -128,7 +148,7 @@ export const sendMedia = async (
         return response.data;
     } catch (error: any) {
         console.error(`Error sending ${file.mediatype} via Evolution:`, JSON.stringify(error.response?.data || error.message, null, 2));
-        throw new Error(`Failed to send ${file.mediatype}`);
+        throw new Error(describeEvolutionError(error, `Failed to send ${file.mediatype}`));
     }
 };
 
