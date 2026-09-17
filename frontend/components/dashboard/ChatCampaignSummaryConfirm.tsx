@@ -33,7 +33,7 @@ function parseDraft(purpose?: string): DraftSummary {
 function Row({ icon: Icon, children }: { icon: any; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2.5 text-sm text-foreground/90">
-      <Icon className="size-4 text-purple-500 shrink-0" />
+      <Icon className="size-4 text-primary shrink-0" />
       <span className="min-w-0 truncate">{children}</span>
     </div>
   )
@@ -53,9 +53,9 @@ export function ChatCampaignSummaryConfirm({ purpose, onConfirm, disabled, isCon
   }
 
   return (
-    <div className="mt-2 w-full max-w-sm rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+    <div className="mt-2 w-full max-w-sm rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Rocket className="size-4 text-purple-500" />
+        <Rocket className="size-4 text-primary" />
         Tudo pronto pra disparar
       </div>
 
@@ -72,7 +72,7 @@ export function ChatCampaignSummaryConfirm({ purpose, onConfirm, disabled, isCon
       <button
         onClick={handleConfirm}
         disabled={disabled || confirmed || isConfirming}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-white text-sm font-medium shadow-lg shadow-purple-500/30 transition-all disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary hover:bg-landing-sky-light text-white text-sm font-medium shadow-lg shadow-primary/30 transition-all disabled:opacity-50"
       >
         {isConfirming ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
         {isConfirming ? "Disparando..." : "Disparar agora"}

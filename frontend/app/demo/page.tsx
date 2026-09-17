@@ -25,7 +25,7 @@ export default function DemoPage() {
             <main className="flex-1 pt-24 pb-12 px-4">
                 <div className="container mx-auto max-w-4xl">
                     <div className="text-center mb-10">
-                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-purple-100 text-brand-purple-600 text-[10px] font-medium mb-4">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-landing-sky-deep text-[10px] font-medium mb-4">
                             <PlayCircle className="w-3 h-3" />
                             Demonstração Interativa
                         </div>
@@ -41,7 +41,7 @@ export default function DemoPage() {
                     <div className="relative aspect-video rounded-xl bg-zinc-900 border border-border shadow-2xl overflow-hidden group mb-10">
                         <div className="absolute inset-0 flex items-center justify-center">
                             <div className="text-center space-y-3">
-                                <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-brand-purple-600/20 text-brand-purple-500 group-hover:scale-110 transition-transform cursor-pointer">
+                                <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-landing-sky-deep/20 text-primary group-hover:scale-110 transition-transform cursor-pointer">
                                     <PlayCircle className="w-8 h-8 fill-current" />
                                 </span>
                                 <p className="text-xs text-muted-foreground font-medium">Vídeo de Demonstração (Placeholder)</p>

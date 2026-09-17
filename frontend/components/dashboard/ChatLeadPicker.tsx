@@ -30,7 +30,7 @@ export function ChatLeadPicker({ purpose, onSelect, disabled }: ChatLeadPickerPr
   const matches = parseMatches(purpose)
 
   return (
-    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-purple-500/20 bg-purple-500/5 p-3 space-y-1.5">
+    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-primary/20 bg-primary/5 p-3 space-y-1.5">
       {matches.map((lead) => (
         <button
           key={lead.id}
@@ -38,7 +38,7 @@ export function ChatLeadPicker({ purpose, onSelect, disabled }: ChatLeadPickerPr
           disabled={disabled}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-accent hover:bg-accent/70 transition-colors text-left disabled:opacity-50"
         >
-          <span className="flex items-center justify-center size-7 rounded-lg bg-purple-500/15 text-purple-500 shrink-0">
+          <span className="flex items-center justify-center size-7 rounded-lg bg-primary/15 text-primary shrink-0">
             <User className="size-3.5" />
           </span>
           <span className="min-w-0 flex-1">

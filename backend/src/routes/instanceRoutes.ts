@@ -62,6 +62,26 @@ router.get('/:id/connect', instanceController.connect);
 
 /**
  * @swagger
+ * /instances/{id}/warmup:
+ *   get:
+ *     summary: Get anti-ban warmup info for an instance (age, recommended daily limit, volume sent in last 24h)
+ *     tags: [Instances]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Warmup info
+ */
+router.get('/:id/warmup', instanceController.getWarmup);
+
+/**
+ * @swagger
  * /instances/{id}:
  *   delete:
  *     summary: Delete an instance

@@ -26,7 +26,7 @@ export function Header() {
                     : 'bg-transparent border-b border-transparent'
             )}
         >
-            <div className="container mx-auto max-w-6xl px-4 md:px-6">
+            <div className="container mx-auto px-4 md:px-6">
                 <div className="flex items-center justify-between h-16">
                     <BrandLogo className="h-6 w-auto text-white" monochrome />
 

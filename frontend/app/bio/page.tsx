@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { ArrowUpRight, MessageCircle, Sparkles, Star } from "lucide-react"
 import { WHATSAPP_CTA_URL } from "@/components/landing/lp/constants"
 import { BrandIcon } from "@/components/BrandLogo"
+import { BioLinks } from "@/components/bio/BioLinks"
 
 export const metadata: Metadata = {
     title: "ZapBroker — Links",
@@ -13,14 +13,14 @@ export const metadata: Metadata = {
 const LINKS = [
     {
         href: "/assinar",
-        icon: Sparkles,
+        icon: <Sparkles className="w-5 h-5 shrink-0" />,
         title: "Ver planos e assinar",
         desc: "Free, Starter (R$39) ou Pro (R$79) — cartão ou PIX",
         primary: true,
     },
     {
         href: WHATSAPP_CTA_URL,
-        icon: MessageCircle,
+        icon: <MessageCircle className="w-5 h-5 shrink-0" />,
         title: "Falar agora no WhatsApp",
         desc: "Tira dúvida direto com a gente",
         primary: false,
@@ -28,7 +28,7 @@ const LINKS = [
     },
     {
         href: "/",
-        icon: ArrowUpRight,
+        icon: <ArrowUpRight className="w-5 h-5 shrink-0" />,
         title: "Ver como funciona",
         desc: "A página completa, com tudo explicado",
         primary: false,
@@ -47,30 +47,7 @@ export default function BioPage() {
                 Disparo em massa no WhatsApp feito pra corretor de imóveis. Manda mensagem pra toda sua base sem perder lead pelo caminho.
             </p>
 
-            <div className="w-full max-w-sm flex flex-col gap-3 mb-8">
-                {LINKS.map((link) => (
-                    <Link
-                        key={link.title}
-                        href={link.href}
-                        target={link.external ? "_blank" : undefined}
-                        rel={link.external ? "noopener noreferrer" : undefined}
-                        className={
-                            link.primary
-                                ? "group flex items-center gap-3 rounded-2xl px-5 py-4 bg-landing-lime hover:bg-landing-lime-dark text-landing-navy transition-colors text-left"
-                                : "group flex items-center gap-3 rounded-2xl px-5 py-4 bg-white/8 hover:bg-white/14 border border-white/15 text-white transition-colors text-left"
-                        }
-                    >
-                        <link.icon className="w-5 h-5 shrink-0" />
-                        <span className="flex-1">
-                            <span className="block font-bold text-sm">{link.title}</span>
-                            <span className={`block text-xs mt-0.5 ${link.primary ? "text-landing-navy/70" : "text-white/60"}`}>
-                                {link.desc}
-                            </span>
-                        </span>
-                        <ArrowUpRight className="w-4 h-4 shrink-0 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                    </Link>
-                ))}
-            </div>
+            <BioLinks links={LINKS} />
 
             <div className="flex items-center gap-1.5 text-white/60 text-xs font-medium">
                 <div className="flex gap-0.5">

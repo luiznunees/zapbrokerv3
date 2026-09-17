@@ -37,7 +37,7 @@ export function ChatListPicker({ onSelect, disabled }: ChatListPickerProps) {
   }
 
   return (
-    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-purple-500/20 bg-purple-500/5 p-3">
+    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-primary/20 bg-primary/5 p-3">
       {isLoading ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
           <Loader2 className="size-3.5 animate-spin" />
@@ -52,7 +52,7 @@ export function ChatListPicker({ onSelect, disabled }: ChatListPickerProps) {
               disabled={disabled}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-accent hover:bg-accent/70 transition-colors text-left disabled:opacity-50"
             >
-              <span className="flex items-center justify-center size-7 rounded-lg bg-purple-500/15 text-purple-500 shrink-0">
+              <span className="flex items-center justify-center size-7 rounded-lg bg-primary/15 text-primary shrink-0">
                 <Users className="size-3.5" />
               </span>
               <span className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ export function ChatListPicker({ onSelect, disabled }: ChatListPickerProps) {
           <button
             onClick={() => setIsImporterOpen(true)}
             disabled={disabled}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-dashed border-border hover:border-purple-500/40 hover:bg-purple-500/5 transition-colors text-left disabled:opacity-50"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-dashed border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left disabled:opacity-50"
           >
             <span className="flex items-center justify-center size-7 rounded-lg bg-accent text-muted-foreground shrink-0">
               <Upload className="size-3.5" />

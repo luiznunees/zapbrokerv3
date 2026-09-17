@@ -3,7 +3,7 @@ import { AgentChatMockup } from './AgentChatMockup'
 
 export function AgentShowcase() {
     return (
-        <section className="py-8 bg-white">
+        <section className="py-12 md:py-16 bg-white">
             <div className="container mx-auto px-4 md:px-6">
                 <div className="relative rounded-3xl bg-landing-navy p-6 md:p-10 grid md:grid-cols-2 gap-8 items-center overflow-hidden">
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">

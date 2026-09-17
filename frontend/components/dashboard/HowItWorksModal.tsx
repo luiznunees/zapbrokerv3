@@ -1,6 +1,7 @@
 "use client"
 
 import { X, QrCode, MessageSquareText, ListChecks, BellRing } from "lucide-react"
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 
 // Mesmos 4 passos e copy de components/landing/Features.tsx — conteúdo estático de
 // propósito: precisa continuar funcionando mesmo se o agente de IA travar ou responder
@@ -30,9 +31,23 @@ const STEPS = [
 ]
 
 export function HowItWorksModal({ onClose }: { onClose: () => void }) {
+    const shouldReduceMotion = useReducedMotion()
+
     return (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 relative max-h-[85vh] overflow-y-auto">
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
+                transition={shouldReduceMotion ? { duration: 0.15, ease: "easeOut" } : { type: "spring", bounce: 0, duration: 0.35 }}
+                className="bg-card border border-border rounded-2xl w-full max-w-md p-6 relative max-h-[85vh] overflow-y-auto"
+            >
                 <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
                     <X className="size-5" />
                 </button>
@@ -60,7 +75,7 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
                 >
                     Entendi
                 </button>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     )
 }

@@ -87,7 +87,7 @@ export function AnimatedAIChat({
         className={`
           relative rounded-3xl transition-all duration-300
           ${isFocused
-            ? "glass-floating shadow-[0_0_40px_rgba(168,85,247,0.12)] ring-1 ring-purple-500/25"
+            ? "glass-floating shadow-[0_0_40px_rgba(46,124,246,0.12)] ring-1 ring-primary/25"
             : "glass shadow-lg"
           }
         `}
@@ -99,7 +99,7 @@ export function AnimatedAIChat({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-500/20 text-purple-500 text-xs max-w-[220px]"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-primary/20 text-primary text-xs max-w-[220px]"
               >
                 <Paperclip className="size-3 shrink-0" />
                 <span className="truncate">{attachment.name}</span>
@@ -144,7 +144,7 @@ export function AnimatedAIChat({
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-accent transition-colors"
                     >
-                      <span className="flex items-center justify-center size-8 rounded-lg bg-purple-500/15 text-purple-500 shrink-0">
+                      <span className="flex items-center justify-center size-8 rounded-lg bg-primary/15 text-primary shrink-0">
                         <opt.icon className="size-4" />
                       </span>
                       <div className="min-w-0">
@@ -175,7 +175,7 @@ export function AnimatedAIChat({
             className={`
               flex items-center justify-center size-9 rounded-2xl transition-all
               ${value.trim() && !disabled && !isLoading
-                ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30 hover:bg-purple-400"
+                ? "bg-primary text-white shadow-lg shadow-primary/30 hover:bg-landing-sky-light"
                 : "bg-muted text-muted-foreground/50 cursor-not-allowed"
               }
             `}

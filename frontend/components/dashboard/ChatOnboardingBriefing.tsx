@@ -86,7 +86,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
         <div className="mt-2 w-full max-w-sm rounded-2xl border border-border glass p-4 space-y-4">
             <div className="flex gap-1.5">
                 {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-                    <div key={i} className={cn("h-1 flex-1 rounded-full transition-colors", step >= i + 1 ? "bg-purple-500" : "bg-border")} />
+                    <div key={i} className={cn("h-1 flex-1 rounded-full transition-colors", step >= i + 1 ? "bg-primary" : "bg-border")} />
                 ))}
             </div>
 
@@ -97,17 +97,17 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                         <button
                             disabled={disabled}
                             onClick={() => { setRole("agent"); setStep(2) }}
-                            className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-purple-500 text-left transition-all disabled:opacity-50"
+                            className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary text-left transition-all disabled:opacity-50"
                         >
-                            <User className="size-4 text-purple-500 shrink-0" />
+                            <User className="size-4 text-primary shrink-0" />
                             <span className="text-sm">Corretor autônomo</span>
                         </button>
                         <button
                             disabled={disabled}
                             onClick={() => { setRole("agency"); setStep(2) }}
-                            className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-purple-500 text-left transition-all disabled:opacity-50"
+                            className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary text-left transition-all disabled:opacity-50"
                         >
-                            <Building2 className="size-4 text-purple-500 shrink-0" />
+                            <Building2 className="size-4 text-primary shrink-0" />
                             <span className="text-sm">Imobiliária / equipe</span>
                         </button>
                     </div>
@@ -117,7 +117,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
             {step === 2 && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <MapPin className="size-4 text-purple-500" /> Em que cidade/região você atua?
+                        <MapPin className="size-4 text-primary" /> Em que cidade/região você atua?
                     </div>
                     <input
                         autoFocus
@@ -125,12 +125,12 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
                         placeholder="Ex: Capão da Canoa, RS"
-                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                     <button
                         disabled={disabled}
                         onClick={() => setStep(3)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-landing-sky-deep text-white text-sm font-medium transition-colors disabled:opacity-50"
                     >
                         Continuar <ArrowRight className="size-4" />
                     </button>
@@ -140,7 +140,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
             {step === 3 && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Smartphone className="size-4 text-purple-500" /> Quantos números de WhatsApp você usa hoje?
+                        <Smartphone className="size-4 text-primary" /> Quantos números de WhatsApp você usa hoje?
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         {[1, 2, 3].map((n) => (
@@ -152,7 +152,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                                     setChipPurposes(Array.from({ length: n }, (_, i) => chipPurposes[i] || "leads"))
                                     setStep(4)
                                 }}
-                                className="p-3 rounded-xl border border-border hover:border-purple-500 text-center font-bold text-lg transition-all disabled:opacity-50"
+                                className="p-3 rounded-xl border border-border hover:border-primary text-center font-bold text-lg transition-all disabled:opacity-50"
                             >
                                 {n}{n === 3 ? "+" : ""}
                             </button>
@@ -175,7 +175,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                                         onClick={() => setChipPurposeAt(i, purpose)}
                                         className={cn(
                                             "p-2.5 rounded-lg border text-xs font-medium text-left transition-all disabled:opacity-50",
-                                            chipPurposes[i] === purpose ? "border-purple-500 bg-purple-500/5 text-purple-600" : "border-border hover:border-purple-500"
+                                            chipPurposes[i] === purpose ? "border-primary bg-primary/5 text-landing-sky-deep" : "border-border hover:border-primary"
                                         )}
                                     >
                                         {CHIP_PURPOSE_LABELS[purpose]}
@@ -187,7 +187,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                     <button
                         disabled={disabled || chipPurposes.length < (chipCount || 1)}
                         onClick={() => setStep(5)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-landing-sky-deep text-white text-sm font-medium transition-colors disabled:opacity-50"
                     >
                         Continuar <ArrowRight className="size-4" />
                     </button>
@@ -197,7 +197,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
             {step === 5 && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Target className="size-4 text-purple-500" /> Qual sua meta de VGV por mês?
+                        <Target className="size-4 text-primary" /> Qual sua meta de VGV por mês?
                     </div>
                     <div className="grid grid-cols-1 gap-1.5">
                         {VGV_OPTIONS.map((opt) => (
@@ -205,7 +205,7 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
                                 key={opt.value}
                                 disabled={disabled}
                                 onClick={() => { setVgvGoal(opt.value); setStep(6) }}
-                                className="p-2.5 rounded-lg border border-border hover:border-purple-500 text-xs font-medium text-left transition-all disabled:opacity-50"
+                                className="p-2.5 rounded-lg border border-border hover:border-primary text-xs font-medium text-left transition-all disabled:opacity-50"
                             >
                                 {opt.label}
                             </button>
@@ -217,20 +217,20 @@ export function ChatOnboardingBriefing({ onComplete, disabled }: ChatOnboardingB
             {step === 6 && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <MessageCircleHeart className="size-4 text-purple-500" /> Quer receber indicação de listagens (quando disponível na sua região)?
+                        <MessageCircleHeart className="size-4 text-primary" /> Quer receber indicação de listagens (quando disponível na sua região)?
                     </div>
                     <div className="grid grid-cols-1 gap-1.5">
                         <button
                             disabled={disabled}
                             onClick={() => finish(true)}
-                            className="p-2.5 rounded-lg border border-border hover:border-purple-500 text-xs font-medium text-left transition-all disabled:opacity-50"
+                            className="p-2.5 rounded-lg border border-border hover:border-primary text-xs font-medium text-left transition-all disabled:opacity-50"
                         >
                             Quero sim
                         </button>
                         <button
                             disabled={disabled}
                             onClick={() => finish(false)}
-                            className="p-2.5 rounded-lg border border-border hover:border-purple-500 text-xs font-medium text-left transition-all disabled:opacity-50"
+                            className="p-2.5 rounded-lg border border-border hover:border-primary text-xs font-medium text-left transition-all disabled:opacity-50"
                         >
                             Não, prefiro não receber por enquanto
                         </button>

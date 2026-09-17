@@ -54,7 +54,7 @@ function NumberField({
           min={min}
           value={value}
           onChange={(e) => onChange(Math.max(min, Number(e.target.value) || min))}
-          className="w-20 px-2.5 py-1.5 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+          className="w-20 px-2.5 py-1.5 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <span className="text-xs text-muted-foreground">{suffix}</span>
       </div>
@@ -80,7 +80,7 @@ export function ChatTimingConfirm({ purpose, onConfirm, disabled }: ChatTimingCo
   return (
     <div className="mt-2 w-full max-w-sm rounded-2xl border border-border glass p-4 space-y-4">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <Clock className="size-4 text-purple-500" />
+        <Clock className="size-4 text-primary" />
         Confirme o timing do disparo
       </div>
 
@@ -102,7 +102,7 @@ export function ChatTimingConfirm({ purpose, onConfirm, disabled }: ChatTimingCo
           onClick={() => setSequentialMode(!sequentialMode)}
           className={cn(
             "relative w-10 h-5.5 rounded-full transition-colors shrink-0",
-            sequentialMode ? "bg-purple-500" : "bg-zinc-300"
+            sequentialMode ? "bg-primary" : "bg-zinc-300"
           )}
         >
           <span className={cn(
@@ -126,7 +126,7 @@ export function ChatTimingConfirm({ purpose, onConfirm, disabled }: ChatTimingCo
       <div className="h-px bg-border" />
 
       <div className="flex items-center gap-2 text-xs font-medium text-foreground/80">
-        <Layers className="size-3.5 text-purple-500" />
+        <Layers className="size-3.5 text-primary" />
         Envio em lotes
       </div>
 
@@ -152,7 +152,7 @@ export function ChatTimingConfirm({ purpose, onConfirm, disabled }: ChatTimingCo
       <button
         onClick={handleConfirm}
         disabled={disabled || confirmed}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-landing-sky-deep text-white text-sm font-medium transition-colors disabled:opacity-50"
       >
         <CheckCircle2 className="size-4" />
         {confirmed ? "Configuração salva" : "Usar essa configuração"}

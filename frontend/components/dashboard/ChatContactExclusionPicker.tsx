@@ -42,7 +42,7 @@ export function ChatContactExclusionPicker({ purpose, onConfirm, disabled }: Cha
   return (
     <div className="mt-2 w-full max-w-sm rounded-2xl border border-border glass p-4 space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <UserX className="size-4 text-purple-500" />
+        <UserX className="size-4 text-primary" />
         Excluir leads desse disparo
       </div>
       <p className="text-[11px] text-muted-foreground/70 -mt-2">Marque quem você NÃO quer que receba essa mensagem.</p>
@@ -74,7 +74,7 @@ export function ChatContactExclusionPicker({ purpose, onConfirm, disabled }: Cha
       <button
         onClick={handleConfirm}
         disabled={disabled || confirmed}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-landing-sky-deep text-white text-sm font-medium transition-colors disabled:opacity-50"
       >
         <Check className="size-4" />
         {confirmed ? "Salvo" : excluded.length > 0 ? `Excluir ${excluded.length} lead(s)` : "Não excluir ninguém"}

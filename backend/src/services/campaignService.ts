@@ -154,8 +154,28 @@ export const getCampaigns = async (userId: string) => {
     if (error) {
         throw new Error(error.message);
     }
+    if (!data || data.length === 0) return [];
 
-    return data;
+    // O status da campanha em si só assume PENDING/PAUSED/CANCELLED (nunca
+    // COMPLETED/RUNNING/FAILED) — quem sabe se o disparo já terminou de
+    // enviar é a contagem de mensagens, não esse campo. Sem isso, o
+    // histórico mostra "Pendente" pra sempre, mesmo já 100% enviado.
+    const campaignIds = data.map(c => c.id);
+    const { data: messages, error: messagesError } = await supabase
+        .from('campaign_messages')
+        .select('campaign_id, status')
+        .in('campaign_id', campaignIds);
+
+    if (messagesError) throw new Error(messagesError.message);
+
+    return data.map(campaign => {
+        const campaignMessages = (messages || []).filter(m => m.campaign_id === campaign.id);
+        const total = campaignMessages.length;
+        const sent = campaignMessages.filter(m => m.status === 'SENT').length;
+        const failed = campaignMessages.filter(m => m.status === 'FAILED').length;
+        const pending = total - sent - failed;
+        return { ...campaign, messageCounts: { total, sent, failed, pending } };
+    });
 };
 
 export const getCampaignsSummary = async (userId: string, limit: number = 5) => {

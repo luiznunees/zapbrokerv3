@@ -38,7 +38,7 @@ interface CampaignDraftPanelProps {
 function Field({ icon: Icon, label, filled, children }: { icon: any; label: string; filled: boolean; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border last:border-0">
-      <span className={cn("flex items-center justify-center size-8 rounded-lg shrink-0", filled ? "bg-purple-500/15 text-purple-500" : "bg-muted text-muted-foreground/50")}>
+      <span className={cn("flex items-center justify-center size-8 rounded-lg shrink-0", filled ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/50")}>
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -93,10 +93,10 @@ function MessageCanvasEditor({
               onChange={(e) => updateAt(i, e.target.value)}
               placeholder={`Variação ${i + 1}`}
               rows={3}
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-purple-500/30 resize-none"
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
             />
             <div className="flex flex-col gap-1 mt-0.5">
-              <button onClick={() => handleCopy(i)} title="Copiar" className="text-muted-foreground/50 hover:text-purple-500 transition-colors">
+              <button onClick={() => handleCopy(i)} title="Copiar" className="text-muted-foreground/50 hover:text-primary transition-colors">
                 {copiedIndex === i ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
               </button>
               {variations.length > 1 && (
@@ -111,7 +111,7 @@ function MessageCanvasEditor({
 
       <button
         onClick={addVariation}
-        className="flex items-center gap-1.5 text-xs text-purple-500 hover:text-purple-600"
+        className="flex items-center gap-1.5 text-xs text-primary hover:text-landing-sky-deep"
       >
         <Plus className="size-3.5" /> Adicionar variação
       </button>
@@ -126,7 +126,7 @@ function MessageCanvasEditor({
         <button
           onClick={() => onSave(validVariations)}
           disabled={validVariations.length === 0}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary hover:bg-landing-sky-deep text-white text-xs font-medium transition-colors disabled:opacity-50"
         >
           <Check className="size-3.5" /> Salvar
         </button>
@@ -168,7 +168,7 @@ export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMess
       )}
     >
       <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
-        <span className="flex items-center justify-center size-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-purple-500">
+        <span className="flex items-center justify-center size-9 rounded-xl bg-gradient-to-br from-primary/20 to-blue-500/20 text-primary">
           <Rocket className="size-4.5" />
         </span>
         <div>
@@ -205,15 +205,15 @@ export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMess
               <div className="space-y-1">
                 <p className="line-clamp-2 text-foreground/80 group-hover/msg:text-foreground transition-colors">{draft.messageVariations![0]}</p>
                 <div className="flex items-center gap-1.5">
-                  {messageCount > 1 && <span className="text-[11px] text-purple-500">+{messageCount - 1} variação(ões)</span>}
-                  <span className="text-[11px] text-muted-foreground/60 group-hover/msg:text-purple-500 flex items-center gap-1 transition-colors">
+                  {messageCount > 1 && <span className="text-[11px] text-primary">+{messageCount - 1} variação(ões)</span>}
+                  <span className="text-[11px] text-muted-foreground/60 group-hover/msg:text-primary flex items-center gap-1 transition-colors">
                     <Pencil className="size-3" /> editar
                   </span>
                 </div>
               </div>
             </button>
           ) : (
-            <button onClick={() => setIsEditingMessage(true)} className="text-left text-muted-foreground hover:text-purple-500 transition-colors flex items-center gap-1.5">
+            <button onClick={() => setIsEditingMessage(true)} className="text-left text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
               Ainda não definida <Pencil className="size-3" />
             </button>
           )}
@@ -299,7 +299,7 @@ export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMess
           className={cn(
             "w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium transition-all",
             draft.readyToSend && !isConfirming
-              ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30 hover:bg-purple-400"
+              ? "bg-primary text-white shadow-lg shadow-primary/30 hover:bg-landing-sky-light"
               : "bg-muted text-muted-foreground/50 cursor-not-allowed"
           )}
         >

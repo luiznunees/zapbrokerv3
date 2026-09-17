@@ -2,17 +2,47 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Rocket, Send, CheckCircle2, XCircle, Clock, Pause, Play, AlertCircle } from 'lucide-react'
+import { Rocket, Send, CheckCircle2, XCircle, Clock, Pause, Play, AlertTriangle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '../../../services/api'
 import { Badge } from '@/components/ui/badge'
 
-const STATUS_MAP: Record<string, { label: string; class: string }> = {
-  COMPLETED: { label: 'Concluído', class: 'bg-green-500/10 text-green-600 border-green-500/20' },
-  RUNNING: { label: 'Enviando', class: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-  PENDING: { label: 'Pendente', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-  PAUSED: { label: 'Pausado', class: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
-  FAILED: { label: 'Falhou', class: 'bg-red-500/10 text-red-600 border-red-500/20' },
+type MessageCounts = { total: number; sent: number; failed: number; pending: number }
+
+type EffectiveStatus = {
+  label: string
+  class: string
+  icon: typeof Rocket
+}
+
+// O campo `campaigns.status` só assume PENDING/PAUSED/CANCELLED — nunca indica
+// que o envio terminou. Quem decide "concluído/enviando/falhou" é a contagem
+// de mensagens (messageCounts, vindo do backend), cruzada com esse status bruto.
+function getEffectiveStatus(campaign: { status: string; scheduled_at?: string | null; messageCounts?: MessageCounts }): EffectiveStatus {
+  const counts = campaign.messageCounts ?? { total: 0, sent: 0, failed: 0, pending: 0 }
+
+  if (campaign.status === 'CANCELLED') {
+    return { label: 'Cancelado', class: 'bg-muted text-muted-foreground border-border', icon: XCircle }
+  }
+  if (campaign.status === 'PAUSED') {
+    return { label: 'Pausado', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20', icon: Pause }
+  }
+  if (counts.total === 0) {
+    return { label: 'Sem contatos', class: 'bg-muted text-muted-foreground border-border', icon: AlertTriangle }
+  }
+  if (counts.pending === counts.total) {
+    const isScheduled = campaign.scheduled_at && new Date(campaign.scheduled_at) > new Date()
+    return isScheduled
+      ? { label: 'Agendado', class: 'bg-primary/10 text-primary border-primary/20', icon: Clock }
+      : { label: 'Na fila', class: 'bg-muted text-muted-foreground border-border', icon: Clock }
+  }
+  if (counts.pending > 0) {
+    return { label: 'Enviando', class: 'bg-primary/10 text-primary border-primary/20', icon: Loader2 }
+  }
+  if (counts.failed > 0) {
+    return { label: 'Concluído com falhas', class: 'bg-destructive/10 text-destructive border-destructive/20', icon: AlertTriangle }
+  }
+  return { label: 'Concluído', class: 'bg-primary/10 text-primary border-primary/20', icon: CheckCircle2 }
 }
 
 export default function CampaignHistoryPage() {
@@ -77,11 +107,16 @@ export default function CampaignHistoryPage() {
       ) : (
         <div className="space-y-3">
           {campaigns.map((camp) => {
-            const status = STATUS_MAP[camp.status] || { label: camp.status, class: 'bg-muted text-muted-foreground' }
+            const status = getEffectiveStatus(camp)
+            const counts: MessageCounts = camp.messageCounts ?? { total: 0, sent: 0, failed: 0, pending: 0 }
+            const canPause = camp.status === 'PENDING' && counts.pending > 0
+            const canResume = camp.status === 'PAUSED'
+            const progressPct = counts.total > 0 ? Math.round(((counts.sent + counts.failed) / counts.total) * 100) : 0
+
             return (
               <div
                 key={camp.id}
-                className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-all"
+                className="bg-card border border-border rounded-2xl p-5 hover:border-primary/30 transition-all"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
@@ -102,25 +137,36 @@ export default function CampaignHistoryPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {(camp.status === 'PENDING' || camp.status === 'RUNNING' || camp.status === 'PAUSED') && (
+                    {(canPause || canResume) && (
                       <button
                         onClick={() => togglePause(camp.id, camp.status)}
-                        className={cn(
-                          "p-2 rounded-lg transition-colors",
-                          camp.status === 'PAUSED'
-                            ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
-                            : "bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20"
-                        )}
-                        title={camp.status === 'PAUSED' ? 'Retomar' : 'Pausar'}
+                        className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        title={canResume ? 'Retomar' : 'Pausar'}
                       >
-                        {camp.status === 'PAUSED' ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
+                        {canResume ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
                       </button>
                     )}
-                    <Badge className={cn("border text-xs font-bold", status.class)}>
+                    <Badge className={cn("border text-xs font-bold flex items-center gap-1.5", status.class)}>
+                      <status.icon className={cn("size-3", status.label === 'Enviando' && 'animate-spin')} />
                       {status.label}
                     </Badge>
                   </div>
                 </div>
+
+                {counts.total > 0 && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn("h-full transition-all duration-500", counts.failed > 0 && counts.pending === 0 ? "bg-destructive" : "bg-primary")}
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {counts.sent + counts.failed}/{counts.total}
+                      {counts.failed > 0 && ` · ${counts.failed} falha${counts.failed === 1 ? '' : 's'}`}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}

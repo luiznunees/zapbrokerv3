@@ -197,7 +197,7 @@ export default function CheckoutRedirectPage() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleRetry}
-                        className="px-6 py-2 bg-brand-purple-600 text-white rounded-md text-sm font-bold shadow-lg"
+                        className="px-6 py-2 bg-landing-sky-deep text-white rounded-md text-sm font-bold shadow-lg"
                     >
                         Tentar novamente
                     </button>
@@ -217,8 +217,8 @@ export default function CheckoutRedirectPage() {
             <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-50">
                 <div className="max-w-xs w-full text-center space-y-6 animate-in fade-in duration-700">
                     <div className="relative">
-                        <div className="absolute inset-0 bg-brand-purple-400/20 blur-2xl rounded-full" />
-                        <ShieldCheck className="h-16 w-16 text-brand-purple-600 mx-auto relative animate-bounce" />
+                        <div className="absolute inset-0 bg-landing-sky-light/20 blur-2xl rounded-full" />
+                        <ShieldCheck className="h-16 w-16 text-landing-sky-deep mx-auto relative animate-bounce" />
                     </div>
 
                     <div className="space-y-2">
@@ -240,7 +240,7 @@ export default function CheckoutRedirectPage() {
             <div className="min-h-screen bg-zinc-50 flex flex-col">
                 <header className="border-b border-zinc-200 bg-white">
                     <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-2">
-                        <ShieldCheck className="h-5 w-5 text-brand-purple-600" />
+                        <ShieldCheck className="h-5 w-5 text-landing-sky-deep" />
                         <span className="font-bold text-zinc-900 text-sm">ZapBroker</span>
                         <span className="text-zinc-300 text-sm">/</span>
                         <span className="text-zinc-500 text-sm">Pagamento via PIX</span>
@@ -258,7 +258,7 @@ export default function CheckoutRedirectPage() {
                                 </div>
                                 <button
                                     onClick={handleRetry}
-                                    className="w-full py-3 bg-brand-purple-600 text-white rounded-md text-sm font-bold shadow-lg"
+                                    className="w-full py-3 bg-landing-sky-deep text-white rounded-md text-sm font-bold shadow-lg"
                                 >
                                     Gerar novo PIX
                                 </button>
@@ -303,7 +303,7 @@ export default function CheckoutRedirectPage() {
                                 <button
                                     onClick={handleCheckNow}
                                     disabled={checkingNow}
-                                    className="w-full py-3 bg-brand-purple-600 text-white rounded-md text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                                    className="w-full py-3 bg-landing-sky-deep text-white rounded-md text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                                 >
                                     {checkingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                     Já fiz o pagamento
@@ -325,7 +325,7 @@ export default function CheckoutRedirectPage() {
         <div className="min-h-screen bg-zinc-50 flex flex-col">
             <header className="border-b border-zinc-200 bg-white">
                 <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5 text-brand-purple-600" />
+                    <ShieldCheck className="h-5 w-5 text-landing-sky-deep" />
                     <span className="font-bold text-zinc-900 text-sm">ZapBroker</span>
                     <span className="text-zinc-300 text-sm">/</span>
                     <span className="text-zinc-500 text-sm">Checkout seguro</span>
@@ -355,7 +355,7 @@ export default function CheckoutRedirectPage() {
                                 <ul className="space-y-2 mb-5">
                                     {plan.features.map((feature, i) => (
                                         <li key={i} className="flex items-start gap-2 text-sm text-zinc-600">
-                                            <Check className="w-4 h-4 text-brand-purple-600 shrink-0 mt-0.5" />
+                                            <Check className="w-4 h-4 text-landing-sky-deep shrink-0 mt-0.5" />
                                             {feature}
                                         </li>
                                     ))}
@@ -396,7 +396,7 @@ export default function CheckoutRedirectPage() {
                                     value={cpf}
                                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                                     placeholder="000.000.000-00"
-                                    className={`w-full border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple-500 focus:border-transparent ${cpfInvalid ? 'border-red-400' : 'border-zinc-300'}`}
+                                    className={`w-full border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${cpfInvalid ? 'border-red-400' : 'border-zinc-300'}`}
                                 />
                                 {cpfInvalid && <p className="text-xs text-red-500">CPF inválido. Confira os números digitados.</p>}
                             </div>
@@ -410,7 +410,7 @@ export default function CheckoutRedirectPage() {
                                     value={cellphone}
                                     onChange={(e) => setCellphone(formatCellphone(e.target.value))}
                                     placeholder="(11) 91234-5678"
-                                    className="w-full border border-zinc-300 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple-500 focus:border-transparent"
+                                    className="w-full border border-zinc-300 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                                 />
                             </div>
 
@@ -425,7 +425,7 @@ export default function CheckoutRedirectPage() {
                             <button
                                 type="submit"
                                 disabled={!canSubmit}
-                                className="w-full py-3 bg-brand-purple-600 text-white rounded-md text-sm font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+                                className="w-full py-3 bg-landing-sky-deep text-white rounded-md text-sm font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
                             >
                                 <Lock className="w-4 h-4" />
                                 Gerar PIX

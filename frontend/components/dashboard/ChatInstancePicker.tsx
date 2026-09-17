@@ -42,7 +42,7 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
   }
 
   return (
-    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+    <div className="mt-2 w-full max-w-[300px] rounded-2xl border border-primary/20 bg-primary/5 p-3 space-y-2">
       {isLoading ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
           <Loader2 className="size-3.5 animate-spin" />
@@ -60,10 +60,10 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
                   disabled={disabled || confirmed}
                   className={cn(
                     "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left disabled:opacity-50",
-                    isSelected ? "bg-purple-500/15 border border-purple-500/40" : "bg-accent hover:bg-accent/70 border border-transparent"
+                    isSelected ? "bg-primary/15 border border-primary/40" : "bg-accent hover:bg-accent/70 border border-transparent"
                   )}
                 >
-                  <span className="flex items-center justify-center size-7 rounded-lg bg-purple-500/15 text-purple-500 shrink-0">
+                  <span className="flex items-center justify-center size-7 rounded-lg bg-primary/15 text-primary shrink-0">
                     <Wifi className="size-3.5" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
                       <span className={cn("size-1.5 rounded-full", instance.status === "connected" ? "bg-emerald-400" : "bg-rose-400")} />
                     </span>
                   </span>
-                  {isSelected && <Check className="size-4 text-purple-500 shrink-0" />}
+                  {isSelected && <Check className="size-4 text-primary shrink-0" />}
                 </button>
               )
             })}
@@ -85,7 +85,7 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
           <button
             onClick={handleConfirm}
             disabled={disabled || confirmed || selected.length === 0}
-            className="w-full py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            className="w-full py-2 rounded-xl bg-primary hover:bg-landing-sky-deep text-white text-sm font-medium transition-colors disabled:opacity-50"
           >
             {confirmed ? "Confirmado" : selected.length > 1 ? `Usar ${selected.length} números` : "Usar esse WhatsApp"}
           </button>

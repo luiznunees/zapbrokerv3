@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as instanceService from '../services/instanceService';
+import * as campaignService from '../services/campaignService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 
 import { supabase } from '../config/supabase';
@@ -64,6 +65,29 @@ export const list = async (req: AuthRequest, res: Response) => {
         const userId = req.user.id;
         const result = await instanceService.getInstances(userId);
         res.status(200).json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
+export const getWarmup = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        const { data: instance } = await supabase
+            .from('instances')
+            .select('id, connected_at')
+            .eq('id', id)
+            .eq('user_id', userId)
+            .single();
+
+        if (!instance) {
+            return res.status(404).json({ error: 'Instância não encontrada.' });
+        }
+
+        const warmup = await campaignService.getWarmupInfo(userId, id, instance.connected_at ?? null);
+        res.status(200).json(warmup);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
     }

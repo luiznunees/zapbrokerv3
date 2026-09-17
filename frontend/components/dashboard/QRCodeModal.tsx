@@ -1,5 +1,5 @@
 import { X, Smartphone } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
 
@@ -19,6 +19,7 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
     // no Baileys/Evolution API — costuma ser recusado pelo WhatsApp mesmo gerado certo).
     const [mode, setMode] = React.useState<'qrcode' | 'code'>('qrcode');
     const [phoneNumber, setPhoneNumber] = React.useState('');
+    const shouldReduceMotion = useReducedMotion();
 
     React.useEffect(() => {
         if (isOpen) {
@@ -34,15 +35,21 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
         }
     }, [isOpen, qrCode]);
 
-    if (!isOpen) return null;
-
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            {isOpen && (
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                >
+                <motion.div
+                    initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
+                    exit={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
+                    transition={shouldReduceMotion ? { duration: 0.15, ease: "easeOut" } : { type: "spring", bounce: 0, duration: 0.35 }}
                     className="bg-card border border-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
                 >
                     <div className="flex items-center justify-between p-4 border-b border-border bg-accent/50">
@@ -205,7 +212,8 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                         </p>
                     </div>
                 </motion.div>
-            </div>
+                </motion.div>
+            )}
         </AnimatePresence>
     );
 }

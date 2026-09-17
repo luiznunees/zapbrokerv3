@@ -4,8 +4,8 @@ import Link from 'next/link'
 export function EmptyStateKanban() {
     return (
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mb-6">
-                <BarChart3 className="w-10 h-10 text-purple-500" />
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+                <BarChart3 className="w-10 h-10 text-primary" />
             </div>
 
             <h3 className="text-2xl font-bold text-foreground mb-2">

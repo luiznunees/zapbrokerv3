@@ -78,6 +78,7 @@ export const api = {
         connect: (id: string, phoneNumber?: string) => fetchAPI(`/instances/${id}/connect${phoneNumber ? `?number=${encodeURIComponent(phoneNumber)}` : ''}`),
         logout: (id: string) => fetchAPI(`/instances/${id}/logout`, { method: 'POST' }),
         delete: (id: string) => fetchAPI(`/instances/${id}`, { method: 'DELETE' }),
+        getWarmup: (id: string) => fetchAPI(`/instances/${id}/warmup`),
     },
     dedicatedNumbers: {
         list: () => fetchAPI('/dedicated-numbers'),

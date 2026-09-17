@@ -42,7 +42,7 @@ export function Pricing() {
             <div className="container mx-auto px-4 md:px-6">
                 <div className="text-center max-w-lg mx-auto mb-10">
                     <p className="text-xs font-bold text-landing-sky uppercase tracking-widest mb-2">Planos simples, sem pegadinhas</p>
-                    <h2 className="font-display text-2xl md:text-4xl font-bold tracking-tight mb-2 text-landing-navy text-balance">
+                    <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight mb-2 text-landing-navy text-balance">
                         Escolha o plano ideal para você
                     </h2>
                     <p className="text-sm text-landing-navy/60">

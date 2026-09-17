@@ -33,7 +33,7 @@ interface KanbanData {
 const COLUMNS = [
     { status: 'PENDING', title: 'Na Fila', color: 'bg-gray-50', icon: '📋' },
     { status: 'SENT', title: 'Enviado', color: 'bg-blue-50', icon: '📤' },
-    { status: 'READ', title: 'Lido', color: 'bg-purple-50', icon: '👁️' },
+    { status: 'READ', title: 'Lido', color: 'bg-primary/10', icon: '👁️' },
     { status: 'REPLIED', title: 'Respondeu', color: 'bg-green-50', icon: '💬' },
     { status: 'NEGOTIATION', title: 'Negociando', color: 'bg-orange-50', icon: '🤝' },
     { status: 'CONVERTED', title: 'Convertido', color: 'bg-emerald-50', icon: '✅' },

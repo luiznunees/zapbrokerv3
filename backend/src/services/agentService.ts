@@ -81,6 +81,11 @@ export interface CampaignDraft {
   // corretor precisa reconhecer explicitamente antes de readyToSend ficar true.
   needsAntiBanWarning?: boolean;
   antiBanAcknowledged?: boolean;
+  // Motivo(s) específico(s) do aviso acima (volume alto num único número / número em
+  // cooldown / acima do limite recomendado pra idade do chip) — o mesmo flag
+  // needsAntiBanWarning cobre os três, isso só define o texto mostrado.
+  antiBanReasons?: Array<'volume' | 'cooldown' | 'warmup_limit'>;
+  antiBanWarmupInfo?: { daysSinceConnected: number | null; recommendedDailyLimit: number | null; sentLast24h: number };
   needsQuotaWarning?: boolean;
   quotaAcknowledged?: boolean;
   readyToSend?: boolean;
@@ -641,7 +646,14 @@ function resolveDraftReferences(
 function deriveRiskComponent(draft: CampaignDraft | null): AgentComponent | null {
   if (!draft) return null;
   if (draft.needsAntiBanWarning && !draft.antiBanAcknowledged) {
-    return { type: 'antiban_warning', purpose: JSON.stringify({ leadCount: draft.leadCount }) };
+    return {
+      type: 'antiban_warning',
+      purpose: JSON.stringify({
+        leadCount: draft.leadCount,
+        reasons: draft.antiBanReasons ?? ['volume'],
+        warmup: draft.antiBanWarmupInfo,
+      }),
+    };
   }
   if (draft.needsQuotaWarning && !draft.quotaAcknowledged) {
     return { type: 'quota_confirm', purpose: JSON.stringify(draft.quota) };
@@ -695,9 +707,41 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
   // Avisos de risco calculados aqui (não pelo LLM) — garantem que o corretor sempre vê o
   // aviso antes de poder disparar, independente do modelo "lembrar" de mencionar.
   const usingSingleInstance = !draft.instanceIds || draft.instanceIds.length <= 1;
-  draft.needsAntiBanWarning = Boolean(
-    draft.contactListId && (draft.leadCount ?? 0) > ANTIBAN_LEAD_THRESHOLD && usingSingleInstance
-  );
+  const soleInstanceId = draft.instanceIds?.[0] ?? draft.instanceId;
+  const leadCount = draft.leadCount ?? 0;
+  const riskReasons: Array<'volume' | 'cooldown' | 'warmup_limit'> = [];
+
+  if (draft.contactListId && leadCount > ANTIBAN_LEAD_THRESHOLD && usingSingleInstance) {
+    riskReasons.push('volume');
+  }
+
+  // Aquecimento só é checado com 1 número — com vários, o volume já se divide entre
+  // eles (mesma regra do aviso por volume acima).
+  if (draft.contactListId && usingSingleInstance && soleInstanceId) {
+    try {
+      const { data: instanceRow } = await supabase
+        .from('instances')
+        .select('connected_at')
+        .eq('id', soleInstanceId)
+        .single();
+      const warmup = await campaignService.getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null);
+      if (warmup.inCooldown) {
+        riskReasons.push('cooldown');
+      } else if (warmup.recommendedDailyLimit !== null && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit) {
+        riskReasons.push('warmup_limit');
+      }
+      draft.antiBanWarmupInfo = {
+        daysSinceConnected: warmup.daysSinceConnected,
+        recommendedDailyLimit: warmup.recommendedDailyLimit,
+        sentLast24h: warmup.sentLast24h,
+      };
+    } catch {
+      // Falha na checagem não deve travar o draft — só não gera esse aviso específico.
+    }
+  }
+
+  draft.antiBanReasons = riskReasons;
+  draft.needsAntiBanWarning = riskReasons.length > 0;
   if (!draft.needsAntiBanWarning) draft.antiBanAcknowledged = false;
 
   draft.needsQuotaWarning = Boolean(draft.quota && draft.quota.available && draft.quota.remaining === 1);

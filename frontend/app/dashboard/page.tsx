@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation"
 import { AnimatedAIChat, type AttachType } from "@/components/ui/animated-ai-chat"
 import { BrandLoader } from "@/components/ui/BrandLoader"
 import { LeadImporterModal } from "@/components/dashboard/LeadImporterModal"
+import { QuickDispatchInline } from "@/components/dashboard/QuickDispatchInline"
 import {
   Bot, Send, Users, Target, Import, Phone, Rocket,
-  Sparkles, TrendingUp, Wifi, AlertCircle, Plus, ListChecks
+  Sparkles, TrendingUp, Wifi, AlertCircle, Plus, ListChecks, Zap
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/services/api"
@@ -139,6 +140,7 @@ export default function DashboardPage() {
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const [isLeadImporterOpen, setIsLeadImporterOpen] = useState(false)
+  const [composerMode, setComposerMode] = useState<"chat" | "dispatch">("chat")
   const [currentDraft, setCurrentDraft] = useState<CampaignDraft | null>(null)
   const [autoEditMessageTrigger, setAutoEditMessageTrigger] = useState(0)
   const [isConfirmingCampaign, setIsConfirmingCampaign] = useState(false)
@@ -862,7 +864,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80">
-            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-primary/10 text-primary">
               <ListChecks className="size-3.5" />
             </span>
             <span className="flex flex-col leading-tight">
@@ -872,7 +874,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80">
-            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+            <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-primary/10 text-primary">
               <Target className="size-3.5" />
             </span>
             <span className="flex flex-col leading-tight">
@@ -883,7 +885,7 @@ export default function DashboardPage() {
 
           {statusBar.lastCampaign && (
             <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-100/80 border border-zinc-200/80 min-w-0">
-              <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-purple-500/10 text-purple-500">
+              <span className="flex items-center justify-center size-[26px] rounded-lg shrink-0 bg-primary/10 text-primary">
                 <Rocket className="size-3.5" />
               </span>
               <span className="flex flex-col leading-tight min-w-0">
@@ -1121,20 +1123,49 @@ export default function DashboardPage() {
 
         <div className="sticky bottom-0 px-4 pb-4 pt-2 bg-gradient-to-t from-zinc-50 via-zinc-50/95 to-transparent backdrop-blur-md">
           <div className="max-w-[768px] mx-auto">
-            <AnimatedAIChat
-              value={input}
-              onChange={(v) => setInput(v)}
-              onSend={sendMessage}
-              onSelectAttachType={handleSelectAttachType}
-              attachment={pendingAttachment}
-              onRemoveAttachment={() => setPendingAttachment(null)}
-              placeholder={isUploadingAttachment ? "Enviando anexo..." : "Envie uma mensagem..."}
-              disabled={false}
-              isLoading={isLoading}
-            />
-            <p className="text-center text-[11px] text-muted-foreground/50 mt-2">
-              O ZapBroker pode cometer erros. Verifique informações importantes.
-            </p>
+            <div className="flex justify-center mb-2.5">
+              <div className="inline-flex items-center gap-1 p-1 rounded-full bg-accent/70 border border-border/50">
+                <button
+                  onClick={() => setComposerMode("chat")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                    composerMode === "chat" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Bot className="size-3.5" /> Conversar com o agente
+                </button>
+                <button
+                  onClick={() => setComposerMode("dispatch")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                    composerMode === "dispatch" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Zap className="size-3.5" /> Disparo rápido
+                </button>
+              </div>
+            </div>
+
+            {composerMode === "dispatch" ? (
+              <QuickDispatchInline onExit={() => setComposerMode("chat")} />
+            ) : (
+              <>
+                <AnimatedAIChat
+                  value={input}
+                  onChange={(v) => setInput(v)}
+                  onSend={sendMessage}
+                  onSelectAttachType={handleSelectAttachType}
+                  attachment={pendingAttachment}
+                  onRemoveAttachment={() => setPendingAttachment(null)}
+                  placeholder={isUploadingAttachment ? "Enviando anexo..." : "Envie uma mensagem..."}
+                  disabled={false}
+                  isLoading={isLoading}
+                />
+                <p className="text-center text-[11px] text-muted-foreground/50 mt-2">
+                  O ZapBroker pode cometer erros. Verifique informações importantes.
+                </p>
+              </>
+            )}
           </div>
         </div>
 

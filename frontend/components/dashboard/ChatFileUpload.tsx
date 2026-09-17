@@ -37,7 +37,7 @@ export function ChatFileUpload({ onUploaded, disabled }: ChatFileUploadProps) {
       <button
         onClick={() => inputRef.current?.click()}
         disabled={disabled || isUploading}
-        className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-colors text-sm text-foreground disabled:opacity-50"
+        className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors text-sm text-foreground disabled:opacity-50"
       >
         {isUploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
         {isUploading ? "Enviando..." : "Anexar mídia"}
