@@ -7,6 +7,10 @@ type WarmupDetail = {
   daysSinceConnected: number | null
   recommendedDailyLimit: number | null
   sentLast24h: number
+  // "chip" = o usuário informou a idade real do chip no WhatsApp (o que de fato importa
+  // pro risco). "connection" = não informou, e caímos no fallback (data de conexão no
+  // ZapBroker) — que pode estar bem errado se o chip já era usado antes de conectar aqui.
+  basis?: "chip" | "connection"
 }
 
 type Reason = "volume" | "cooldown" | "warmup_limit"
@@ -39,13 +43,19 @@ function parsePurpose(purpose?: string): Parsed {
 }
 
 function reasonMessage(reason: Reason, leadCount: number, warmup?: WarmupDetail): string {
+  const isChipBasis = warmup?.basis === "chip"
+
   switch (reason) {
     case "cooldown":
-      return "Esse WhatsApp foi conectado há menos de 24h. Números muito novos têm o maior risco de bloqueio — o ideal é esperar completar 1 dia antes de disparar."
+      return isChipBasis
+        ? "Você indicou que esse chip tem menos de 1 dia de uso real no WhatsApp — números muito novos têm o maior risco de bloqueio. O ideal é esperar completar pelo menos 1 dia de aquecimento antes de disparar."
+        : "Esse WhatsApp foi conectado ao ZapBroker há menos de 24h e a idade real do chip não foi informada — por segurança, tratamos como número novo. Se ele já tem uso real de WhatsApp há mais tempo, informe a idade do chip nas configurações da instância pra um aviso mais preciso."
     case "warmup_limit": {
       const limit = warmup?.recommendedDailyLimit
       const days = warmup?.daysSinceConnected
-      return `Esse WhatsApp tem ${days ?? "poucos"} dia(s) desde que conectou — o volume recomendado pra essa idade é até ${limit ?? "?"} mensagens/dia, e esse disparo passa disso.`
+      return isChipBasis
+        ? `Você indicou que esse chip tem ${days ?? "poucos"} dia(s) de uso no WhatsApp — o volume recomendado pra essa idade é até ${limit ?? "?"} mensagens/dia, e esse disparo passa disso.`
+        : `Esse WhatsApp foi conectado ao ZapBroker há ${days ?? "poucos"} dia(s) (idade real do chip não informada) — o volume recomendado pra esse tempo é até ${limit ?? "?"} mensagens/dia, e esse disparo passa disso.`
     }
     case "volume":
     default:

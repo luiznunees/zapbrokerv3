@@ -9,6 +9,7 @@ interface Instance {
   id: string
   name: string
   status: string
+  phone_number?: string | null
 }
 
 interface ChatInstancePickerProps {
@@ -53,13 +54,15 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
           <div className="space-y-1.5">
             {instances.map((instance) => {
               const isSelected = selected.includes(instance.id)
+              const isConnected = instance.status === "connected"
               return (
                 <button
                   key={instance.id}
                   onClick={() => toggle(instance.id)}
-                  disabled={disabled || confirmed}
+                  disabled={disabled || confirmed || !isConnected}
+                  title={isConnected ? undefined : "Desconectado — conecte esse WhatsApp antes de usar no disparo"}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left disabled:opacity-50",
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed",
                     isSelected ? "bg-primary/15 border border-primary/40" : "bg-accent hover:bg-accent/70 border border-transparent"
                   )}
                 >
@@ -67,10 +70,17 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
                     <Wifi className="size-3.5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-sm text-foreground truncate">
-                      {instance.name}
-                      <span className={cn("size-1.5 rounded-full", instance.status === "connected" ? "bg-emerald-400" : "bg-rose-400")} />
-                    </span>
+                    <span className="text-sm text-foreground truncate block">{instance.name}</span>
+                    {instance.phone_number && (
+                      <span className="text-[11px] text-muted-foreground truncate block">{instance.phone_number}</span>
+                    )}
+                  </span>
+                  <span className={cn(
+                    "flex items-center gap-1 text-[11px] font-medium shrink-0",
+                    isConnected ? "text-emerald-500" : "text-rose-500"
+                  )}>
+                    <span className={cn("size-1.5 rounded-full", isConnected ? "bg-emerald-400" : "bg-rose-400")} />
+                    {isConnected ? "Conectado" : "Desconectado"}
                   </span>
                   {isSelected && <Check className="size-4 text-primary shrink-0" />}
                 </button>
@@ -81,6 +91,10 @@ export function ChatInstancePicker({ onConfirm, disabled }: ChatInstancePickerPr
               <p className="text-xs text-muted-foreground px-1 py-1">Você ainda não tem nenhum WhatsApp conectado.</p>
             )}
           </div>
+
+          <p className="text-[11px] text-muted-foreground/80 px-1">
+            Selecionar mais de um distribui o envio entre eles, reduzindo o volume por número.
+          </p>
 
           <button
             onClick={handleConfirm}

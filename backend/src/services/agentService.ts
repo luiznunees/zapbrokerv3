@@ -85,7 +85,7 @@ export interface CampaignDraft {
   // cooldown / acima do limite recomendado pra idade do chip) — o mesmo flag
   // needsAntiBanWarning cobre os três, isso só define o texto mostrado.
   antiBanReasons?: Array<'volume' | 'cooldown' | 'warmup_limit'>;
-  antiBanWarmupInfo?: { daysSinceConnected: number | null; recommendedDailyLimit: number | null; sentLast24h: number };
+  antiBanWarmupInfo?: { daysSinceConnected: number | null; recommendedDailyLimit: number | null; sentLast24h: number; basis?: 'chip' | 'connection' };
   needsQuotaWarning?: boolean;
   quotaAcknowledged?: boolean;
   readyToSend?: boolean;
@@ -721,10 +721,10 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
     try {
       const { data: instanceRow } = await supabase
         .from('instances')
-        .select('connected_at')
+        .select('connected_at, self_reported_chip_days')
         .eq('id', soleInstanceId)
         .single();
-      const warmup = await campaignService.getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null);
+      const warmup = await campaignService.getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null, instanceRow?.self_reported_chip_days ?? null);
       if (warmup.inCooldown) {
         riskReasons.push('cooldown');
       } else if (warmup.recommendedDailyLimit !== null && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit) {
@@ -734,6 +734,7 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
         daysSinceConnected: warmup.daysSinceConnected,
         recommendedDailyLimit: warmup.recommendedDailyLimit,
         sentLast24h: warmup.sentLast24h,
+        basis: warmup.basis,
       };
     } catch {
       // Falha na checagem não deve travar o draft — só não gera esse aviso específico.
@@ -1178,7 +1179,7 @@ async function executeTool(
   args: any,
   state: ToolState,
   lists: Array<{ id: string; name: string; leadCount: number }>,
-  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null }>,
+  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null; self_reported_chip_days?: number | null }>,
   campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }>,
   stalledCount: number
 ): Promise<any> {
@@ -1422,7 +1423,7 @@ async function executeTool(
         : instances.find(i => i.id === state.draft?.instanceId);
       if (!target) return { message: 'Não encontrei esse WhatsApp — informe o nome ou defina o número no disparo primeiro.' };
 
-      const warmup = await campaignService.getWarmupInfo(userId, target.id, target.connected_at ?? null);
+      const warmup = await campaignService.getWarmupInfo(userId, target.id, target.connected_at ?? null, target.self_reported_chip_days ?? null);
       const risk = warmup.sentLast24h > 300 ? 'alto' : warmup.sentLast24h > 120 ? 'moderado' : 'baixo';
       return {
         instanceName: target.name,
@@ -1719,7 +1720,7 @@ interface ToolLoopContext {
   sessionId: string;
   planId: string;
   lists: Array<{ id: string; name: string; leadCount: number }>;
-  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null }>;
+  instances: Array<{ id: string; name: string; status: string; connected_at?: string | null; self_reported_chip_days?: number | null }>;
   campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }>;
   stalledCount: number;
 }

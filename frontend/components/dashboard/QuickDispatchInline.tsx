@@ -10,6 +10,7 @@ import { ChatListPicker } from "@/components/dashboard/ChatListPicker"
 import { ChatInstancePicker } from "@/components/dashboard/ChatInstancePicker"
 import { ChatAntiBanWarningConfirm } from "@/components/dashboard/ChatAntiBanWarningConfirm"
 import { ChatCampaignSummaryConfirm } from "@/components/dashboard/ChatCampaignSummaryConfirm"
+import { ChatTimingConfirm, type TimingValues } from "@/components/dashboard/ChatTimingConfirm"
 
 // Espelha as regras do agente (agentService.ts) pra manter o mesmo comportamento
 // sem gastar chamada de IA: limiar de risco de bloqueio e timing padrão por tamanho de lista.
@@ -21,7 +22,7 @@ function defaultDelaySeconds(leadCount: number) {
   return 60
 }
 
-type Step = "list" | "instance" | "message" | "antiban" | "review" | "status"
+type Step = "list" | "instance" | "message" | "antiban" | "timing" | "review" | "status"
 
 type SelectedList = { id: string; name: string; leadCount: number }
 type SelectedInstances = { instanceIds: string[]; instanceNames: string[] }
@@ -36,7 +37,7 @@ interface QuickDispatchInlineProps {
   onExit: () => void
 }
 
-const STEP_ORDER: Step[] = ["list", "instance", "message", "review"]
+const STEP_ORDER: Step[] = ["list", "instance", "message", "timing", "review"]
 
 export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
   useReducedMotion()
@@ -49,6 +50,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
   const [riskReasons, setRiskReasons] = useState<RiskReason[]>([])
   const [warmup, setWarmup] = useState<WarmupInfo | undefined>(undefined)
+  const [timing, setTiming] = useState<TimingValues | null>(null)
   const pollCountRef = useRef(0)
 
   const handleSelectList = (selected: SelectedList) => {
@@ -102,7 +104,8 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
     instance: "list",
     antiban: "instance",
     message: "instance",
-    review: "message",
+    timing: "message",
+    review: "timing",
     status: null,
   }
   const goBack = () => {
@@ -111,7 +114,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
   }
 
   const handleSubmit = async () => {
-    if (!list || !instances || validMessages.length === 0) return
+    if (!list || !instances || !timing || validMessages.length === 0) return
     setIsSubmitting(true)
     try {
       const formData = new FormData()
@@ -120,9 +123,11 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
       formData.append("messageVariations", JSON.stringify(validMessages))
       formData.append("contactListId", list.id)
       formData.append("instanceIds", JSON.stringify(instances.instanceIds))
-      formData.append("delaySeconds", String(defaultDelaySeconds(list.leadCount)))
-      formData.append("batchSize", "30")
-      formData.append("batchDelaySeconds", "60")
+      formData.append("delaySeconds", String(timing.delaySeconds))
+      formData.append("sequentialMode", String(timing.sequentialMode))
+      formData.append("blockDelay", String(timing.blockDelay))
+      formData.append("batchSize", String(timing.batchSize))
+      formData.append("batchDelaySeconds", String(timing.batchDelaySeconds))
       formData.append("mediaType", "text")
 
       const created = await api.campaigns.create(formData)
@@ -263,7 +268,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
               <Plus className="size-3.5" /> Adicionar variação
             </button>
             <button
-              onClick={() => setStep("review")}
+              onClick={() => setStep("timing")}
               disabled={validMessages.length === 0}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
@@ -272,7 +277,21 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
           </div>
         )}
 
-        {step === "review" && list && instances && (
+        {step === "timing" && list && (
+          <ChatTimingConfirm
+            purpose={JSON.stringify({
+              delaySeconds: defaultDelaySeconds(list.leadCount),
+              batchSize: 30,
+              batchDelaySeconds: 60,
+            })}
+            onConfirm={(values) => {
+              setTiming(values)
+              setStep("review")
+            }}
+          />
+        )}
+
+        {step === "review" && list && instances && timing && (
           <ChatCampaignSummaryConfirm
             purpose={JSON.stringify({
               contactListName: list.name,
@@ -280,8 +299,8 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
               instanceNames: instances.instanceNames,
               messageVariations: validMessages,
               scheduledAt: null,
-              delaySeconds: defaultDelaySeconds(list.leadCount),
-              batchSize: 30,
+              delaySeconds: timing.delaySeconds,
+              batchSize: timing.batchSize,
             })}
             onConfirm={handleSubmit}
             isConfirming={isSubmitting}
@@ -341,7 +360,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
 
             <div className="flex gap-2">
               <Link
-                href={`/dashboard/campaigns/${campaignId}/kanban`}
+                href={`/dashboard/campaigns/${campaignId}`}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors"
               >
                 Ver detalhes <ExternalLink className="size-3.5" />

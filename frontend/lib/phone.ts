@@ -29,12 +29,6 @@ export function formatLocalPhoneDisplay(localDigits: string): string {
     return out
 }
 
-// O que exibir no input: sempre com o +55 fixo na frente assim que houver algo digitado.
-export function formatPhoneWithDdi(localDigits: string): string {
-    if (!localDigits) return ""
-    return `+55 ${formatLocalPhoneDisplay(localDigits)}`
-}
-
 // O valor real (DDI + DDD + número, só dígitos) pra mandar pra API.
 export function toFullPhoneDigits(localDigits: string): string {
     return localDigits ? "55" + localDigits : ""

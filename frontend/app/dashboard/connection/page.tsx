@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 
 import { api } from '@/services/api'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
-import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone'
+import { toFullPhoneDigits } from '@/lib/phone'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 import { BrandLoader } from '@/components/ui/BrandLoader'
 
@@ -20,8 +21,18 @@ export default function ConnectionPage() {
     const [isNewInstanceModalOpen, setIsNewInstanceModalOpen] = useState(false);
     const [newInstanceName, setNewInstanceName] = useState('');
     const [newInstancePhone, setNewInstancePhone] = useState('');
+    const [chipAgeDays, setChipAgeDays] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const connectRequestId = useRef(0);
+
+    // A idade real do chip no WhatsApp é o que determina o risco de bloqueio — não a data
+    // em que ele foi conectado aqui (ver campaignService.ts getWarmupInfo). null = não informado.
+    const CHIP_AGE_OPTIONS: Array<{ label: string; days: number | null }> = [
+        { label: 'É novo (comprei/ativei agora)', days: 0 },
+        { label: 'Uso há alguns dias', days: 3 },
+        { label: 'Uso há 1-2 semanas', days: 10 },
+        { label: 'Mais de 1 mês, já maduro', days: 20 },
+    ];
 
     useEffect(() => {
         fetchInstances();
@@ -86,9 +97,10 @@ export default function ConnectionPage() {
             setLoadingInstances(true);
             setErrorMessage(null); // Clear previous errors
             const phone = toFullPhoneDigits(newInstancePhone) || undefined;
-            const created = await api.instances.create(newInstanceName, phone);
+            const created = await api.instances.create(newInstanceName, phone, chipAgeDays);
             setNewInstanceName('');
             setNewInstancePhone('');
+            setChipAgeDays(null);
             setIsNewInstanceModalOpen(false);
             await fetchInstances();
 
@@ -312,15 +324,33 @@ export default function ConnectionPage() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-1.5">Número de WhatsApp (opcional)</label>
-                                        <input
-                                            type="tel"
-                                            inputMode="numeric"
-                                            value={formatPhoneWithDdi(newInstancePhone)}
-                                            onChange={(e) => setNewInstancePhone(extractLocalPhoneDigits(e.target.value))}
-                                            placeholder="+55 (11) 91234-5678"
-                                            className="w-full px-4 py-2.5 rounded-lg bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none"
+                                        <PhoneInput
+                                            value={newInstancePhone}
+                                            onChange={setNewInstancePhone}
+                                            className="w-full px-4 py-2.5 rounded-lg bg-background border border-border focus-within:ring-2 focus-within:ring-primary/20"
                                         />
                                         <p className="text-xs text-muted-foreground mt-2">Informar aqui gera o QR/código de pareamento já na criação — mais confiável do que conectar depois.</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1.5">Esse chip já tem uso real no WhatsApp?</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {CHIP_AGE_OPTIONS.map((opt) => (
+                                                <button
+                                                    key={opt.label}
+                                                    type="button"
+                                                    onClick={() => setChipAgeDays(opt.days)}
+                                                    className={cn(
+                                                        "px-3 py-2 rounded-lg border text-xs font-medium text-left transition-colors",
+                                                        chipAgeDays === opt.days ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/50"
+                                                    )}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            É a idade real do chip que importa pro risco de bloqueio — não a data em que ele foi conectado aqui. Um chip já maduro corre menos risco mesmo conectando hoje.
+                                        </p>
                                     </div>
                                     <div className="flex gap-3 pt-2">
                                         <button

@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase';
 import * as evolutionService from './evolutionService';
 import * as eventLogService from './eventLogService';
 
-export const createInstance = async (userId: string, name: string, phoneNumber?: string) => {
+export const createInstance = async (userId: string, name: string, phoneNumber?: string, chipAgeDays?: number | null) => {
     // Evolution API: Instance name acts as the ID/Token
     const instanceName = name.replace(/\s+/g, '-').toLowerCase() + '-' + userId.substring(0, 4);
 
@@ -30,7 +30,7 @@ export const createInstance = async (userId: string, name: string, phoneNumber?:
     const { data, error } = await supabase
         .from('instances')
         .insert([
-            { user_id: userId, name: name, evolution_id: instanceName, status: 'disconnected' }
+            { user_id: userId, name: name, evolution_id: instanceName, status: 'disconnected', self_reported_chip_days: chipAgeDays ?? null }
         ])
         .select()
         .single();

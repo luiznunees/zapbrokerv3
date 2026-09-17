@@ -500,22 +500,39 @@ export interface WarmupInfo {
     daysSinceConnected: number | null;
     recommendedDailyLimit: number | null; // null = sem teto de aquecimento (chip já maduro)
     sentLast24h: number;
-    inCooldown: boolean; // < 24h desde a primeira conexão — orientação é não usar ainda
+    inCooldown: boolean; // < 24h de aquecimento — orientação é não usar ainda
+    basis: 'chip' | 'connection'; // de onde veio a idade: o que o usuário informou sobre o chip, ou (fallback) a data de conexão no ZapBroker
 }
 
+// A idade real do chip no WhatsApp (quanto tempo ele já tem uso de verdade) é o que
+// determina o risco de bloqueio — não a data em que ele foi conectado aqui no ZapBroker.
+// Um chip já maduro pode ser conectado hoje e não corre o mesmo risco de um número
+// realmente novo; por isso, quando o usuário informou a idade do chip ao conectar
+// (instances.self_reported_chip_days), essa é a base. connected_at só entra como
+// fallback pra quem não informou.
 export const getWarmupInfo = async (
     userId: string,
     instanceId: string,
-    connectedAt: string | null
+    connectedAt: string | null,
+    selfReportedChipDays?: number | null
 ): Promise<WarmupInfo> => {
     const { sentLast24h } = await getInstanceSendVolume(userId, instanceId);
 
-    if (!connectedAt) {
-        return { daysSinceConnected: null, recommendedDailyLimit: null, sentLast24h, inCooldown: false };
+    let daysSinceConnected: number | null = null;
+    let basis: 'chip' | 'connection' = 'connection';
+
+    if (selfReportedChipDays !== undefined && selfReportedChipDays !== null) {
+        daysSinceConnected = selfReportedChipDays;
+        basis = 'chip';
+    } else if (connectedAt) {
+        daysSinceConnected = (Date.now() - new Date(connectedAt).getTime()) / (24 * 60 * 60 * 1000);
     }
 
-    const daysSinceConnected = (Date.now() - new Date(connectedAt).getTime()) / (24 * 60 * 60 * 1000);
-    const stage = WARMUP_SCHEDULE.find(s => daysSinceConnected < s.maxDays);
+    if (daysSinceConnected === null) {
+        return { daysSinceConnected: null, recommendedDailyLimit: null, sentLast24h, inCooldown: false, basis };
+    }
+
+    const stage = WARMUP_SCHEDULE.find(s => daysSinceConnected! < s.maxDays);
     const recommendedDailyLimit = stage ? stage.recommendedDailyLimit : null;
 
     return {
@@ -523,6 +540,7 @@ export const getWarmupInfo = async (
         recommendedDailyLimit,
         sentLast24h,
         inCooldown: daysSinceConnected < 1,
+        basis,
     };
 };
 

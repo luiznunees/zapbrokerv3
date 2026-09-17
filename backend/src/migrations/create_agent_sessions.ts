@@ -270,6 +270,10 @@ begin
 end $$;
 `;
 
+const CHIP_AGE_SQL = `
+alter table instances add column if not exists self_reported_chip_days integer;
+`;
+
 const BETA_FEEDBACK_SQL = `
 create table if not exists beta_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -488,6 +492,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao corrigir FKs de users:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: CHIP_AGE_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar self_reported_chip_days automaticamente:', rpcError.message);
+    } else {
+      console.log('[Migrations] Coluna instances.self_reported_chip_days verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar self_reported_chip_days:', err.message);
   }
 
   try {

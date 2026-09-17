@@ -112,14 +112,14 @@ export default function CampaignDetailsPage() {
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-foreground">{campaign?.name}</h1>
                         {campaign?.status === 'PAUSED' && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200 animate-pulse">
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-xs font-bold border border-amber-500/20 animate-pulse">
                                 PAUSADA
                             </span>
                         )}
                     </div>
                     <p className="text-sm text-muted-foreground">Criada em {new Date(campaign?.created_at).toLocaleDateString()}</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                     {/* Pause/Resume Control */}
                     <button
                         onClick={async () => {
@@ -138,8 +138,8 @@ export default function CampaignDetailsPage() {
                         className={cn(
                             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border",
                             campaign?.status === 'PAUSED'
-                                ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200"
-                                : "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20"
+                                : "bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/20"
                         )}
                     >
                         {campaign?.status === 'PAUSED' ? (
@@ -155,12 +155,11 @@ export default function CampaignDetailsPage() {
                         )}
                     </button>
 
-
                     <button
                         onClick={fetchDetails}
                         disabled={loading}
                         title="Atualizar dados"
-                        className="p-2 bg-accent hover:bg-accent/80 rounded-lg transition-colors disabled:opacity-50 border border-border"
+                        className="flex items-center justify-center p-2 bg-accent hover:bg-accent/80 rounded-lg transition-colors disabled:opacity-50 border border-border"
                     >
                         <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
                     </button>
@@ -169,10 +168,10 @@ export default function CampaignDetailsPage() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total de Contatos" value={stats.total} icon={Users} color="bg-blue-500" />
-                <StatCard title="Enviados" value={stats.sent} icon={CheckCircle2} color="bg-emerald-500" />
-                <StatCard title="Falhas" value={stats.failed} icon={XCircle} color="bg-rose-500" />
-                <StatCard title="Aguardando" value={stats.pending} icon={Clock} color="bg-amber-500" />
+                <StatCard title="Total de Contatos" value={stats.total} icon={Users} color="bg-primary/10 text-primary" />
+                <StatCard title="Enviados" value={stats.sent} icon={CheckCircle2} color="bg-emerald-500/10 text-emerald-600" />
+                <StatCard title="Falhas" value={stats.failed} icon={XCircle} color="bg-destructive/10 text-destructive" />
+                <StatCard title="Aguardando" value={stats.pending} icon={Clock} color="bg-amber-500/10 text-amber-600" />
             </div>
 
             {/* Message Content Preview */}
@@ -235,7 +234,7 @@ export default function CampaignDetailsPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             {msg.error_message ? (
-                                                <span className="text-xs text-rose-500 flex items-center gap-1">
+                                                <span className="text-xs text-destructive flex items-center gap-1">
                                                     <AlertCircle className="w-3 h-3" /> {msg.error_message}
                                                 </span>
                                             ) : '-'}
@@ -262,7 +261,7 @@ function StatCard({ title, value, icon: Icon, color }: any) {
         <div className="bg-card border border-border p-5 rounded-xl shadow-sm">
             <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{title}</span>
-                <div className={cn("p-2 rounded-lg text-white", color)}>
+                <div className={cn("flex items-center justify-center p-2 rounded-lg", color)}>
                     <Icon className="w-4 h-4" />
                 </div>
             </div>
@@ -274,8 +273,8 @@ function StatCard({ title, value, icon: Icon, color }: any) {
 function StatusBadge({ status }: { status: string }) {
     const configs: any = {
         'SENT': { label: 'Enviado', class: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-        'FAILED': { label: 'Falhou', class: 'bg-rose-500/10 text-rose-600 border-rose-500/20' },
-        'PENDING': { label: 'Pendente', class: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
+        'FAILED': { label: 'Falhou', class: 'bg-destructive/10 text-destructive border-destructive/20' },
+        'PENDING': { label: 'Pendente', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
         'QUEUED': { label: 'Na Fila', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
     };
 

@@ -2,7 +2,8 @@ import { X, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { BrandLoader } from '@/components/ui/BrandLoader';
-import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone';
+import { PhoneInput } from '@/components/ui/PhoneInput';
+import { toFullPhoneDigits } from '@/lib/phone';
 
 export interface QRCodeModalProps {
     isOpen: boolean;
@@ -131,13 +132,11 @@ export function QRCodeModal({ isOpen, onClose, qrCode, pairingCode, isLoading, o
                                     <p className="text-sm text-muted-foreground">
                                         Digite o número de WhatsApp que será conectado:
                                     </p>
-                                    <input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        placeholder="+55 (11) 91234-5678"
-                                        value={formatPhoneWithDdi(phoneNumber)}
-                                        onChange={(e) => setPhoneNumber(extractLocalPhoneDigits(e.target.value))}
-                                        className="w-full text-center text-lg font-medium bg-accent/50 border border-border rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary"
+                                    <PhoneInput
+                                        value={phoneNumber}
+                                        onChange={setPhoneNumber}
+                                        className="w-full justify-center text-lg font-medium bg-accent/50 border border-border rounded-lg py-2 px-4 focus-within:ring-2 focus-within:ring-primary"
+                                        inputClassName="text-center"
                                     />
                                     <button
                                         onClick={() => onRequestPairingCode(toFullPhoneDigits(phoneNumber))}

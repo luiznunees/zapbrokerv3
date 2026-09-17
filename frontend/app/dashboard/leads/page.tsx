@@ -15,7 +15,8 @@ import {
 } from '@solar-icons/react'
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
-import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from '@/lib/phone'
+import { toFullPhoneDigits } from '@/lib/phone'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 import { LeadImporterModal } from '@/components/dashboard/LeadImporterModal'
 import { SimpleTooltip as Tooltip } from '@/components/ui/simple-tooltip'
 import { HelpBadge } from '@/components/ui/HelpBadge'
@@ -143,7 +144,7 @@ export default function LeadsPage() {
     }
 
     const handleDeleteList = async (id: string) => {
-        if (!confirm('Tem certeza que deseja excluir esta pasta e todos os seus contatos?')) return
+        if (!confirm('Tem certeza que deseja excluir esta lista de leads e todos os seus contatos?')) return
         try {
             await api.contacts.deleteList(id)
             setLists(prev => prev.filter(l => l.id !== id))
@@ -152,7 +153,7 @@ export default function LeadsPage() {
             // Folder deleted successfully
         } catch (error: any) {
             console.error('Error deleting list:', error)
-            const errorMessage = error?.message || 'Erro desconhecido ao excluir pasta'
+            const errorMessage = error?.message || 'Erro desconhecido ao excluir lista de leads'
 
             // If list not found, it might have been deleted already - remove from UI
             if (errorMessage.includes('not found') || errorMessage.includes('access denied')) {
@@ -226,13 +227,13 @@ export default function LeadsPage() {
     if (loading && view === 'folders' && lists.length === 0) {
         return (
             <div className="flex items-center justify-center h-[60vh]">
-                <BrandLoader size="lg" label="Carregando suas pastas..." />
+                <BrandLoader size="lg" label="Carregando suas listas de leads..." />
             </div>
         )
     }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-6 max-w-4xl mx-auto">
             {/* Create Contact Modal */}
             <AnimatePresence>
                 {isCreatingContact && (
@@ -244,7 +245,7 @@ export default function LeadsPage() {
                             className="bg-card border border-border p-8 rounded-3xl shadow-2xl w-full max-w-md"
                         >
                             <h3 className="text-2xl font-bold mb-2">Novo Contato</h3>
-                            <p className="text-muted-foreground mb-6">Adicione um novo contato à pasta {selectedList?.name}.</p>
+                            <p className="text-muted-foreground mb-6">Adicione um novo contato à lista {selectedList?.name}.</p>
 
                             <div className="space-y-4 mb-8">
                                 <div>
@@ -261,13 +262,10 @@ export default function LeadsPage() {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-muted-foreground mb-2">WhatsApp</label>
-                                    <input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        value={formatPhoneWithDdi(newContactData.phone)}
-                                        onChange={(e) => setNewContactData(prev => ({ ...prev, phone: extractLocalPhoneDigits(e.target.value) }))}
-                                        className="w-full px-5 py-3 bg-accent/50 border border-border rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                        placeholder="+55 (11) 91234-5678"
+                                    <PhoneInput
+                                        value={newContactData.phone}
+                                        onChange={(phone) => setNewContactData(prev => ({ ...prev, phone }))}
+                                        className="w-full px-5 py-3 bg-accent/50 border border-border rounded-2xl focus-within:ring-2 focus-within:ring-primary/50 transition-all font-medium"
                                         disabled={isSubmitting}
                                     />
                                 </div>
@@ -311,15 +309,15 @@ export default function LeadsPage() {
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             className="bg-card border border-border p-8 rounded-3xl shadow-2xl w-full max-w-md"
                         >
-                            <h3 className="text-2xl font-bold mb-2">Nova Pasta</h3>
-                            <p className="text-muted-foreground mb-6">Crie uma nova pasta para organizar seus contatos.</p>
+                            <h3 className="text-2xl font-bold mb-2">Nova Lista de Leads</h3>
+                            <p className="text-muted-foreground mb-6">Crie uma nova lista de leads para organizar seus contatos.</p>
 
                             <input
                                 type="text"
                                 value={newFolderName}
                                 onChange={(e) => setNewFolderName(e.target.value)}
                                 className="w-full px-5 py-3 bg-accent/50 border border-border rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                placeholder="Nome da pasta"
+                                placeholder="Nome da lista"
                                 autoFocus
                                 disabled={isSubmitting}
                             />
@@ -343,7 +341,7 @@ export default function LeadsPage() {
                                             Criando...
                                         </>
                                     ) : (
-                                        'Criar Pasta'
+                                        'Criar Lista'
                                     )}
                                 </button>
                             </div>
@@ -362,7 +360,7 @@ export default function LeadsPage() {
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             className="bg-card border border-border p-8 rounded-3xl shadow-2xl w-full max-w-md"
                         >
-                            <h3 className="text-2xl font-bold mb-2">Renomear Pasta</h3>
+                            <h3 className="text-2xl font-bold mb-2">Renomear Lista</h3>
                             <p className="text-muted-foreground mb-6">Escolha um novo nome para sua lista de contatos.</p>
 
                             <input
@@ -370,7 +368,7 @@ export default function LeadsPage() {
                                 value={newName}
                                 onChange={(e) => setNewName(e.target.value)}
                                 className="w-full px-5 py-3 bg-accent/50 border border-border rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                placeholder="Novo nome da pasta"
+                                placeholder="Novo nome da lista"
                                 autoFocus
                                 disabled={isSubmitting}
                             />
@@ -406,7 +404,7 @@ export default function LeadsPage() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div className="flex items-center gap-4">
                         {view === 'contacts' && (
-                            <Tooltip content="Voltar para lista de pastas">
+                            <Tooltip content="Voltar para listas de leads">
                                 <motion.button
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
@@ -419,7 +417,7 @@ export default function LeadsPage() {
                         )}
                         <div>
                             <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-                                {view === 'folders' ? 'Minhas Pastas' : selectedList?.name}
+                                {view === 'folders' ? 'Minhas Listas de Leads' : selectedList?.name}
                                 <HelpBadge size="sm" />
                             </h1>
                             <p className="text-muted-foreground font-medium">
@@ -430,7 +428,7 @@ export default function LeadsPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4 w-full max-w-md">
+                    <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
                         {view === 'folders' && (
                             <>
                                 <Tooltip content="Importar contatos de PDF, CSV ou Excel">
@@ -442,20 +440,20 @@ export default function LeadsPage() {
                                         Importar PDF
                                     </button>
                                 </Tooltip>
-                                <Tooltip content="Criar uma nova pasta para organizar leads">
+                                <Tooltip content="Criar uma nova lista de leads">
                                     <button
                                         onClick={() => setIsCreatingFolder(true)}
                                         className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
                                     >
                                         <FolderFavouriteStar className="w-5 h-5" />
-                                        Nova Pasta
+                                        Nova Lista de Leads
                                     </button>
                                 </Tooltip>
                             </>
                         )}
                         {view === 'contacts' && (
                             <>
-                                <Tooltip content="Baixar todos os contatos desta pasta em CSV">
+                                <Tooltip content="Baixar todos os contatos desta lista em CSV">
                                     <button
                                         onClick={handleExportCSV}
                                         disabled={contacts.length === 0}
@@ -485,11 +483,11 @@ export default function LeadsPage() {
                                 </Tooltip>
                             </>
                         )}
-                        <div className="relative w-full group">
+                        <div className="relative w-full sm:w-64 group">
                             <MagniferZoomIn className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <input
                                 type="text"
-                                placeholder={view === 'folders' ? "Buscar pasta..." : "Buscar contato..."}
+                                placeholder={view === 'folders' ? "Buscar lista..." : "Buscar contato..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-2xl focus:ring-4 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all font-medium shadow-sm"
@@ -509,7 +507,7 @@ export default function LeadsPage() {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-accent/30 border-b border-border">
-                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Nome da Pasta</th>
+                                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Nome da Lista</th>
                                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Criada em</th>
                                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 text-right">Ações</th>
                                 </tr>
@@ -590,7 +588,7 @@ export default function LeadsPage() {
                                         <td colSpan={3} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center justify-center">
                                                 <FolderFavouriteStar className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                                                <p className="text-muted-foreground font-bold text-sm">Nenhuma pasta encontrada.</p>
+                                                <p className="text-muted-foreground font-bold text-sm">Nenhuma lista encontrada.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -674,7 +672,7 @@ export default function LeadsPage() {
                                     {filteredContacts.length === 0 && (
                                         <tr>
                                             <td colSpan={4} className="px-8 py-24 text-center text-muted-foreground font-bold italic bg-accent/5">
-                                                Nenhum contato encontrado nesta pasta.
+                                                Nenhum contato encontrado nesta lista.
                                             </td>
                                         </tr>
                                     )}

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import { Smartphone, CheckCircle2, RefreshCw, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { extractLocalPhoneDigits, formatPhoneWithDdi, toFullPhoneDigits } from "@/lib/phone"
+import { toFullPhoneDigits } from "@/lib/phone"
+import { PhoneInput } from "@/components/ui/PhoneInput"
 
 export type WhatsAppQrStatus = "connecting" | "connected" | "expired"
 
@@ -47,19 +48,12 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
   }, [pairingCode])
 
   return (
-    <div
-      className={cn(
-        "mt-2 w-full max-w-[280px] rounded-2xl border p-4 transition-all",
-        isConnected
-          ? "border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-teal-950/20"
-          : "border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 to-teal-950/10"
-      )}
-    >
+    <div className="mt-2 w-full max-w-[280px] rounded-2xl border border-border bg-card p-4 transition-all">
       <div className="flex items-center gap-2.5 mb-3">
         <span
           className={cn(
             "flex items-center justify-center size-8 rounded-xl shrink-0",
-            isConnected ? "bg-emerald-500/25 text-emerald-400" : "bg-emerald-500/15 text-emerald-400"
+            isConnected ? "bg-brand-green-500/15 text-brand-green-600" : "bg-primary/10 text-primary"
           )}
         >
           {isConnected ? <CheckCircle2 className="size-4.5" /> : <Smartphone className="size-4.5" />}
@@ -77,18 +71,18 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
       </div>
 
       {isConnected ? (
-        <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-3 text-sm text-emerald-300">
+        <div className="flex items-center gap-2 rounded-xl border border-brand-green-500/30 bg-brand-green-500/10 px-3 py-3 text-sm text-foreground">
           <span className="text-lg">🎉</span>
           Pronto! Seu número já está vinculado à plataforma.
         </div>
       ) : (
         <>
-          <div className="flex bg-black/20 rounded-lg p-1 mb-3">
+          <div className="flex bg-accent/50 rounded-lg p-1 mb-3">
             <button
               onClick={() => setMode("qrcode")}
               className={cn(
                 "flex-1 text-[11px] font-medium py-1.5 rounded-md transition-colors",
-                mode === "qrcode" ? "bg-emerald-500/20 text-emerald-300" : "text-muted-foreground/70"
+                mode === "qrcode" ? "bg-card shadow text-foreground" : "text-muted-foreground"
               )}
             >
               QR Code
@@ -97,7 +91,7 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
               onClick={() => setMode("code")}
               className={cn(
                 "flex-1 text-[11px] font-medium py-1.5 rounded-md transition-colors",
-                mode === "code" ? "bg-emerald-500/20 text-emerald-300" : "text-muted-foreground/70"
+                mode === "code" ? "bg-card shadow text-foreground" : "text-muted-foreground"
               )}
             >
               Código
@@ -107,38 +101,36 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
           {mode === "code" ? (
             pairingCode ? (
               <div className="space-y-3">
-                <p className="text-center text-2xl font-bold tracking-[0.25em] text-foreground bg-black/20 rounded-xl py-3">
+                <p className="text-center text-2xl font-bold tracking-[0.25em] text-foreground bg-accent/50 rounded-xl py-3">
                   {pairingCode}
                 </p>
                 <button
                   onClick={onRegenerate}
                   disabled={regenerating}
-                  className="w-full text-[11px] underline text-muted-foreground/70 disabled:opacity-60"
+                  className="w-full text-[11px] underline text-muted-foreground disabled:opacity-60"
                 >
                   Gerar novo código
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="+55 (11) 91234-5678"
-                  value={formatPhoneWithDdi(phoneNumber)}
-                  onChange={(e) => setPhoneNumber(extractLocalPhoneDigits(e.target.value))}
-                  className="w-full text-center text-sm font-medium bg-black/20 border border-emerald-500/20 rounded-lg py-2 px-3 text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                <PhoneInput
+                  value={phoneNumber}
+                  onChange={setPhoneNumber}
+                  className="w-full justify-center text-sm font-medium bg-accent/50 border border-border rounded-lg py-2 px-3 focus-within:ring-2 focus-within:ring-primary"
+                  inputClassName="text-center"
                 />
                 <button
                   onClick={() => onRequestPairingCode(toFullPhoneDigits(phoneNumber))}
                   disabled={regenerating || phoneNumber.length < 10}
-                  className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50 text-emerald-300 text-xs font-semibold py-2 rounded-lg transition-colors"
+                  className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full shadow-lg transition-all"
                 >
                   {regenerating ? "Gerando..." : "Gerar código"}
                 </button>
               </div>
             )
           ) : (
-            <div className="relative rounded-xl bg-white p-3 flex items-center justify-center aspect-square">
+            <div className="relative rounded-xl bg-white p-3 flex items-center justify-center aspect-square shadow-inner">
               {qrCode ? (
                 <img
                   src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
@@ -163,8 +155,8 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
           )}
 
           {!isExpired && (mode === "qrcode" ? !!qrCode : !!pairingCode) && (
-            <div className="mt-3 flex items-center gap-1.5 text-[11px] text-emerald-400">
-              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="mt-3 flex items-center gap-1.5 text-[11px] text-primary">
+              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
               Aguardando conexão...
             </div>
           )}
@@ -172,8 +164,9 @@ export function ChatWhatsAppQR({ qrCode, pairingCode, status, onRegenerate, onRe
           {!isExpired && (mode === "qrcode" ? !!qrCode : !!pairingCode) && onAlreadyConnected && (
             <button
               onClick={onAlreadyConnected}
-              className="mt-2 w-full bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-semibold py-2 rounded-lg transition-colors"
+              className="mt-2 w-full flex items-center justify-center gap-2 border border-primary text-primary text-xs font-bold py-2 rounded-full hover:bg-primary/5 transition-colors"
             >
+              <CheckCircle2 className="size-3.5" />
               Já conectei
             </button>
           )}

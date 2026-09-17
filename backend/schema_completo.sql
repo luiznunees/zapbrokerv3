@@ -42,6 +42,8 @@ create table if not exists instances (
   status text default 'disconnected',
   evolution_id text,
   phone_number text,
+  connected_at timestamp with time zone,
+  self_reported_chip_days integer, -- idade real do chip no WhatsApp, informada pelo usuário (base do aquecimento, não connected_at)
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );

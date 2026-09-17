@@ -9,7 +9,7 @@ import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 export const create = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user.id;
-        const { name, phoneNumber } = req.body;
+        const { name, phoneNumber, chipAgeDays } = req.body;
 
         // 1. Check User's Plan
         const { data: subscription } = await supabase
@@ -41,7 +41,13 @@ export const create = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        const result = await instanceService.createInstance(userId, name, typeof phoneNumber === 'string' ? phoneNumber : undefined);
+        const parsedChipAgeDays = chipAgeDays === undefined || chipAgeDays === null || chipAgeDays === '' ? null : Number(chipAgeDays);
+        const result = await instanceService.createInstance(
+            userId,
+            name,
+            typeof phoneNumber === 'string' ? phoneNumber : undefined,
+            Number.isFinite(parsedChipAgeDays as number) ? parsedChipAgeDays : null
+        );
         res.status(201).json(result);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
@@ -77,7 +83,7 @@ export const getWarmup = async (req: AuthRequest, res: Response) => {
 
         const { data: instance } = await supabase
             .from('instances')
-            .select('id, connected_at')
+            .select('id, connected_at, self_reported_chip_days')
             .eq('id', id)
             .eq('user_id', userId)
             .single();
@@ -86,7 +92,7 @@ export const getWarmup = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Instância não encontrada.' });
         }
 
-        const warmup = await campaignService.getWarmupInfo(userId, id, instance.connected_at ?? null);
+        const warmup = await campaignService.getWarmupInfo(userId, id, instance.connected_at ?? null, instance.self_reported_chip_days ?? null);
         res.status(200).json(warmup);
     } catch (error: any) {
         res.status(400).json({ error: error.message });
