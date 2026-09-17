@@ -249,6 +249,13 @@ const TRIAL_INVITES_SQL = `
 alter table admin_invites add column if not exists trial_days integer;
 `;
 
+// Convite travado num email especifico — sem isso, qualquer pessoa com o link consegue
+// usar o convite de teste gratis de outra pessoa (achado real: fundador testou o cadastro
+// direto, sem o link, e a pessoa convidada quase usou email diferente do esperado).
+const ADMIN_INVITES_EMAIL_SQL = `
+alter table admin_invites add column if not exists email text;
+`;
+
 // FKs pra users(id) sem "on delete" definido bloqueiam qualquer exclusão de usuário
 // (erro visto ao tentar limpar a base: "agent_messages_user_id_fkey"). Acha o nome real
 // da constraint em cada tabela (não assume o nome padrão) e recria com o rule certo —
@@ -502,6 +509,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar coluna trial_days:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: ADMIN_INVITES_EMAIL_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar coluna email em admin_invites:', rpcError.message);
+    } else {
+      console.log('[Migrations] Coluna admin_invites.email verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar coluna email em admin_invites:', err.message);
   }
 
   try {

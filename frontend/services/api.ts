@@ -58,6 +58,7 @@ export const api = {
     auth: {
         login: (data: any) => fetchAPI('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
         register: (data: any) => fetchAPI('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+        checkInvite: (code: string) => fetchAPI(`/auth/invite/${encodeURIComponent(code)}`),
         me: () => fetchAPI('/auth/me'),
         profile: () => fetchAPI('/auth/me'),
         updateProfile: (data: any) => fetchAPI('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
@@ -166,7 +167,7 @@ export const api = {
         stats: () => fetchAPI('/admin/stats'),
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
-        createInvite: (planId: string, trialDays?: number) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays }) }),
+        createInvite: (planId: string, trialDays?: number, email?: string) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays, email }) }),
         logs: (severity?: string) => {
             const params = new URLSearchParams()
             if (severity) params.set('severity', severity)

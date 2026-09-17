@@ -13,19 +13,24 @@ const TRIAL_DAYS = 15
 
 export default function AdminInvitesPage() {
     const [planId, setPlanId] = useState('trial')
+    const [email, setEmail] = useState('')
     const [generatedLink, setGeneratedLink] = useState('')
     const [generatedIsTrial, setGeneratedIsTrial] = useState(false)
+    const [generatedEmail, setGeneratedEmail] = useState('')
     const [copied, setCopied] = useState(false)
     const [loading, setLoading] = useState(false)
 
     const isTrial = planId === 'trial'
+    const emailValid = /\S+@\S+\.\S+/.test(email.trim())
 
     const handleGenerate = async () => {
+        if (!emailValid) return
         setLoading(true)
         try {
-            const res = await api.admin.createInvite(isTrial ? 'pro' : planId, isTrial ? TRIAL_DAYS : undefined)
+            const res = await api.admin.createInvite(isTrial ? 'pro' : planId, isTrial ? TRIAL_DAYS : undefined, email.trim())
             setGeneratedLink(res.link)
             setGeneratedIsTrial(isTrial)
+            setGeneratedEmail(email.trim())
         } catch (error) {
             console.error('Failed to generate invite:', error)
             alert('Failed to generate invite')
@@ -57,6 +62,19 @@ export default function AdminInvitesPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
+                        <Label className="text-zinc-300">Email da pessoa</Label>
+                        <Input
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="pessoa@email.com"
+                            className="bg-zinc-950 border-zinc-800 text-zinc-100"
+                        />
+                        <p className="text-xs text-zinc-500">
+                            O convite fica travado nesse email — só funciona se a pessoa se cadastrar com ele.
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label className="text-zinc-300">Plano Inicial</Label>
                         <Select value={planId} onValueChange={setPlanId}>
                             <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-100">
@@ -78,7 +96,7 @@ export default function AdminInvitesPage() {
 
                     <Button
                         onClick={handleGenerate}
-                        disabled={loading}
+                        disabled={loading || !emailValid}
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-12"
                     >
                         {loading ? 'Gerando...' : 'Gerar Link Único'}
@@ -87,7 +105,7 @@ export default function AdminInvitesPage() {
                     {generatedLink && (
                         <div className="animate-in fade-in slide-in-from-top-4 pt-4 border-t border-zinc-800">
                             <Label className="text-zinc-300 mb-2 block">
-                                Link gerado — uso único{generatedIsTrial ? ` (${TRIAL_DAYS} dias de teste grátis)` : ''}
+                                Link gerado pra <span className="text-primary">{generatedEmail}</span> — uso único{generatedIsTrial ? ` (${TRIAL_DAYS} dias de teste grátis)` : ''}
                             </Label>
                             <div className="flex gap-2">
                                 <Input

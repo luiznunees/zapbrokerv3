@@ -24,11 +24,24 @@ export default function SignupPage() {
     const [error, setError] = useState('')
 
     const [inviteValid, setInviteValid] = useState<boolean | null>(null)
+    const [inviteTrialDays, setInviteTrialDays] = useState<number | null>(null)
+    const [inviteEmailLocked, setInviteEmailLocked] = useState(false)
+    const [checkingInvite, setCheckingInvite] = useState(false)
 
     useEffect(() => {
-        if (inviteCode) {
-            setInviteValid(true)
-        }
+        if (!inviteCode) return
+        setCheckingInvite(true)
+        api.auth.checkInvite(inviteCode)
+            .then((data: any) => {
+                setInviteValid(!!data.valid)
+                setInviteTrialDays(data.trialDays || null)
+                if (data.email) {
+                    setEmail(data.email)
+                    setInviteEmailLocked(true)
+                }
+            })
+            .catch(() => setInviteValid(false))
+            .finally(() => setCheckingInvite(false))
     }, [inviteCode])
 
     const handleSignup = async (e: React.FormEvent) => {
@@ -38,6 +51,12 @@ export default function SignupPage() {
 
         if (password !== confirmPassword) {
             setError('As senhas não coincidem')
+            setLoading(false)
+            return
+        }
+
+        if (inviteCode && inviteValid === false) {
+            setError('Esse link de convite não é mais válido. Fale com quem te convidou pra pedir um novo.')
             setLoading(false)
             return
         }
@@ -115,24 +134,40 @@ export default function SignupPage() {
                             </div>
                         )}
 
-                        {inviteCode && (
+                        {inviteCode && checkingInvite && (
+                            <div className="flex items-center gap-2 rounded-xl bg-accent/50 border border-border px-4 py-3 text-sm text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Verificando convite...
+                            </div>
+                        )}
+
+                        {inviteCode && !checkingInvite && inviteValid && (
                             <div className="flex items-start gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 px-4 py-3 text-sm">
                                 <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
                                 <div>
                                     <p className="font-bold">Convite aplicado!</p>
-                                    <p>Você está se registrando com um código de convite especial.</p>
+                                    <p>
+                                        {inviteTrialDays
+                                            ? `Você ganhou ${inviteTrialDays} dias de teste grátis.`
+                                            : 'Você está se registrando com um código de convite especial.'}
+                                        {inviteEmailLocked && ' Esse convite é exclusivo pro email abaixo.'}
+                                    </p>
                                 </div>
                             </div>
                         )}
 
+                        {inviteCode && !checkingInvite && inviteValid === false && (
+                            <AuthError>Esse link de convite não é mais válido (expirado ou já usado). Fale com quem te convidou pra pedir um novo.</AuthError>
+                        )}
+
                         <AuthInput id="name" label="Nome completo" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} required />
-                        <AuthInput id="email" type="email" label="Email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                        <AuthInput id="email" type="email" label="Email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={inviteEmailLocked} />
                         <AuthInput id="password" type="password" label="Senha" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
                         <AuthInput id="confirmPassword" type="password" label="Confirmar senha" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
 
                         {error && <AuthError>{error}</AuthError>}
 
-                        <AuthButton type="submit" loading={loading}>
+                        <AuthButton type="submit" loading={loading} disabled={checkingInvite || (!!inviteCode && inviteValid === false)}>
                             {loading && <Loader2 className="w-5 h-5 animate-spin" />}
                             Criar conta
                         </AuthButton>

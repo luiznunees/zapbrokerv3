@@ -33,6 +33,7 @@ const router = Router();
  *         description: Error
  */
 router.post('/register', authController.register);
+router.get('/invite/:code', authController.checkInvite);
 
 /**
  * @swagger

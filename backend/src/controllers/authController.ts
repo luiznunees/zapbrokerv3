@@ -29,6 +29,12 @@ export const register = async (req: Request, res: Response) => {
             if (inviteError || !invite) {
                 throw new Error('Código de convite inválido ou já utilizado.');
             }
+            // Convite travado num email específico — impede que outra pessoa use o link
+            // de alguém (ou que a própria pessoa convidada digite um email diferente por
+            // engano, perdendo o plano/teste grátis reservado pra ela).
+            if (invite.email && invite.email.toLowerCase() !== String(email).trim().toLowerCase()) {
+                throw new Error('Esse convite foi criado pra outro email. Use o mesmo email que recebeu o convite.');
+            }
             inviteData = invite;
         }
 
@@ -133,6 +139,32 @@ function friendlyRegisterError(message: string): string {
     }
     return 'Falha ao criar conta. Verifique os dados e tente novamente.';
 }
+
+// Pública, sem auth — a página de cadastro consulta antes de deixar a pessoa digitar
+// o email, pra já travar/pré-preencher quando o convite for exclusivo de alguém.
+export const checkInvite = async (req: Request, res: Response) => {
+    try {
+        const { code } = req.params;
+        const { data: invite } = await supabase
+            .from('admin_invites')
+            .select('code, plan_id, trial_days, email, is_used')
+            .eq('code', code)
+            .maybeSingle();
+
+        if (!invite || invite.is_used) {
+            return res.status(404).json({ valid: false });
+        }
+
+        res.status(200).json({
+            valid: true,
+            planId: invite.plan_id,
+            trialDays: invite.trial_days,
+            email: invite.email || null,
+        });
+    } catch (error: any) {
+        res.status(400).json({ valid: false, error: error.message });
+    }
+};
 
 export const login = async (req: Request, res: Response) => {
     try {
