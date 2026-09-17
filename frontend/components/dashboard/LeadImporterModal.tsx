@@ -32,7 +32,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
     const [step, setStep] = useState<'input' | 'result'>('input')
 
     const [file, setFile] = useState<File | null>(null)
-    const [importResult, setImportResult] = useState<{ listName?: string, count: number } | null>(null)
+    const [importResult, setImportResult] = useState<{ listName?: string, count: number, skipped?: number } | null>(null)
 
     const [isSubmitting, setIsSubmitting] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -60,7 +60,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                     ? await api.contacts.importExcel(formData)
                     : await api.contacts.importCsv(formData)
 
-                result = { listName: response.list.name, count: response.count }
+                result = { listName: response.list.name, count: response.count, skipped: response.skipped || 0 }
                 importedList = { id: response.list.id, name: response.list.name, count: response.count }
             }
 
@@ -186,12 +186,12 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                             <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex gap-3 items-start">
                                 <InfoCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-green-600">Como preparar seu arquivo</h4>
+                                    <h4 className="text-sm font-bold text-green-600">Não precisa seguir um modelo</h4>
                                     <ul className="text-xs text-muted-foreground mt-2 leading-relaxed space-y-1 list-disc list-inside">
-                                        <li>Use as colunas <b>"nome"</b> e <b>"telefone"</b></li>
-                                        <li>Telefones devem estar no formato: <b>5511999998888</b> (com DDI e DDD)</li>
-                                        <li>Aceita arquivos <b>.csv</b> e <b>.xlsx</b> (Excel)</li>
-                                        <li>Baixe nosso modelo para garantir o formato correto</li>
+                                        <li>A gente identifica sozinho qual coluna é nome e qual é telefone, mesmo sem cabeçalho</li>
+                                        <li>Aceita telefone com ou sem DDI, com parênteses, espaço ou traço — a gente ajusta</li>
+                                        <li>Funciona com <b>.csv</b> (vírgula ou ponto-e-vírgula) e <b>.xlsx</b> (Excel)</li>
+                                        <li>Linhas sem telefone válido são ignoradas e mostramos quantas foram</li>
                                     </ul>
                                 </div>
                             </div>
@@ -210,6 +210,11 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                                     : <span>Importamos <b>{importResult.count}</b> contatos para a pasta <b className="text-foreground">{importResult.listName}</b>.</span>
                                 }
                             </p>
+                            {mode !== 'pdf' && !!importResult.skipped && (
+                                <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 max-w-sm">
+                                    {importResult.skipped} linha{importResult.skipped > 1 ? 's' : ''} ignorada{importResult.skipped > 1 ? 's' : ''} por não ter um telefone válido.
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -250,7 +255,7 @@ export function LeadImporterModal({ isOpen, onClose, onSuccess }: Omit<LeadImpor
                                     <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
                                         {mode === 'pdf'
                                             ? "Nós criaremos uma nova pasta automaticamente."
-                                            : "Certifique-se de seguir o modelo padrão."}
+                                            : "Qualquer formatação, a gente descobre nome e telefone sozinho."}
                                     </p>
                                 </div>
                             )}

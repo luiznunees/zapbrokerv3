@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as adminController from '../controllers/adminController';
+import * as feedbackController from '../controllers/feedbackController';
 import { authenticateToken } from '../middlewares/authMiddleware';
 import { requireAdmin } from '../middlewares/adminMiddleware';
 
@@ -21,5 +22,8 @@ router.post('/users/:id/ban', adminController.banUser);
 
 // Invites
 router.post('/invites', adminController.createInvite);
+
+// Feedback do beta
+router.get('/feedback', feedbackController.listFeedback);
 
 export default router;

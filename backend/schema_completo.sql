@@ -216,6 +216,24 @@ create table if not exists admin_invites (
   trial_days integer
 );
 
+-- 3.14.1 Beta feedback (página não-linkada de feedback pros testers do trial)
+create table if not exists beta_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete set null,
+  name text,
+  email text,
+  overall_rating integer,
+  ease_rating integer,
+  liked text,
+  confusing text,
+  had_error boolean,
+  error_description text,
+  improvements text,
+  page_url text,
+  user_agent text,
+  created_at timestamptz default now()
+);
+
 -- 3.15 Agent sessions (AI chat grouping)
 create table if not exists agent_sessions (
   id uuid primary key default gen_random_uuid(),

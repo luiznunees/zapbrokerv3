@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Ticket, Settings, LogOut, ShieldAlert, BarChart3, Link as LinkIcon, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Users, Ticket, Settings, LogOut, ShieldAlert, BarChart3, Link as LinkIcon, DollarSign, MessageSquareHeart } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { useState, useEffect } from 'react'
@@ -17,6 +17,7 @@ const ADMIN_NAV_ITEMS = [
             { name: 'Financeiro', icon: DollarSign, href: '/admin/finance' },
             { name: 'Usuários', icon: Users, href: '/admin/users' },
             { name: 'Invites / Freemium', icon: LinkIcon, href: '/admin/invites' },
+            { name: 'Feedback do Beta', icon: MessageSquareHeart, href: '/admin/feedback' },
         ]
     },
     {

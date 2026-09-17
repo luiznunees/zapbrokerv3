@@ -312,94 +312,168 @@ const extractPdfTextWithLayout = async (dataBuffer: Buffer, pdf: any) => {
     return text || result.text || '';
 };
 
+// --- Importador inteligente: detecta separador, cabeçalho (ou a falta dele) e qual coluna
+// é nome/telefone só pelo conteúdo, pra não depender de um modelo fixo de planilha. ---
+
+const PHONE_HEADER_HINTS = ['telefone', 'celular', 'whatsapp', 'zap', 'fone', 'phone', 'tel', 'cel', 'numero', 'número', 'mobile'];
+const NAME_HEADER_HINTS = ['nome', 'name', 'cliente', 'lead', 'proprietário', 'proprietario', 'contato', 'contact'];
+
+const sniffDelimiter = (sampleLine: string): string => {
+    const candidates = [',', ';', '\t'];
+    let best = ',';
+    let bestCount = -1;
+    for (const d of candidates) {
+        const count = sampleLine.split(d).length - 1;
+        if (count > bestCount) { bestCount = count; best = d; }
+    }
+    return best;
+};
+
+// Normaliza pro formato que o WhatsApp/Evolution API espera: DDI(55) + DDD + número, só dígitos.
+const normalizePhoneDigits = (raw: any): string => {
+    let digits = String(raw ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    // "0" de discagem interurbana antes do DDD (ex: 011999998888)
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('0') && !digits.startsWith('055')) {
+        digits = digits.slice(1);
+    }
+
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+        return digits; // já vem com DDI
+    }
+
+    if (digits.length === 10 || digits.length === 11) {
+        return '55' + digits; // DDD + número, sem DDI — assume Brasil
+    }
+
+    return digits; // formato incomum (internacional, incompleto) — mantém como veio
+};
+
+const looksLikePhone = (value: any): boolean => {
+    const str = String(value ?? '').trim();
+    if (!str || /[a-zA-Z]/.test(str)) return false;
+    const digits = str.replace(/\D/g, '');
+    return digits.length >= 8 && digits.length <= 13;
+};
+
+// Acha qual índice de coluna é telefone/nome, primeiro pelo texto do cabeçalho, e se não achar
+// (ou se a planilha nem tiver cabeçalho — a primeira linha já é dado), pelo formato dos valores.
+const detectColumns = (headerRow: any[], sampleDataRows: any[][]) => {
+    const headerHasHints = headerRow.some((h) => {
+        const str = String(h ?? '').toLowerCase();
+        return PHONE_HEADER_HINTS.some(hint => str.includes(hint)) || NAME_HEADER_HINTS.some(hint => str.includes(hint));
+    });
+
+    let phoneIdx = -1;
+    let nameIdx = -1;
+    const dataStartIdx = headerHasHints ? 1 : 0;
+
+    if (headerHasHints) {
+        phoneIdx = headerRow.findIndex(h => PHONE_HEADER_HINTS.some(hint => String(h ?? '').toLowerCase().includes(hint)));
+        nameIdx = headerRow.findIndex((h, i) => i !== phoneIdx && NAME_HEADER_HINTS.some(hint => String(h ?? '').toLowerCase().includes(hint)));
+    }
+
+    const sample = dataStartIdx === 1 && sampleDataRows.length ? sampleDataRows : [headerRow, ...sampleDataRows];
+    const colCount = Math.max(headerRow.length, ...sample.map(r => r.length), 0);
+
+    if (phoneIdx === -1) {
+        let bestCol = -1, bestScore = 0;
+        for (let c = 0; c < colCount; c++) {
+            const values = sample.map(r => r[c]).filter((v) => v !== undefined && v !== '');
+            if (!values.length) continue;
+            const score = values.filter(looksLikePhone).length / values.length;
+            if (score > bestScore) { bestScore = score; bestCol = c; }
+        }
+        if (bestScore >= 0.5) phoneIdx = bestCol;
+    }
+
+    if (nameIdx === -1) {
+        for (let c = 0; c < colCount; c++) {
+            if (c === phoneIdx) continue;
+            const values = sample.map(r => r[c]).filter((v) => v !== undefined && String(v).trim() !== '');
+            if (values.length) { nameIdx = c; break; }
+        }
+    }
+
+    return { nameIdx, phoneIdx, dataStartIdx };
+};
+
+const buildContactsFromRows = (rows: any[][], listId: string): { contacts: any[]; skipped: number } => {
+    if (!rows.length) return { contacts: [], skipped: 0 };
+
+    const { nameIdx, phoneIdx, dataStartIdx } = detectColumns(rows[0], rows.slice(1, 21));
+    if (phoneIdx === -1) return { contacts: [], skipped: Math.max(0, rows.length - dataStartIdx) };
+
+    const contacts: any[] = [];
+    let skipped = 0;
+    for (let i = dataStartIdx; i < rows.length; i++) {
+        const row = rows[i];
+        const phone = normalizePhoneDigits(row[phoneIdx]);
+        if (!phone || phone.length < 10) { skipped++; continue; }
+        const name = (nameIdx !== -1 ? String(row[nameIdx] ?? '').trim() : '') || 'Sem Nome';
+        contacts.push({ list_id: listId, name, phone });
+    }
+    return { contacts, skipped };
+};
+
+const readCsvAsRows = (filePath: string): Promise<string[][]> => {
+    return new Promise((resolve, reject) => {
+        const firstLine = fs.readFileSync(filePath, 'utf8').split(/\r?\n/).find(l => l.trim().length > 0) || '';
+        const separator = sniffDelimiter(firstLine);
+
+        const rows: string[][] = [];
+        fs.createReadStream(filePath)
+            .pipe(csv({ headers: false, separator }))
+            .on('data', (data: Record<string, string>) => rows.push(Object.values(data)))
+            .on('end', () => resolve(rows))
+            .on('error', reject);
+    });
+};
+
 export const importContactsFromCsv = async (userId: string, filePath: string, originalFilename: string) => {
-    // Create List from filename
-    const listName = originalFilename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const listName = originalFilename.replace(/\.[^/.]+$/, "");
     const newList = await createList(userId, listName);
 
-    const results: any[] = [];
+    try {
+        const rows = await readCsvAsRows(filePath);
+        const { contacts, skipped } = buildContactsFromRows(rows, newList.id);
 
-    return new Promise((resolve, reject) => {
-        fs.createReadStream(filePath)
-            .pipe(csv())
-            .on('data', (data) => results.push(data))
-            .on('end', async () => {
-                try {
-                    const contacts = results.map((row: any) => {
-                        // Find name and phone regardless of case or slight variations
-                        const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('name') || k.toLowerCase().includes('nome'));
-                        const phoneKey = Object.keys(row).find(k => k.toLowerCase().includes('phone') || k.toLowerCase().includes('tel') || k.toLowerCase().includes('cel'));
+        if (contacts.length > 0) {
+            const { error } = await supabase.from('contacts').insert(contacts);
+            if (error) throw new Error(error.message);
+        }
 
-                        return {
-                            list_id: newList.id,
-                            name: (nameKey ? row[nameKey] : row.name || row.Name || 'Sem Nome').trim(),
-                            phone: (phoneKey ? row[phoneKey] : row.phone || row.Phone || '').replace(/\D/g, '').trim()
-                        };
-                    }).filter(c => c.phone); // Filter out empty phones
-
-                    if (contacts.length > 0) {
-                        const { error } = await supabase
-                            .from('contacts')
-                            .insert(contacts);
-
-                        if (error) throw new Error(error.message);
-                    }
-
-                    // Clean up file
-                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
-                    resolve({ list: newList, count: contacts.length });
-                } catch (error) {
-                    reject(error);
-                }
-            })
-            .on('error', (error) => reject(error));
-    });
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        return { list: newList, count: contacts.length, skipped };
+    } catch (error: any) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        throw new Error('Falha ao processar arquivo CSV: ' + error.message);
+    }
 };
 
 export const importContactsFromExcel = async (userId: string, filePath: string, originalFilename: string) => {
     const XLSX = require('xlsx');
 
-    // Create List from filename
-    const listName = originalFilename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const listName = originalFilename.replace(/\.[^/.]+$/, "");
     const newList = await createList(userId, listName);
 
     try {
-        // Read Excel file
         const workbook = XLSX.readFile(filePath);
-        const sheetName = workbook.SheetNames[0]; // Get first sheet
+        const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
-        // Convert to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        // Process contacts
-        const contacts = jsonData.map((row: any) => {
-            // Find name and phone regardless of case or slight variations
-            const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('name') || k.toLowerCase().includes('nome'));
-            const phoneKey = Object.keys(row).find(k => k.toLowerCase().includes('phone') || k.toLowerCase().includes('tel') || k.toLowerCase().includes('cel'));
-
-            return {
-                list_id: newList.id,
-                name: (nameKey ? row[nameKey] : row.name || row.Name || 'Sem Nome').toString().trim(),
-                phone: (phoneKey ? row[phoneKey] : row.phone || row.Phone || '').toString().replace(/\D/g, '').trim()
-            };
-        }).filter((c: any) => c.phone); // Filter out empty phones
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        const { contacts, skipped } = buildContactsFromRows(rows, newList.id);
 
         if (contacts.length > 0) {
-            const { error } = await supabase
-                .from('contacts')
-                .insert(contacts);
-
+            const { error } = await supabase.from('contacts').insert(contacts);
             if (error) throw new Error(error.message);
         }
 
-        // Clean up file
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
-        return { list: newList, count: contacts.length };
+        return { list: newList, count: contacts.length, skipped };
     } catch (error: any) {
-        // Clean up file on error
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         throw new Error('Falha ao processar arquivo Excel: ' + error.message);
     }

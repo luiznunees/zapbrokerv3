@@ -108,6 +108,9 @@ app.use('/quotas', quotaRoutes);
 import adminRoutes from './routes/adminRoutes';
 app.use('/admin', adminRoutes);
 
+import feedbackRoutes from './routes/feedbackRoutes';
+app.use('/feedback', feedbackRoutes);
+
 import { runMigrations } from './migrations/create_agent_sessions';
 
 import { startProcessor } from './services/campaignProcessor';

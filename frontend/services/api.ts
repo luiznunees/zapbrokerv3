@@ -158,6 +158,10 @@ export const api = {
         checkPaymentNow: (subscriptionId: string) =>
             fetchAPI(`/payments/subscription/${subscriptionId}/check-now`, { method: 'POST' }),
     },
+    feedback: {
+        submit: (data: Record<string, any>) => fetchAPI('/feedback', { method: 'POST', body: JSON.stringify(data) }),
+        list: (page = 1) => fetchAPI(`/admin/feedback?page=${page}`),
+    },
     admin: {
         stats: () => fetchAPI('/admin/stats'),
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
