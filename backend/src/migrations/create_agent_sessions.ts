@@ -1,5 +1,14 @@
 import { supabase } from '../config/supabase';
 
+// authController.ts e adminService.ts leem/gravam admin_invites.is_used, mas a coluna nunca
+// foi de fato criada em produção (o arquivo backend/migrations/admin_invites_is_used.sql
+// existia mas nunca tinha sido plugado no runner abaixo) — isso quebrava TODO cadastro por
+// convite (inclusive o teste gratis novo), sempre com "Codigo de convite invalido ou ja
+// utilizado", porque a query .eq('is_used', false) falha com coluna inexistente.
+const ADMIN_INVITES_IS_USED_SQL = `
+alter table admin_invites add column if not exists is_used boolean not null default false;
+`;
+
 const SQL = `
 create table if not exists agent_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -296,6 +305,18 @@ create index if not exists idx_beta_feedback_created_at on beta_feedback(created
 `;
 
 export async function runMigrations() {
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: ADMIN_INVITES_IS_USED_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar admin_invites.is_used automaticamente:', rpcError.message);
+      console.warn('[Migrations] URGENTE — execute manualmente: alter table admin_invites add column if not exists is_used boolean not null default false;');
+    } else {
+      console.log('[Migrations] Coluna admin_invites.is_used verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar admin_invites.is_used:', err.message);
+  }
+
   console.log('[Migrations] Verificando tabela agent_sessions...');
 
   try {
