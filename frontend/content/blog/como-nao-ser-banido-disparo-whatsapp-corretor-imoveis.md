@@ -7,7 +7,7 @@ keywords:
   - disparo em massa whatsapp corretor de imóveis
   - como enviar mensagem em massa no whatsapp sem ser banido
   - como aquecer chip whatsapp
-draft: true
+draft: false
 ---
 
 Todo corretor que já tentou avisar a carteira toda sobre um imóvel novo de uma vez só já teve o mesmo medo: e se meu WhatsApp for banido no meio disso? É uma preocupação válida — o WhatsApp bane, sim, números que mandam volume alto de mensagem pra gente que não pediu. Mas banimento não é sorteio. Tem um padrão bem claro por trás, e dá pra disparar em massa sem cair nele.
