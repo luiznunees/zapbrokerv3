@@ -167,7 +167,7 @@ export const api = {
         stats: () => fetchAPI('/admin/stats'),
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
-        createInvite: (planId: string, trialDays?: number, email?: string) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays, email }) }),
+        createInvite: (planId: string, trialDays?: number, email?: string, maxUses?: number) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays, email, maxUses }) }),
         logs: (severity?: string) => {
             const params = new URLSearchParams()
             if (severity) params.set('severity', severity)
@@ -186,6 +186,7 @@ export const api = {
             const params = new URLSearchParams({ from, to })
             return fetchAPI(`/admin/activity-logs/raw?${params.toString()}`)
         },
+        triggerDeploy: (service: 'api' | 'app') => fetchAPI(`/admin/deploy/${service}`, { method: 'POST' }),
     },
     sessions: {
         list: () => fetchAPI('/agent/sessions'),

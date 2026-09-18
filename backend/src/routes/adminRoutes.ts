@@ -14,6 +14,7 @@ router.use(requireAdmin);
 router.get('/stats', adminController.getStats);
 router.get('/logs', adminController.getLogs);
 router.get('/activity-logs/raw', adminController.getRawActivityLogs);
+router.post('/deploy/:service', adminController.triggerDeploy);
 router.get('/finance', adminController.getFinance);
 router.get('/ai-credits', adminController.getAiCredits);
 

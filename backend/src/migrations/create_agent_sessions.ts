@@ -9,6 +9,39 @@ const ADMIN_INVITES_IS_USED_SQL = `
 alter table admin_invites add column if not exists is_used boolean not null default false;
 `;
 
+// Convite compartilhável (1 link, N vagas) — pra campanhas tipo "poste no fórum, libera
+// pros primeiros 10". max_uses/uses_count substituem o is_used booleano (que só dava pra
+// 1 uso) sem quebrar convites antigos: eles nascem com max_uses=1 e são migrados pra
+// uses_count=1 quando já estavam marcados como usados. redeem_admin_invite faz o
+// check-and-increment num único UPDATE atômico — evita que 2 cadastros simultâneos
+// consumam a última vaga ao mesmo tempo (race condition real com link público).
+const ADMIN_INVITES_MULTI_USE_SQL = `
+alter table admin_invites add column if not exists max_uses integer not null default 1;
+alter table admin_invites add column if not exists uses_count integer not null default 0;
+update admin_invites set uses_count = 1 where is_used = true and uses_count = 0;
+
+create or replace function redeem_admin_invite(p_code text, p_user_id uuid)
+returns admin_invites
+language plpgsql
+security definer
+as $$
+declare
+  v_invite admin_invites;
+begin
+  update admin_invites
+  set uses_count = uses_count + 1,
+      used_by = coalesce(used_by, p_user_id),
+      used_at = now(),
+      is_used = (uses_count + 1 >= max_uses)
+  where code = p_code
+    and uses_count < max_uses
+  returning * into v_invite;
+
+  return v_invite;
+end;
+$$;
+`;
+
 // Log bruto de toda acao que muda estado no backend (POST/PUT/PATCH/DELETE, de qualquer
 // usuario) — diferente do system_events (curado, so eventos especificos). Pensado pra ser
 // exportado pelo painel admin e analisado depois pra entender o que os usuarios realmente
@@ -586,5 +619,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar raw_activity_logs:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: ADMIN_INVITES_MULTI_USE_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar convite com múltiplas vagas automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: backend/migrations/admin_invites_multi_use.sql');
+    } else {
+      console.log('[Migrations] Colunas admin_invites.max_uses/uses_count e função redeem_admin_invite verificadas/criadas.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar convite com múltiplas vagas:', err.message);
   }
 }

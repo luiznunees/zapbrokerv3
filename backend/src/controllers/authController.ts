@@ -23,10 +23,9 @@ export const register = async (req: Request, res: Response) => {
                 .from('admin_invites')
                 .select('*')
                 .eq('code', inviteCode)
-                .eq('is_used', false)
                 .single();
 
-            if (inviteError || !invite) {
+            if (inviteError || !invite || invite.uses_count >= invite.max_uses) {
                 throw new Error('Código de convite inválido ou já utilizado.');
             }
             // Convite travado num email específico — impede que outra pessoa use o link
@@ -71,15 +70,18 @@ export const register = async (req: Request, res: Response) => {
 
         // 1.1 Process Invite (Mark as used and Create Subscription)
         if (inviteData && user.user) {
-            // Mark invite as used
-            const { error: markUsedError } = await supabase
-                .from('admin_invites')
-                .update({ is_used: true, used_by: user.user.id })
-                .eq('id', inviteData.id);
+            // Resgate atômico (check-and-increment num único UPDATE no banco) — garante que,
+            // com o link compartilhado entre várias pessoas ao mesmo tempo, nunca mais que
+            // max_uses cadastros passem, mesmo em requisições simultâneas. Se perder a corrida
+            // (vaga esgotou entre o pre-check acima e agora), desfaz o usuário já criado.
+            const { data: redeemed, error: redeemError } = await supabase
+                .rpc('redeem_admin_invite', { p_code: inviteCode, p_user_id: user.user.id })
+                .single();
 
-            if (markUsedError) {
-                console.error('Register: failed to mark invite as used:', markUsedError.message);
-                throw new Error('Falha ao processar o convite (marcar como usado). Tenta de novo em alguns segundos.');
+            if (redeemError || !redeemed || !(redeemed as any).id) {
+                await supabase.auth.admin.deleteUser(user.user.id).catch(() => {});
+                if (redeemError) console.error('Register: failed to redeem invite:', redeemError.message);
+                throw new Error('Esse convite acabou de esgotar as vagas disponíveis. Fala com quem te convidou pra pedir um novo.');
             }
 
             // Convite de teste grátis (trial_days setado): assinatura ativa mas com prazo —
@@ -157,11 +159,11 @@ export const checkInvite = async (req: Request, res: Response) => {
         const { code } = req.params;
         const { data: invite } = await supabase
             .from('admin_invites')
-            .select('code, plan_id, trial_days, email, is_used')
+            .select('code, plan_id, trial_days, email, max_uses, uses_count')
             .eq('code', code)
             .maybeSingle();
 
-        if (!invite || invite.is_used) {
+        if (!invite || invite.uses_count >= invite.max_uses) {
             return res.status(404).json({ valid: false });
         }
 

@@ -98,7 +98,7 @@ export const banUser = async (userId: string) => {
     return { success: true };
 };
 
-export const generateInvite = async (planId: string, createdBy: string, trialDays?: number, email?: string) => {
+export const generateInvite = async (planId: string, createdBy: string, trialDays?: number, email?: string, maxUses?: number) => {
     // Generate a unique code
     const code = uuidv4().substring(0, 8).toUpperCase(); // Short code
 
@@ -110,6 +110,7 @@ export const generateInvite = async (planId: string, createdBy: string, trialDay
             created_by: createdBy, // If we add this column, or just ignore
             trial_days: trialDays || null,
             email: email ? email.trim().toLowerCase() : null,
+            max_uses: maxUses && maxUses > 1 ? Math.floor(maxUses) : 1,
         }])
         .select()
         .single();

@@ -45,16 +45,16 @@ export const banUser = async (req: AuthRequest, res: Response) => {
 
 export const createInvite = async (req: AuthRequest, res: Response) => {
     try {
-        const { planId, trialDays, email } = req.body; // e.g., 'free', 'pro'; trialDays: 15 pra teste grátis; email: trava o convite pra essa pessoa
+        const { planId, trialDays, email, maxUses } = req.body; // e.g., 'free', 'pro'; trialDays: 15 pra teste grátis; email: trava o convite pra essa pessoa; maxUses: N vagas num link compartilhável (sem email)
         const userId = req.user.id;
 
-        const invite = await adminService.generateInvite(planId || 'free', userId, trialDays, email);
+        const invite = await adminService.generateInvite(planId || 'free', userId, trialDays, email, maxUses);
         eventLogService.logEvent({
             type: 'admin.invite_created',
             severity: 'info',
-            message: `Admin ${userId} criou convite (plano ${planId || 'free'}${trialDays ? `, teste grátis ${trialDays}d` : ''}${email ? ` pra ${email}` : ''})`,
+            message: `Admin ${userId} criou convite (plano ${planId || 'free'}${trialDays ? `, teste grátis ${trialDays}d` : ''}${email ? ` pra ${email}` : ''}${maxUses > 1 ? `, ${maxUses} vagas` : ''})`,
             userId,
-            metadata: { planId: planId || 'free', inviteCode: invite.code, trialDays: trialDays || null, email: email || null },
+            metadata: { planId: planId || 'free', inviteCode: invite.code, trialDays: trialDays || null, email: email || null, maxUses: maxUses || 1 },
         });
 
         // Return full link format
@@ -78,6 +78,44 @@ export const getLogs = async (req: AuthRequest, res: Response) => {
 
         const logs = await adminService.getSystemLogs({ severity, type, page, limit });
         res.status(200).json(logs);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// As URLs de gatilho do EasyPanel ficam só no .env do backend — nunca expostas pro
+// frontend, porque quem tiver a URL consegue acionar deploy sem autenticação nenhuma
+// (é assim que o EasyPanel funciona). O botão no painel admin chama esse endpoint
+// (que já é protegido por requireAdmin), e a chamada de verdade pro EasyPanel é feita
+// aqui, server-side.
+const DEPLOY_HOOKS: Record<string, string | undefined> = {
+    api: process.env.EASYPANEL_DEPLOY_HOOK_API,
+    app: process.env.EASYPANEL_DEPLOY_HOOK_APP,
+};
+
+export const triggerDeploy = async (req: AuthRequest, res: Response) => {
+    try {
+        const { service } = req.params;
+        const hookUrl = DEPLOY_HOOKS[service];
+
+        if (!hookUrl) {
+            return res.status(400).json({ error: `Serviço "${service}" não configurado.` });
+        }
+
+        const response = await fetch(hookUrl);
+        if (!response.ok) {
+            throw new Error(`EasyPanel respondeu ${response.status}`);
+        }
+
+        eventLogService.logEvent({
+            type: 'admin.deploy_triggered',
+            severity: 'info',
+            message: `Admin ${req.user.id} acionou deploy do serviço "${service}"`,
+            userId: req.user.id,
+            metadata: { service },
+        });
+
+        res.status(200).json({ triggered: true, service });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
