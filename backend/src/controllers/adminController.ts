@@ -69,6 +69,36 @@ export const createInvite = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const listInvites = async (req: AuthRequest, res: Response) => {
+    try {
+        const invites = await adminService.listInvites();
+        const withLinks = invites.map((invite: any) => ({
+            ...invite,
+            link: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/signup?invite=${invite.code}`,
+        }));
+        res.status(200).json(withLinks);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const revokeInvite = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const invite = await adminService.revokeInvite(id);
+        eventLogService.logEvent({
+            type: 'admin.invite_revoked',
+            severity: 'info',
+            message: `Admin ${req.user.id} revogou o convite ${invite.code}`,
+            userId: req.user.id,
+            metadata: { inviteId: id, inviteCode: invite.code },
+        });
+        res.status(200).json({ invite });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 export const getLogs = async (req: AuthRequest, res: Response) => {
     try {
         const severity = req.query.severity as string | undefined;

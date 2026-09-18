@@ -168,6 +168,8 @@ export const api = {
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
         createInvite: (planId: string, trialDays?: number, email?: string, maxUses?: number) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays, email, maxUses }) }),
+        listInvites: () => fetchAPI('/admin/invites'),
+        revokeInvite: (id: string) => fetchAPI(`/admin/invites/${id}/revoke`, { method: 'POST' }),
         logs: (severity?: string) => {
             const params = new URLSearchParams()
             if (severity) params.set('severity', severity)

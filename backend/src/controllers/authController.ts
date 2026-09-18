@@ -25,7 +25,7 @@ export const register = async (req: Request, res: Response) => {
                 .eq('code', inviteCode)
                 .single();
 
-            if (inviteError || !invite || invite.uses_count >= invite.max_uses) {
+            if (inviteError || !invite || invite.uses_count >= invite.max_uses || invite.revoked) {
                 throw new Error('Código de convite inválido ou já utilizado.');
             }
             // Convite travado num email específico — impede que outra pessoa use o link
@@ -185,11 +185,11 @@ export const checkInvite = async (req: Request, res: Response) => {
         const { code } = req.params;
         const { data: invite } = await supabase
             .from('admin_invites')
-            .select('code, plan_id, trial_days, email, max_uses, uses_count')
+            .select('code, plan_id, trial_days, email, max_uses, uses_count, revoked')
             .eq('code', code)
             .maybeSingle();
 
-        if (!invite || invite.uses_count >= invite.max_uses) {
+        if (!invite || invite.uses_count >= invite.max_uses || invite.revoked) {
             return res.status(404).json({ valid: false });
         }
 

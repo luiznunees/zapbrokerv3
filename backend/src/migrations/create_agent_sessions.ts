@@ -35,11 +35,20 @@ begin
       is_used = (uses_count + 1 >= max_uses)
   where code = p_code
     and uses_count < max_uses
+    and not revoked
   returning * into v_invite;
 
   return v_invite;
 end;
 $$;
+`;
+
+// Painel de administração dos convites (listar + revogar um link antes de esgotar as
+// vagas — ex: link vazou além de quem devia, ou campanha encerrou antes do previsto).
+// revoked é um campo à parte de is_used/uses_count pra não perder o histórico real de
+// quantas vagas foram usadas até a revogação.
+const ADMIN_INVITES_REVOKED_SQL = `
+alter table admin_invites add column if not exists revoked boolean not null default false;
 `;
 
 // Log bruto de toda acao que muda estado no backend (POST/PUT/PATCH/DELETE, de qualquer
@@ -631,5 +640,17 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar convite com múltiplas vagas:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: ADMIN_INVITES_REVOKED_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar admin_invites.revoked automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: alter table admin_invites add column if not exists revoked boolean not null default false;');
+    } else {
+      console.log('[Migrations] Coluna admin_invites.revoked verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar coluna revoked:', err.message);
   }
 }

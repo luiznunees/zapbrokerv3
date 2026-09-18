@@ -1,15 +1,30 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Copy, Check, Sparkles } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Copy, Check, Sparkles, Ban, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
 const TRIAL_DAYS = 15
+
+type Invite = {
+    id: string
+    code: string
+    link: string
+    plan_id: string
+    trial_days: number | null
+    email: string | null
+    max_uses: number
+    uses_count: number
+    revoked: boolean
+    created_at: string
+}
 
 export default function AdminInvitesPage() {
     const [mode, setMode] = useState<'personal' | 'shared'>('personal')
@@ -25,6 +40,47 @@ export default function AdminInvitesPage() {
     const [generatedTrialDays, setGeneratedTrialDays] = useState(TRIAL_DAYS)
     const [copied, setCopied] = useState(false)
     const [loading, setLoading] = useState(false)
+
+    const [invites, setInvites] = useState<Invite[]>([])
+    const [loadingInvites, setLoadingInvites] = useState(true)
+    const [revokingId, setRevokingId] = useState<string | null>(null)
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+
+    const loadInvites = async () => {
+        setLoadingInvites(true)
+        try {
+            const data = await api.admin.listInvites()
+            setInvites(data)
+        } catch (error) {
+            console.error('Failed to load invites:', error)
+        } finally {
+            setLoadingInvites(false)
+        }
+    }
+
+    useEffect(() => {
+        loadInvites()
+    }, [])
+
+    const handleRevoke = async (invite: Invite) => {
+        if (!confirm(`Revogar o convite ${invite.code}? Ele para de funcionar na hora, mesmo com vagas sobrando.`)) return
+        setRevokingId(invite.id)
+        try {
+            await api.admin.revokeInvite(invite.id)
+            await loadInvites()
+        } catch (error) {
+            console.error('Failed to revoke invite:', error)
+            alert('Falha ao revogar convite')
+        } finally {
+            setRevokingId(null)
+        }
+    }
+
+    const copyInviteLink = (invite: Invite) => {
+        navigator.clipboard.writeText(invite.link)
+        setCopiedId(invite.id)
+        setTimeout(() => setCopiedId(null), 2000)
+    }
 
     const isTrial = planId === 'trial'
     const isShared = mode === 'shared'
@@ -48,6 +104,7 @@ export default function AdminInvitesPage() {
             setGeneratedEmail(isShared ? '' : email.trim())
             setGeneratedMaxUses(isShared ? Number(maxUses) : 1)
             setGeneratedTrialDays(isShared ? sharedTrialDaysNum : TRIAL_DAYS)
+            await loadInvites()
         } catch (error) {
             console.error('Failed to generate invite:', error)
             alert('Failed to generate invite')
@@ -63,7 +120,7 @@ export default function AdminInvitesPage() {
     }
 
     return (
-        <div className="max-w-2xl mx-auto space-y-8 pt-12">
+        <div className="max-w-4xl mx-auto space-y-8 pt-12">
             <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold text-zinc-100 flex items-center justify-center gap-2">
                     <Sparkles className="text-yellow-500" />
@@ -208,6 +265,84 @@ export default function AdminInvitesPage() {
                                 </Button>
                             </div>
                         </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900 border-zinc-800">
+                <CardHeader>
+                    <CardTitle className="text-zinc-100 flex items-center gap-2">
+                        <ListChecks className="size-4 text-primary" />
+                        Convites gerados
+                    </CardTitle>
+                    <CardDescription className="text-zinc-500">
+                        Últimos 100 convites, mais recente primeiro. Revogar encerra o link na hora, mesmo com vagas sobrando.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loadingInvites ? (
+                        <p className="text-sm text-zinc-500">Carregando...</p>
+                    ) : invites.length === 0 ? (
+                        <p className="text-sm text-zinc-500">Nenhum convite gerado ainda.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="border-zinc-800 hover:bg-transparent">
+                                    <TableHead className="text-zinc-400">Código</TableHead>
+                                    <TableHead className="text-zinc-400">Plano</TableHead>
+                                    <TableHead className="text-zinc-400">Vagas</TableHead>
+                                    <TableHead className="text-zinc-400">Dias</TableHead>
+                                    <TableHead className="text-zinc-400">Email</TableHead>
+                                    <TableHead className="text-zinc-400">Criado em</TableHead>
+                                    <TableHead className="text-zinc-400">Status</TableHead>
+                                    <TableHead className="text-zinc-400 text-right">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {invites.map((invite) => {
+                                    const exhausted = invite.uses_count >= invite.max_uses
+                                    const status = invite.revoked ? 'revoked' : exhausted ? 'exhausted' : 'active'
+                                    return (
+                                        <TableRow key={invite.id} className="border-zinc-800">
+                                            <TableCell className="font-mono text-zinc-300">{invite.code}</TableCell>
+                                            <TableCell className="text-zinc-300">{invite.plan_id}</TableCell>
+                                            <TableCell className="text-zinc-300">{invite.uses_count}/{invite.max_uses}</TableCell>
+                                            <TableCell className="text-zinc-300">{invite.trial_days ? `${invite.trial_days}d` : '—'}</TableCell>
+                                            <TableCell className="text-zinc-300 max-w-[160px] truncate">{invite.email || '—'}</TableCell>
+                                            <TableCell className="text-zinc-500 text-xs">
+                                                {new Date(invite.created_at).toLocaleString('pt-BR')}
+                                            </TableCell>
+                                            <TableCell>
+                                                {status === 'active' && <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Ativo</Badge>}
+                                                {status === 'exhausted' && <Badge className="bg-zinc-700/50 text-zinc-400 border-zinc-700">Esgotado</Badge>}
+                                                {status === 'revoked' && <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Revogado</Badge>}
+                                            </TableCell>
+                                            <TableCell className="text-right space-x-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-8 px-2"
+                                                    onClick={() => copyInviteLink(invite)}
+                                                >
+                                                    {copiedId === invite.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                                </Button>
+                                                {status === 'active' && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="border-zinc-700 text-red-400 hover:bg-red-500/10 h-8 px-2"
+                                                        disabled={revokingId === invite.id}
+                                                        onClick={() => handleRevoke(invite)}
+                                                    >
+                                                        <Ban className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
+                            </TableBody>
+                        </Table>
                     )}
                 </CardContent>
             </Card>

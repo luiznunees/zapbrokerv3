@@ -23,7 +23,9 @@ router.get('/users', adminController.listUsers);
 router.post('/users/:id/ban', adminController.banUser);
 
 // Invites
+router.get('/invites', adminController.listInvites);
 router.post('/invites', adminController.createInvite);
+router.post('/invites/:id/revoke', adminController.revokeInvite);
 
 // Feedback do beta
 router.get('/feedback', feedbackController.listFeedback);

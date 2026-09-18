@@ -119,6 +119,29 @@ export const generateInvite = async (planId: string, createdBy: string, trialDay
     return data;
 };
 
+export const listInvites = async () => {
+    const { data, error } = await supabase
+        .from('admin_invites')
+        .select('id, code, plan_id, trial_days, email, max_uses, uses_count, revoked, created_at, used_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+    if (error) throw new Error(error.message);
+    return data;
+};
+
+export const revokeInvite = async (id: string) => {
+    const { data, error } = await supabase
+        .from('admin_invites')
+        .update({ revoked: true })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+};
+
 const SEVERITY_TO_LEVEL: Record<string, string> = {
     info: 'INFO',
     warn: 'WARN',
