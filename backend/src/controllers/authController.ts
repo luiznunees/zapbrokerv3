@@ -51,6 +51,23 @@ export const register = async (req: Request, res: Response) => {
         if (error) throw error;
         if (!user.user) throw new Error('Failed to create user');
 
+        // Sincroniza em public.users agora — normalmente isso só acontece no primeiro
+        // request autenticado (authMiddleware.ts), mas o convite cria a assinatura já
+        // dentro desse mesmo request de registro (sem token ainda), então precisa que o
+        // perfil já exista antes disso ou o insert falha (FK pra users(id)).
+        const { error: userSyncError } = await supabase
+            .from('users')
+            .upsert([{
+                id: user.user.id,
+                email,
+                name: name || email.split('@')[0],
+                password: 'auth_via_supabase_provider',
+            }], { onConflict: 'id', ignoreDuplicates: true });
+
+        if (userSyncError) {
+            console.error('Register: failed to sync user to public.users:', userSyncError.message);
+        }
+
         eventLogService.logEvent({
             type: 'auth.new_signup',
             severity: 'info',
@@ -78,9 +95,18 @@ export const register = async (req: Request, res: Response) => {
                 .rpc('redeem_admin_invite', { p_code: inviteCode, p_user_id: user.user.id })
                 .single();
 
-            if (redeemError || !redeemed || !(redeemed as any).id) {
+            // Erro de verdade (RPC ausente, falha de rede etc.) é diferente de "perdeu a
+            // corrida pela última vaga" — as duas coisas resultavam na mesma mensagem
+            // ("esgotou as vagas"), o que confundia debug quando o problema era outro
+            // (ex: a função redeem_admin_invite ainda não tinha sido migrada no banco).
+            if (redeemError) {
                 await supabase.auth.admin.deleteUser(user.user.id).catch(() => {});
-                if (redeemError) console.error('Register: failed to redeem invite:', redeemError.message);
+                console.error('Register: failed to redeem invite:', redeemError.message);
+                throw new Error('Falha ao processar o convite. Tenta de novo em alguns segundos.');
+            }
+
+            if (!redeemed || !(redeemed as any).id) {
+                await supabase.auth.admin.deleteUser(user.user.id).catch(() => {});
                 throw new Error('Esse convite acabou de esgotar as vagas disponíveis. Fala com quem te convidou pra pedir um novo.');
             }
 
