@@ -4,10 +4,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Users, Send, Settings,
-  LogOut, Plus, Wifi,
+  LogOut, Plus, Wifi, ShieldAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDashboard } from "@/contexts/dashboard-context"
+import { useUser } from "@/contexts/user-context"
 import { BrandIcon } from "@/components/BrandLogo"
 import { logoutUser } from "@/lib/supabase"
 
@@ -22,6 +23,8 @@ const NAV_ITEMS = [
 export function NavRail() {
   const pathname = usePathname()
   const { triggerNewChat } = useDashboard()
+  const { user } = useUser()
+  const isAdmin = user?.role === "admin"
 
   return (
     <nav
@@ -78,6 +81,16 @@ export function NavRail() {
       <div className="hidden lg:block flex-1" />
 
       <div className="flex items-center gap-1 lg:flex-col">
+        {isAdmin && (
+          <Link
+            href="/admin"
+            title="Painel Admin"
+            className="flex items-center justify-center size-10 rounded-2xl text-zinc-400 hover:text-primary hover:bg-primary/5 transition-all"
+          >
+            <ShieldAlert className="size-5" />
+          </Link>
+        )}
+
         <Link
           href="/dashboard/settings"
           title="Configurações"

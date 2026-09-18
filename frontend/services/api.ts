@@ -182,6 +182,10 @@ export const api = {
             return fetchAPI(`/admin/finance${qs ? `?${qs}` : ''}`)
         },
         aiCredits: () => fetchAPI('/admin/ai-credits'),
+        rawActivityLogs: (from: string, to: string) => {
+            const params = new URLSearchParams({ from, to })
+            return fetchAPI(`/admin/activity-logs/raw?${params.toString()}`)
+        },
     },
     sessions: {
         list: () => fetchAPI('/agent/sessions'),

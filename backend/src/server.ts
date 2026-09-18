@@ -68,6 +68,9 @@ app.use('/webhooks', webhookRoutes);
 
 app.use(express.json());
 
+import { activityLogger } from './middlewares/activityLogger';
+app.use(activityLogger);
+
 // Apply auth limiter to auth routes
 import authRoutes from './routes/authRoutes';
 app.use('/auth', authLimiter, authRoutes);

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { BrandLogo } from '@/components/BrandLogo'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Ticket, Settings, LogOut, ShieldAlert, BarChart3, Link as LinkIcon, DollarSign, MessageSquareHeart } from 'lucide-react'
+import { LayoutDashboard, Users, Ticket, Settings, LogOut, ShieldAlert, BarChart3, Link as LinkIcon, DollarSign, MessageSquareHeart, Terminal } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { useState, useEffect } from 'react'
@@ -24,6 +24,7 @@ const ADMIN_NAV_ITEMS = [
         group: 'Sistema',
         items: [
             { name: 'System Logs', icon: ShieldAlert, href: '/admin/logs' },
+            { name: 'Log Bruto', icon: Terminal, href: '/admin/activity-logs' },
             { name: 'Configurações', icon: Settings, href: '/admin/settings' },
         ]
     }

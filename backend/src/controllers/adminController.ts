@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import * as adminService from '../services/adminService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import * as eventLogService from '../services/eventLogService';
+import { getRawActivityLogsText } from '../services/activityLogService';
 
 export const getStats = async (req: AuthRequest, res: Response) => {
     try {
@@ -77,6 +78,22 @@ export const getLogs = async (req: AuthRequest, res: Response) => {
 
         const logs = await adminService.getSystemLogs({ severity, type, page, limit });
         res.status(200).json(logs);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const getRawActivityLogs = async (req: AuthRequest, res: Response) => {
+    try {
+        const from = req.query.from as string | undefined;
+        const to = req.query.to as string | undefined;
+
+        if (!from || !to) {
+            return res.status(400).json({ error: 'Informe "from" e "to" (datas ISO).' });
+        }
+
+        const result = await getRawActivityLogsText(from, to);
+        res.status(200).json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

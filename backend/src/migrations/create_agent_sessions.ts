@@ -9,6 +9,27 @@ const ADMIN_INVITES_IS_USED_SQL = `
 alter table admin_invites add column if not exists is_used boolean not null default false;
 `;
 
+// Log bruto de toda acao que muda estado no backend (POST/PUT/PATCH/DELETE, de qualquer
+// usuario) — diferente do system_events (curado, so eventos especificos). Pensado pra ser
+// exportado pelo painel admin e analisado depois pra entender o que os usuarios realmente
+// fazem, ja que o log curado tinha "muito pouca informacao".
+const RAW_ACTIVITY_LOGS_SQL = `
+create table if not exists raw_activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  user_id uuid,
+  method text not null,
+  path text not null,
+  status_code integer,
+  duration_ms integer,
+  request_body text,
+  response_body text
+);
+
+create index if not exists idx_raw_activity_logs_created_at on raw_activity_logs(created_at desc);
+create index if not exists idx_raw_activity_logs_user_id on raw_activity_logs(user_id);
+`;
+
 const SQL = `
 create table if not exists agent_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -554,5 +575,16 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar beta_feedback:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: RAW_ACTIVITY_LOGS_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar raw_activity_logs automaticamente:', rpcError.message);
+    } else {
+      console.log('[Migrations] Tabela raw_activity_logs verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar raw_activity_logs:', err.message);
   }
 }
