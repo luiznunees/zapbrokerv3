@@ -150,9 +150,13 @@ export default function ConnectionPage() {
             if (data.pairingCode) {
                 setPairingCode(data.pairingCode);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to connect');
-            if (requestId === connectRequestId.current) setIsQRModalOpen(false);
+            if (requestId === connectRequestId.current) {
+                setIsQRModalOpen(false);
+                setErrorMessage(error?.message || 'Erro ao conectar. Tente novamente.');
+                await fetchInstances();
+            }
         } finally {
             if (requestId === connectRequestId.current) setQrLoading(false);
         }

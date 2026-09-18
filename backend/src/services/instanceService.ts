@@ -54,6 +54,15 @@ export const connectInstance = async (userId: string, instanceId: string, phoneN
         throw new Error('Instance not found');
     }
 
+    // Proteção contra estado desatualizado no frontend (aba antiga aberta, race
+    // condition, duplo clique): sem isso, chamar connect numa instância que já está
+    // aberta desloga uma sessão de WhatsApp funcionando de verdade. Já aconteceu com
+    // uma conta real em produção — ver eventos "Log out instance" na Evolution API.
+    const stateBeforeLogout = await evolutionService.checkSessionStatus(instance.evolution_id);
+    if (stateBeforeLogout === 'open') {
+        throw new Error('Esse número já está conectado. Atualize a página — se realmente quiser trocar de número, desconecte primeiro.');
+    }
+
     // Sessão pendente/travada de uma tentativa anterior faz a Evolution devolver
     // pairingCode/base64 nulos silenciosamente, ou um código velho ainda vinculado ao
     // socket antigo (que o celular rejeita com "não foi possível conectar"). Desloga e
