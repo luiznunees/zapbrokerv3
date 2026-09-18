@@ -35,6 +35,7 @@ export function Header() {
                         <Link href="#features" className="hover:text-white transition-colors">Funcionalidades</Link>
                         <Link href="#pricing" className="hover:text-white transition-colors">Preços</Link>
                         <Link href="#faq" className="hover:text-white transition-colors">FAQ</Link>
+                        <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
                     </nav>
 
                     <div className="hidden md:flex items-center gap-5">
@@ -64,6 +65,7 @@ export function Header() {
                         <Link href="#features" className="text-sm font-bold p-3 rounded-xl text-white hover:bg-white/5" onClick={() => setIsMenuOpen(false)}>Funcionalidades</Link>
                         <Link href="#pricing" className="text-sm font-bold p-3 rounded-xl text-white hover:bg-white/5" onClick={() => setIsMenuOpen(false)}>Preços</Link>
                         <Link href="#faq" className="text-sm font-bold p-3 rounded-xl text-white hover:bg-white/5" onClick={() => setIsMenuOpen(false)}>FAQ</Link>
+                        <Link href="/blog" className="text-sm font-bold p-3 rounded-xl text-white hover:bg-white/5" onClick={() => setIsMenuOpen(false)}>Blog</Link>
                         <div className="flex flex-col gap-2 mt-2">
                             <Link href="/login" className="w-full text-center px-4 py-2.5 border border-white/15 text-white rounded-full font-bold">
                                 Login

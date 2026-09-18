@@ -26,7 +26,9 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.26",
+    "gray-matter": "^4.0.3",
     "lucide-react": "^0.561.0",
+    "marked": "^18.0.13",
     "next": "16.0.10",
     "next-themes": "^0.4.6",
     "react": "19.2.1",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/typography": "^0.5.20",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
