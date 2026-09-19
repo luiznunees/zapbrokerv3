@@ -25,10 +25,19 @@ const LEAK_PATTERNS = [
   /\{\s*"function"\s*:/i,
 ];
 
+// Mesmo padrão do guardrail correctFalseDispatchClaim (agentService.ts) — o envio real só
+// acontece via o botão "Confirmar disparo", nunca dentro do chat livre, então qualquer
+// ocorrência aqui é sempre alucinação. Achado real em produção: o agente respondia "Disparo
+// confirmado e saindo agora!" logo depois do usuário dizer que nem conseguia confirmar,
+// numa tentativa de disparo só com mídia (sem texto).
+const FALSE_DISPATCH_CLAIM_PATTERN =
+  /dispar[oa]\s+(?:j[áa]\s+)?confirmad[oa]|dispar[oa]\s+(?:j[áa]\s+)?sa[ií]u|(?:est[áa]|foi)\s+(?:sendo\s+)?envi(?:ad[oa]|ando)\s+agora|leads?\s+(?:est[ãa]o|j[áa])\s+recebendo|mensagem\s+enviada\s+com\s+sucesso/i;
+
 interface Scenario {
   name: string;
   messages: string[];
   expectNoIterationLimit?: boolean;
+  expectNoFalseDispatchClaim?: boolean;
 }
 
 const SCENARIOS: Scenario[] = [
@@ -42,6 +51,15 @@ const SCENARIOS: Scenario[] = [
   { name: 'Pergunta fora do fluxo de disparo', messages: ['como eu respondo um lead que disse que tá caro?'] },
   { name: 'Cancelar disparo', messages: ['cancela o disparo que eu tava montando'] },
   { name: 'Conectar WhatsApp', messages: ['quero conectar um novo WhatsApp'] },
+  {
+    name: 'Disparo só com mídia, sem texto (regressão da confirmação falsa)',
+    messages: [
+      'Quero criar uma campanha de disparo agora.',
+      'quero mandar essa foto\n\n[Anexo disponível: foto-teste.jpg (image) em https://api.zapbroker.dev/uploads/teste-regressao.jpg]',
+      'não quero texto nenhum, só a foto mesmo, não consigo confirmar',
+    ],
+    expectNoFalseDispatchClaim: true,
+  },
 ];
 
 async function runScenario(scenario: Scenario): Promise<{ name: string; pass: boolean; reason?: string }> {
@@ -70,6 +88,10 @@ async function runScenario(scenario: Scenario): Promise<{ name: string; pass: bo
       if (turn?.hit_iteration_limit) {
         return { name: scenario.name, pass: false, reason: 'bateu no limite de iterações (loop infinito)' };
       }
+    }
+
+    if (scenario.expectNoFalseDispatchClaim && FALSE_DISPATCH_CLAIM_PATTERN.test(lastReply)) {
+      return { name: scenario.name, pass: false, reason: `alegou disparo confirmado sem confirmação real: "${lastReply}"` };
     }
 
     return { name: scenario.name, pass: true };

@@ -674,8 +674,13 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
   else if (draft.instanceId) done.push(`WhatsApp (${draft.instanceName})`);
   else missing.push('WhatsApp');
 
+  // Mensagem de texto não é obrigatória se já tem mídia anexada — disparo só com
+  // áudio/foto/vídeo é válido (evolutionService/campaignWorker já suportam mídia sem
+  // legenda). Sem isso, o checklist ficava travado pedindo "mensagem" pra sempre quando o
+  // usuário só queria mandar mídia, e o agente entrava em loop de pergunta repetida.
   if (draft.messageVariations?.length) done.push(`mensagem ("${draft.messageVariations[0].substring(0, 60)}")`);
-  else missing.push('mensagem');
+  else if (draft.mediaUrl) done.push('mensagem (dispensada — disparo é só com a mídia anexada)');
+  else missing.push('mensagem (ou anexar mídia no lugar dela)');
 
   const lines = [
     done.length > 0 ? `JÁ DEFINIDO (NÃO pergunte de novo sobre isso): ${done.join('; ')}.` : 'Nada definido ainda.',
@@ -684,12 +689,36 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
 
   if (draft.timingConfirmed) {
     lines.push(`JÁ DEFINIDO (NÃO pergunte de novo): timing confirmado pelo usuário — ${draft.delaySeconds}s entre mensagens${draft.sequentialMode ? ', modo sequencial (quebra em blocos)' : ''}, lotes de ${draft.batchSize ?? 30} leads a cada ${draft.batchDelaySeconds ?? 60}s.`);
-  } else if (draft.contactListId && draft.messageVariations?.length) {
+  } else if (draft.contactListId && (draft.messageVariations?.length || draft.mediaUrl)) {
     lines.push('AINDA FALTA: confirmar o tempo entre mensagens e o tamanho dos lotes — chame request_timing_confirmation (não pergunte isso em texto, é sempre por seletor visual).');
   }
-  lines.push(draft.mediaUrl ? 'Já tem mídia anexada ao disparo.' : 'Ainda sem mídia anexada — pergunte se o usuário quer anexar imagem/vídeo/áudio.');
+  lines.push(draft.mediaUrl ? 'Já tem mídia anexada ao disparo.' : 'Ainda sem mídia anexada — pergunte se o usuário quer anexar imagem/vídeo/áudio, ou seguir só com texto.');
 
   return lines.join('\n');
+}
+
+// O envio real só acontece via o botão "Confirmar disparo" (executeAction's confirm_campaign,
+// nunca dentro do chat livre — ver guardrail "ENVIO DE DISPARO" no prompt). Então qualquer
+// frase de "disparo já saiu" vinda de runToolLoop é sempre alucinação, sem exceção — achado
+// real em produção: o modelo respondia "Disparo confirmado e saindo agora!" logo depois do
+// usuário dizer que nem conseguia clicar em confirmar, deixando campanhas fantasma em PENDING.
+// A instrução de prompt sozinha não segurou isso sob pressão; esse guardrail intercepta o
+// texto em código antes de persistir/devolver pro usuário.
+const FALSE_DISPATCH_CLAIM_PATTERN =
+  /dispar[oa]\s+(?:j[áa]\s+)?confirmad[oa]|dispar[oa]\s+(?:j[áa]\s+)?sa[ií]u|(?:est[áa]|foi)\s+(?:sendo\s+)?envi(?:ad[oa]|ando)\s+agora|leads?\s+(?:est[ãa]o|j[áa])\s+recebendo|mensagem\s+enviada\s+com\s+sucesso/i;
+
+function correctFalseDispatchClaim(reply: string, state: ToolState): string {
+  if (!reply || !FALSE_DISPATCH_CLAIM_PATTERN.test(reply)) return reply;
+
+  if (state.draft?.readyToSend) {
+    if (!state.actions.some((a) => a.type === 'confirm_campaign')) {
+      state.component = { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
+      state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
+    }
+    return 'Quase lá! Tá tudo pronto — é só clicar em "Confirmar disparo" que aí sim ele sai de verdade.';
+  }
+
+  return `Ainda não — esse disparo não saiu (o envio só acontece depois de clicar em "Confirmar disparo") e ainda falta configurar:\n\n${buildDraftChecklist(state.draft)}`;
 }
 
 // Acima disso, disparar pra uma lista grande usando um único número aumenta bastante o
@@ -751,7 +780,7 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
   draft.readyToSend = Boolean(
     draft.contactListId &&
     draft.instanceId &&
-    draft.messageVariations?.length &&
+    (draft.messageVariations?.length || draft.mediaUrl) &&
     draft.timingConfirmed &&
     (!draft.quota || draft.quota.available) &&
     (!draft.needsAntiBanWarning || draft.antiBanAcknowledged) &&
@@ -868,10 +897,11 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - Quando o usuário disser que quer fazer um disparo/campanha/enviar mensagem em massa, comece a montar o rascunho aos poucos, perguntando o que faltar.
 - Siga o "Estado do disparo em andamento" acima à risca. NUNCA pergunte de novo sobre um campo já listado como "JÁ DEFINIDO". Só pergunte sobre o que está em "AINDA FALTA".
 - REGRA DE OURO (vale só enquanto você estiver ativamente montando o disparo, não pra toda e qualquer resposta): nunca termine uma resposta sobre o disparo sem dar um próximo passo claro — ou uma pergunta específica (não genérica) sobre o que falta, ou um aviso de que está tudo pronto pra confirmar. Isso não significa forçar o assunto do disparo quando o usuário estava falando de outra coisa (veja PRIORIDADE DA CONVERSA acima).
-- Depois que lista, WhatsApp e mensagem já estiverem definidos, ainda faltam DUAS coisas antes de considerar o disparo pronto: (1) se ele quer anexar imagem/vídeo/áudio (pergunte em texto, use request_media_upload se ele topar), e (2) confirmar o timing — chame request_timing_confirmation (não é uma pergunta de texto, é sempre o seletor visual). Só ofereça pra confirmar o disparo depois dessas duas coisas — não pressuponha que ele não quer nenhuma das duas.
+- Mensagem de texto e mídia (imagem/vídeo/áudio) não são cumulativas nem uma pré-requisito da outra — o disparo pode ser só texto, só mídia, ou os dois juntos. Se o usuário disser explicitamente que não quer texto (só mídia), pare de perguntar por mensagem e siga o fluxo normalmente — NUNCA insista pedindo mensagem de novo depois disso.
+- Depois que lista, WhatsApp e (mensagem OU mídia) já estiverem definidos, ainda falta confirmar o timing antes de considerar o disparo pronto — chame request_timing_confirmation (não é uma pergunta de texto, é sempre o seletor visual). Se ainda não perguntou sobre anexar mídia nem o usuário recusou, pergunte uma vez em texto (ou use request_media_upload se ele topar) antes de seguir pro timing — mas não trave nisso se ele já disse que não quer.
 - O tempo/modo de envio/tamanho de lote têm valores recomendados calculados automaticamente, mas NUNCA são aplicados sozinhos — a confirmação é sempre via request_timing_confirmation (seletor visual com inputs editáveis), nunca perguntando em texto e aceitando a resposta em texto livre.
 - Se "AINDA FALTA" incluir "mensagem" e o usuário escrever qualquer texto que pareça ser o conteúdo a enviar (entre aspas, depois de "essa mensagem", "manda isso", "pode ser assim", ou uma frase que faça sentido pra um lead) — SEMPRE capture esse texto via update_campaign_draft, mesmo que o tom seja informal ou pareça um desabafo. Você não decide se a mensagem é "boa o suficiente" — só captura, e se quiser, sugere uma versão melhorada como opção.
-- Se a mensagem do usuário contiver um trecho "[Anexo disponível: nome (tipo) em URL]", é um arquivo que ele já anexou pela interface — confirme no reply que ficou vinculado (a vinculação em si acontece fora do seu controle, pelo componente de upload).
+- Se a mensagem do usuário contiver um trecho "[Anexo disponível: nome (tipo) em URL]", é um arquivo que ele já anexou pela interface — a vinculação já foi persistida automaticamente antes desse turno chegar até você, então trate normalmente como "JÁ DEFINIDO" (confira no checklist) e confirme no reply. Nunca diga que uma mídia ficou vinculada se o checklist não mostrar isso.
 - Personalização: o placeholder {nome} dentro de uma mensagem é substituído automaticamente pelo nome de cada lead no envio. Ofereça isso proativamente quando ajudar a escrever/melhorar uma mensagem (ex: "Oi {nome}, tudo bem?") — não é necessário perguntar, só avise que vai personalizar.
 - Se faltar WhatsApp conectado, avise e chame suggest_connect_whatsapp antes de seguir com o disparo.
 - Se o usuário disser que "já tem" WhatsApp conectado (sem citar qual), chame get_whatsapp_instances antes de perguntar mais nada. Se só existir um conectado, já use esse via update_campaign_draft e confirme pelo nome — NÃO pergunte "qual número" como se houvesse várias opções quando só tem uma.
@@ -882,6 +912,7 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - NUNCA diga que um QR Code, seletor ou botão "apareceu"/"já está na tela" a menos que você tenha chamado a tool correspondente NESSE MESMO turno — isso inclui repetir a mesma alegação depois. Se o usuário disser que não está vendo nada (QR Code, seletor, botão), isso significa que a tool não foi chamada ou precisa ser chamada de novo: chame de novo nesse turno, nunca insista que "já apareceu".
 - NUNCA diga "lista selecionada"/"mensagem definida" a menos que o rascunho já tenha esse campo preenchido (veja "JÁ DEFINIDO" acima) — se o usuário só confirmou por texto, chame update_campaign_draft com contactListName ANTES de confirmar isso na resposta, nunca depois.
 - NUNCA diga "WhatsApp vinculado"/"podemos prosseguir com esse número" a menos que o rascunho já tenha instanceId definido. Se o usuário acabou de conectar um número (evento do sistema ou confirmação em texto), chame update_campaign_draft com o instanceName desse número ANTES de dizer que está tudo pronto.
+- Não troque o campo na hora de confirmar: se o usuário acabou de responder sobre WhatsApp/número, confirme como "número"/"WhatsApp" (nunca diga "lista selecionada" nesse momento); se foi sobre lista de contatos, confirme como "lista" (nunca diga "número confirmado"); se foi sobre mensagem, confirme como "mensagem". Antes de confirmar, releia a pergunta anterior sua nesse mesmo turno pra ter certeza de qual campo o usuário estava respondendo.
 - Nunca contradiga o "JÁ DEFINIDO" na sua resposta em texto.
 - Mensagens que começam com "[EVENTO DO SISTEMA — não é fala do usuário]" não foram digitadas pelo usuário — são notificações automáticas de uma ação que ele fez pela interface (escolheu uma lista, anexou mídia). Reaja normalmente continuando a conversa a partir disso, seguindo a REGRA DE OURO acima — nunca pare depois de um evento desses sem fazer a próxima pergunta ou confirmar que está tudo pronto.
 
@@ -1861,7 +1892,8 @@ async function continueAfterAction(
 
     const state: ToolState = { draft: existingDraft, component: null, actions: [] };
     const loopCtx: ToolLoopContext = { userId, sessionId, planId: ctx.planId, lists, instances, campaignsSummary, stalledCount };
-    const finalReply = await runToolLoop(workingMessages, loopCtx, state);
+    let finalReply = await runToolLoop(workingMessages, loopCtx, state);
+    finalReply = correctFalseDispatchClaim(finalReply, state);
 
     // Essa mensagem não é persistida como 'user' (evitaria mostrar o texto de evento
     // interno como se o usuário tivesse digitado isso ao recarregar a conversa).
@@ -1923,7 +1955,23 @@ export async function chat(
       getRecentSessionsBrief(userId, currentSessionId),
     ]);
 
-    const systemPrompt = buildSystemPrompt(ctx, existingDraft, memoryFacts, brokerContext, campaignsSummary, recentSessions);
+    // O composer do chat anexa mídia só no estado local do frontend e manda esse marcador
+    // junto da próxima mensagem — diferente do fluxo de upload dedicado (set_draft_media),
+    // nenhuma tool persistia isso no rascunho antes. O prompt só mandava o modelo "dizer"
+    // que ficou vinculado, então ele confirmava e se contradizia poucos turnos depois,
+    // quando o checklist relia o rascunho de verdade e via que a mídia nunca chegou lá.
+    // Extrai e persiste aqui, antes do modelo processar a mensagem — não depende dele acertar.
+    const attachmentMatch = userMessage.match(/\[Anexo dispon[íi]vel:\s*(.+?)\s*\((\w+)\)\s*em\s*(\S+)\]/i);
+    let draftForTurn = existingDraft;
+    if (attachmentMatch) {
+      const [, , mediaType, mediaUrl] = attachmentMatch;
+      let updatedDraft: CampaignDraft = { ...(existingDraft ?? {}), mediaUrl, mediaType };
+      updatedDraft = await recomputeDraftMeta(userId, ctx.planId, updatedDraft);
+      await saveDraft(userId, currentSessionId, updatedDraft);
+      draftForTurn = updatedDraft;
+    }
+
+    const systemPrompt = buildSystemPrompt(ctx, draftForTurn, memoryFacts, brokerContext, campaignsSummary, recentSessions);
 
     // O histórico vem sempre do banco (fonte confiável), não do parâmetro `history` do
     // chamador — o frontend não estava enviando isso, o que deixava o agente sem memória
@@ -1938,9 +1986,9 @@ export async function chat(
       { role: 'user', content: userMessage },
     ];
 
-    const state: ToolState = { draft: existingDraft, component: null, actions: [] };
+    const state: ToolState = { draft: draftForTurn, component: null, actions: [] };
     const loopCtx: ToolLoopContext = { userId, sessionId: currentSessionId, planId: ctx.planId, lists, instances, campaignsSummary, stalledCount };
-    const finalReply = await runToolLoop(workingMessages, loopCtx, state, onToken, onReset);
+    let finalReply = await runToolLoop(workingMessages, loopCtx, state, onToken, onReset);
 
     // Rede de segurança: se existe um disparo em andamento sem mensagem ainda, e o usuário
     // escreveu algo entre aspas nesse turno, captura como mensagem mesmo se o modelo não
@@ -1978,6 +2026,8 @@ export async function chat(
       state.component = { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
       state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
     }
+
+    finalReply = correctFalseDispatchClaim(finalReply, state);
 
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', finalReply);
@@ -2624,7 +2674,9 @@ export async function executeAction(
       }
 
       const draft = await loadDraft(userId, sessionId);
-      if (!draft || !draft.contactListId || !draft.instanceId || !draft.messageVariations?.length) {
+      // Mensagem OU mídia satisfaz o requisito — disparo só com áudio/foto/vídeo, sem
+      // legenda, é válido (ver buildDraftChecklist/recomputeDraftMeta acima).
+      if (!draft || !draft.contactListId || !draft.instanceId || !(draft.messageVariations?.length || draft.mediaUrl)) {
         return {
           success: false,
           message: 'Ainda faltam informações pra eu conseguir disparar — vamos terminar de configurar primeiro.',
@@ -2662,7 +2714,7 @@ export async function executeAction(
         const campaign = await campaignService.createCampaign(
           userId,
           draft.name || `Disparo - ${draft.contactListName || 'Leads'}`,
-          draft.messageVariations,
+          draft.messageVariations || [], // pode ser [] em disparo só-mídia (ver readyToSend acima)
           draft.contactListId,
           instanceIds,
           draft.scheduledAt || undefined,
