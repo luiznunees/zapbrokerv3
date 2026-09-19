@@ -3,36 +3,7 @@
 import { useState } from "react"
 import { Plus, Minus, MessageCircle } from "lucide-react"
 import Link from "next/link"
-
-// Exportado pra app/page.tsx montar o FAQPage schema (JSON-LD) em cima do mesmo texto
-// que já aparece na tela — sem isso, o schema divergiria do conteúdo real assim que
-// alguém editasse uma pergunta aqui e esquecesse de atualizar em outro lugar.
-export const FAQ_ITEMS = [
-    {
-        q: "O ZapBroker é seguro? Vou ser banido?",
-        a: "Você conecta seu próprio número via QR Code, do mesmo jeito que conecta no WhatsApp Web. Recomendamos seguir as boas práticas de envio (não disparar volumes muito grandes de uma vez) pra reduzir o risco de bloqueio pela própria Meta."
-    },
-    {
-        q: "A IA realmente personaliza as mensagens?",
-        a: "Sim. Você conversa com o agente sobre o disparo — qual imóvel, qual lista, que tom usar — e ele monta a mensagem com você antes de enviar pra toda a lista de uma vez."
-    },
-    {
-        q: "Preciso de conhecimento técnico?",
-        a: "Zero. Se você sabe usar WhatsApp, sabe usar ZapBroker. O setup leva menos de 5 minutos: escaneia QR Code, importa contatos e começa a disparar."
-    },
-    {
-        q: "Como funciona o pagamento via PIX?",
-        a: "Sua assinatura é cobrada mensalmente via PIX. Você recebe o QR Code direto no painel alguns dias antes do vencimento e paga em segundos, sem cartão de crédito."
-    },
-    {
-        q: "Posso cancelar quando quiser?",
-        a: "Sim, sem multas e sem burocracia. Você pode cancelar sua assinatura a qualquer momento diretamente no painel de controle."
-    },
-    {
-        q: "Quanto tempo leva para ativar?",
-        a: "Menos de 2 minutos. Você escaneia o QR Code, conecta seu número e já pode criar seu primeiro disparo."
-    },
-]
+import { FAQ_ITEMS } from "./faqData"
 
 export function FAQ() {
     const [openIndex, setOpenIndex] = useState<number | null>(0)
