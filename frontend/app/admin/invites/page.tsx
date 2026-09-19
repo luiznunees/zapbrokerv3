@@ -119,19 +119,25 @@ export default function AdminInvitesPage() {
         setTimeout(() => setCopied(false), 2000)
     }
 
+    const totalInvites = invites.length
+    const activeInvites = invites.filter((i) => !i.revoked && i.uses_count < i.max_uses).length
+    const totalUsed = invites.reduce((sum, i) => sum + i.uses_count, 0)
+
     return (
         <div className="max-w-4xl mx-auto space-y-8 pt-12">
-            <div className="text-center space-y-2">
-                <h1 className="text-3xl font-bold text-zinc-100 flex items-center justify-center gap-2">
-                    <Sparkles className="text-yellow-500" />
-                    Gerador de Convites
-                </h1>
-                <p className="text-zinc-400">Crie links de registro exclusivos para novos usuários.</p>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <Sparkles className="size-5 text-primary" />
+                </div>
+                <div>
+                    <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Convites</h1>
+                    <p className="text-zinc-400 text-sm">Crie e acompanhe links de registro pra novos usuários.</p>
+                </div>
             </div>
 
-            <Card className="bg-zinc-900 border-zinc-800 border-t-4 border-t-primary">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl border-t-4 border-t-primary">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100">Configurar Convite</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100">Configurar Convite</CardTitle>
                     <CardDescription className="text-zinc-500">Escolha o plano que será atribuído ao usuário.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -237,7 +243,7 @@ export default function AdminInvitesPage() {
                     <Button
                         onClick={handleGenerate}
                         disabled={loading || !canGenerate}
-                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-12"
+                        className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold h-12"
                     >
                         {loading ? 'Gerando...' : isShared ? 'Gerar Link Compartilhável' : 'Gerar Link Único'}
                     </Button>
@@ -255,11 +261,11 @@ export default function AdminInvitesPage() {
                                 <Input
                                     value={generatedLink}
                                     readOnly
-                                    className="bg-zinc-950 border-zinc-800 text-zinc-400 font-mono text-sm"
+                                    className="bg-zinc-950 border-zinc-800 text-zinc-400 font-mono text-sm rounded-xl"
                                 />
                                 <Button
                                     onClick={copyToClipboard}
-                                    className={copied ? "bg-green-600 text-white" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}
+                                    className={`rounded-full shrink-0 ${copied ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}
                                 >
                                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                 </Button>
@@ -269,15 +275,31 @@ export default function AdminInvitesPage() {
                 </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100 flex items-center gap-2">
+                    <CardTitle className="font-display font-bold text-zinc-100 flex items-center gap-2">
                         <ListChecks className="size-4 text-primary" />
                         Convites gerados
                     </CardTitle>
                     <CardDescription className="text-zinc-500">
                         Últimos 100 convites, mais recente primeiro. Revogar encerra o link na hora, mesmo com vagas sobrando.
                     </CardDescription>
+                    {totalInvites > 0 && (
+                        <div className="flex gap-3 pt-2">
+                            <div className="flex-1 rounded-2xl bg-zinc-950 border border-zinc-800 px-4 py-3">
+                                <p className="text-xs text-zinc-500">Total</p>
+                                <p className="font-display text-xl font-extrabold text-zinc-100">{totalInvites}</p>
+                            </div>
+                            <div className="flex-1 rounded-2xl bg-zinc-950 border border-zinc-800 px-4 py-3">
+                                <p className="text-xs text-zinc-500">Ativos</p>
+                                <p className="font-display text-xl font-extrabold text-primary">{activeInvites}</p>
+                            </div>
+                            <div className="flex-1 rounded-2xl bg-zinc-950 border border-zinc-800 px-4 py-3">
+                                <p className="text-xs text-zinc-500">Vagas usadas</p>
+                                <p className="font-display text-xl font-extrabold text-zinc-100">{totalUsed}</p>
+                            </div>
+                        </div>
+                    )}
                 </CardHeader>
                 <CardContent>
                     {loadingInvites ? (
@@ -313,24 +335,24 @@ export default function AdminInvitesPage() {
                                                 {new Date(invite.created_at).toLocaleString('pt-BR')}
                                             </TableCell>
                                             <TableCell>
-                                                {status === 'active' && <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Ativo</Badge>}
-                                                {status === 'exhausted' && <Badge className="bg-zinc-700/50 text-zinc-400 border-zinc-700">Esgotado</Badge>}
-                                                {status === 'revoked' && <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Revogado</Badge>}
+                                                {status === 'active' && <Badge className="rounded-full bg-primary/10 text-primary border-primary/20">Ativo</Badge>}
+                                                {status === 'exhausted' && <Badge className="rounded-full bg-zinc-700/50 text-zinc-400 border-zinc-700">Esgotado</Badge>}
+                                                {status === 'revoked' && <Badge className="rounded-full bg-red-500/10 text-red-500 border-red-500/20">Revogado</Badge>}
                                             </TableCell>
-                                            <TableCell className="text-right space-x-1">
+                                            <TableCell className="text-right space-x-1.5">
                                                 <Button
-                                                    size="sm"
+                                                    size="icon"
                                                     variant="outline"
-                                                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-8 px-2"
+                                                    className="rounded-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-primary size-8"
                                                     onClick={() => copyInviteLink(invite)}
                                                 >
                                                     {copiedId === invite.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                                 </Button>
                                                 {status === 'active' && (
                                                     <Button
-                                                        size="sm"
+                                                        size="icon"
                                                         variant="outline"
-                                                        className="border-zinc-700 text-red-400 hover:bg-red-500/10 h-8 px-2"
+                                                        className="rounded-full border-zinc-700 text-red-400 hover:bg-red-500/10 hover:text-red-400 size-8"
                                                         disabled={revokingId === invite.id}
                                                         onClick={() => handleRevoke(invite)}
                                                     >
