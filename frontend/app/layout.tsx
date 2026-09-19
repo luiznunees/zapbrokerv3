@@ -55,6 +55,18 @@ export const viewport = {
   themeColor: "#2E7CF6",
 };
 
+// Global (toda página) — ajuda Google/IAs a reconhecer a entidade "ZapBroker" como marca,
+// independente de qual página foi indexada primeiro. sameAs fica vazio até o perfil do
+// Instagram ter uso de verdade (ver marketing/seo/04-otimizacao-on-page.md) — preencher lá.
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "ZapBroker",
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon-512.svg`,
+  sameAs: [] as string[],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -68,6 +80,10 @@ export default function RootLayout({
           <ToastProvider />
           <PushPromptModal />
         </ThemeProvider>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
       </body>
     </html>
   );

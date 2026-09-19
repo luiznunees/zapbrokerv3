@@ -4,7 +4,10 @@ import { useState } from "react"
 import { Plus, Minus, MessageCircle } from "lucide-react"
 import Link from "next/link"
 
-const QUESTIONS = [
+// Exportado pra app/page.tsx montar o FAQPage schema (JSON-LD) em cima do mesmo texto
+// que já aparece na tela — sem isso, o schema divergiria do conteúdo real assim que
+// alguém editasse uma pergunta aqui e esquecesse de atualizar em outro lugar.
+export const FAQ_ITEMS = [
     {
         q: "O ZapBroker é seguro? Vou ser banido?",
         a: "Você conecta seu próprio número via QR Code, do mesmo jeito que conecta no WhatsApp Web. Recomendamos seguir as boas práticas de envio (não disparar volumes muito grandes de uma vez) pra reduzir o risco de bloqueio pela própria Meta."
@@ -45,7 +48,7 @@ export function FAQ() {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-2.5 items-start">
-                    {QUESTIONS.map((item, i) => (
+                    {FAQ_ITEMS.map((item, i) => (
                         <div
                             key={i}
                             className="rounded-2xl bg-white border border-landing-navy/10 overflow-hidden transition-all duration-200"
