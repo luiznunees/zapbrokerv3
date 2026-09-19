@@ -86,6 +86,13 @@ export const connectInstance = async (userId: string, instanceId: string, phoneN
     return { base64, pairingCode };
 };
 
+// Janela de tolerância antes de declarar desconexão de verdade — casa com o polling de
+// 30s do WhatsAppStatusWidget (frontend), então ~3 checagens ruins seguidas. Sem isso,
+// um único soquete piscando (comum em sessão de WhatsApp no iOS, sem ser queda de
+// verdade) já virava alerta permanente de "desconectou" — foi o que aconteceu com a
+// conta da Fernanda em 17-18/09, dezenas de eventos pro mesmo instanceId.
+const DISCONNECT_CONFIRM_MS = 90_000;
+
 export const getInstances = async (userId: string) => {
     const { data: instances, error } = await supabase
         .from('instances')
@@ -117,6 +124,30 @@ export const getInstances = async (userId: string) => {
                 dbStatus = 'error';
             }
 
+            // Debounce: só deixa "connected" virar outra coisa se a instabilidade se
+            // confirmar por tempo sustentado — enquanto isso, segue reportando como
+            // conectado (sem flicker de UI e sem logar alerta) igual estava antes do blip.
+            if (instance.status === 'connected' && dbStatus !== 'connected') {
+                if (!instance.unstable_since) {
+                    await supabase
+                        .from('instances')
+                        .update({ unstable_since: new Date().toISOString() })
+                        .eq('id', instance.id);
+                    return instance;
+                }
+
+                const unstableForMs = Date.now() - new Date(instance.unstable_since).getTime();
+                if (unstableForMs < DISCONNECT_CONFIRM_MS) {
+                    return instance;
+                }
+                // passou da janela de tolerância — segue pro fluxo normal abaixo, que
+                // persiste o novo status e loga o alerta de verdade.
+            } else if (dbStatus === 'connected' && instance.unstable_since) {
+                // recuperou dentro da janela — limpa o marcador de instabilidade.
+                await supabase.from('instances').update({ unstable_since: null }).eq('id', instance.id);
+                instance.unstable_since = null;
+            }
+
             // Update DB if changed
             if (dbStatus !== instance.status) {
                 // Primeira conexão de verdade marca o início do aquecimento (ver
@@ -127,6 +158,7 @@ export const getInstances = async (userId: string) => {
                     .from('instances')
                     .update({
                         status: dbStatus,
+                        unstable_since: null,
                         ...(isFirstConnection ? { connected_at: new Date().toISOString() } : {}),
                     })
                     .eq('id', instance.id);

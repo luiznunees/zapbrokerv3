@@ -353,6 +353,15 @@ const CHIP_AGE_SQL = `
 alter table instances add column if not exists self_reported_chip_days integer;
 `;
 
+// Marca desde quando uma instância que estava conectada começou a responder algo
+// diferente de "open" — usado pra dar um período de tolerância antes de declarar
+// desconexão de verdade (ver instanceService.getInstances). Sem isso, uma única
+// checagem ruim (soquete piscando, comum em sessão de WhatsApp no iOS) já virava
+// alerta permanente de "desconectou".
+const DISCONNECT_DEBOUNCE_SQL = `
+alter table instances add column if not exists unstable_since timestamptz;
+`;
+
 const BETA_FEEDBACK_SQL = `
 create table if not exists beta_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -605,6 +614,18 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar self_reported_chip_days:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: DISCONNECT_DEBOUNCE_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar instances.unstable_since automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: alter table instances add column if not exists unstable_since timestamptz;');
+    } else {
+      console.log('[Migrations] Coluna instances.unstable_since verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar instances.unstable_since:', err.message);
   }
 
   try {
