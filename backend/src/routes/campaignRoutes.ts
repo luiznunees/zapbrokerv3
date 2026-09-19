@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import * as campaignController from '../controllers/campaignController';
 import { authenticateToken } from '../middlewares/authMiddleware';
+import { requireAdmin } from '../middlewares/adminMiddleware';
 import { checkQuota } from '../middlewares/checkQuota';
 import multer from 'multer';
 import path from 'path';
 
 const router = Router();
 
-router.get('/debug-status', campaignController.debugStatus);
-
 router.use(authenticateToken);
+
+router.get('/debug-status', requireAdmin, campaignController.debugStatus);
 
 import { upload } from '../middlewares/uploadMiddleware';
 

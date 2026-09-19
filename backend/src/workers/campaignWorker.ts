@@ -13,28 +13,45 @@ const MIMETYPE_BY_EXTENSION: Record<string, string> = {
     mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4',
 };
 
+// mediaUrl chega de fora (draft do agente, aceito sem validação de host lá) e essa função
+// decide se manda a Evolution API buscar a URL remotamente — sem essa checagem, um usuário
+// autenticado podia colocar uma URL interna (ex: metadata da nuvem, serviço interno) no
+// draft e fazer a Evolution API buscá-la (SSRF). Só confiamos em URL do nosso próprio
+// domínio (BASE_URL); qualquer outra é recusada antes de chegar na Evolution API.
+function isTrustedMediaUrl(mediaUrl: string): boolean {
+    try {
+        const base = new URL(process.env.BASE_URL || 'http://localhost:3000');
+        const parsed = new URL(mediaUrl);
+        return parsed.protocol === base.protocol && parsed.host === base.host;
+    } catch {
+        return false;
+    }
+}
+
 // Se o arquivo estiver hospedado localmente (uploads/), lê e converte pra base64 puro —
 // a Evolution API prefere isso a mandar só a URL. Reaproveitado por imagem/vídeo/áudio.
 function readLocalMediaAsBase64(mediaUrl: string, fallbackMimetype: string): { mediaData: string; mimetype: string } {
+    if (!mediaUrl || !isTrustedMediaUrl(mediaUrl)) {
+        throw new Error(`mediaUrl fora do domínio confiável, recusando envio: ${mediaUrl}`);
+    }
+
     let mediaData = mediaUrl;
     let mimetype = fallbackMimetype;
 
-    if (mediaUrl && (mediaUrl.includes('localhost') || mediaUrl.includes('127.0.0.1'))) {
-        try {
-            const filename = mediaUrl.split('/').pop() as string;
-            const filePath = path.join(process.cwd(), 'uploads', filename);
+    try {
+        const filename = path.basename(mediaUrl.split('/').pop() as string);
+        const filePath = path.join(process.cwd(), 'uploads', filename);
 
-            if (fs.existsSync(filePath)) {
-                const fileBuffer = fs.readFileSync(filePath);
-                const extension = path.extname(filePath).toLowerCase().replace('.', '');
-                mimetype = MIMETYPE_BY_EXTENSION[extension] || fallbackMimetype;
-                mediaData = fileBuffer.toString('base64');
-            } else {
-                console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
-            }
-        } catch (err: any) {
-            console.error('[CampaignWorker] Failed to convert local media to base64:', err.message);
+        if (fs.existsSync(filePath)) {
+            const fileBuffer = fs.readFileSync(filePath);
+            const extension = path.extname(filePath).toLowerCase().replace('.', '');
+            mimetype = MIMETYPE_BY_EXTENSION[extension] || fallbackMimetype;
+            mediaData = fileBuffer.toString('base64');
+        } else {
+            console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
         }
+    } catch (err: any) {
+        console.error('[CampaignWorker] Failed to convert local media to base64:', err.message);
     }
 
     return { mediaData, mimetype };

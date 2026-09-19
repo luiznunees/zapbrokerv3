@@ -3,6 +3,23 @@ import { supabase } from '../config/supabase';
 import { getIO } from '../services/socketService';
 import { sendPushToUser } from '../services/pushService';
 
+// Resolve a instância (nome de sessão do WAHA/Evolution) pro user_id dono dela — sem isso,
+// o webhook casava contato só por telefone em TODA a base (todos os corretores), então uma
+// mensagem chegando na instância do corretor A podia atualizar o contato/campanha do
+// corretor B se os dois tivessem um lead com o mesmo telefone cadastrado. Se a instância não
+// for reconhecida (ex: nome de sessão não bate com o esperado), cai pro comportamento antigo
+// (sem escopo) em vez de descartar o evento — evita quebrar silenciosamente o rastreio de
+// resposta de lead por causa de um formato de payload inesperado.
+async function resolveInstanceOwner(instanceName?: string | null): Promise<string | undefined> {
+    if (!instanceName) return undefined;
+    const { data } = await supabase
+        .from('instances')
+        .select('user_id')
+        .eq('evolution_id', instanceName)
+        .maybeSingle();
+    return data?.user_id ?? undefined;
+}
+
 // Avisa o corretor por push quando um lead responde a campanha.
 async function notifyLeadReplied(campaignId: string) {
     try {
@@ -56,11 +73,16 @@ export const handleWahaWebhook = async (req: Request, res: Response) => {
                     possiblePhones.push(phoneWithout9);
                 }
 
-                let { data: contact } = await supabase
+                const ownerId = await resolveInstanceOwner(session);
+
+                let contactQuery = supabase
                     .from('contacts')
-                    .select('id, unread_count')
-                    .in('phone', possiblePhones)
-                    .maybeSingle();
+                    .select('id, unread_count, contact_lists!inner(user_id)')
+                    .in('phone', possiblePhones);
+                if (ownerId) {
+                    contactQuery = contactQuery.eq('contact_lists.user_id', ownerId);
+                }
+                let { data: contact } = await contactQuery.maybeSingle();
 
                 if (contact) {
                     console.log(`Contact found: ${contact.id}`);
@@ -178,7 +200,7 @@ export const handleWahaWebhook = async (req: Request, res: Response) => {
 };
 export const handleEvolutionWebhook = async (req: Request, res: Response) => {
     try {
-        const { event, data } = req.body;
+        const { event, data, instance } = req.body;
         console.log(`[EvolutionWebhook] Event: ${event}`);
 
         if (event === 'messages.update') {
@@ -245,11 +267,16 @@ export const handleEvolutionWebhook = async (req: Request, res: Response) => {
                     possiblePhones.push(phoneWithout9);
                 }
 
-                let { data: contact } = await supabase
+                const ownerId = await resolveInstanceOwner(instance);
+
+                let contactQuery = supabase
                     .from('contacts')
-                    .select('id')
-                    .in('phone', possiblePhones)
-                    .maybeSingle();
+                    .select('id, contact_lists!inner(user_id)')
+                    .in('phone', possiblePhones);
+                if (ownerId) {
+                    contactQuery = contactQuery.eq('contact_lists.user_id', ownerId);
+                }
+                let { data: contact } = await contactQuery.maybeSingle();
 
                 if (contact) {
                     // Update Campaign Lead Status to REPLIED
