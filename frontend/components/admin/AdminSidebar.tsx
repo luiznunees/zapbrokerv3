@@ -78,7 +78,7 @@ export default function AdminSidebar() {
                 <div className="p-4 border-b border-zinc-800">
                     <div className="flex items-center gap-2 mb-4 mt-2">
                         <BrandLogo className="h-6 w-auto text-white" monochrome />
-                        <span className="text-xs font-bold bg-gradient-to-r from-primary to-sky-500 px-2 py-0.5 rounded text-white">ADMIN</span>
+                        <span className="text-xs font-extrabold bg-gradient-to-r from-primary to-sky-500 px-2.5 py-0.5 rounded-full text-white">ADMIN</span>
                     </div>
                 </div>
 
@@ -86,7 +86,7 @@ export default function AdminSidebar() {
                 <div className="flex-1 overflow-y-auto px-3 space-y-6 pt-6 custom-scrollbar">
                     {ADMIN_NAV_ITEMS.map((group, idx) => (
                         <div key={idx} className="space-y-0.5">
-                            <h4 className="px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">{group.group}</h4>
+                            <h4 className="px-3 text-[10px] font-display font-bold text-zinc-500 uppercase tracking-wider mb-1">{group.group}</h4>
                             {group.items.map((item) => (
                                 <NavItem key={item.href} item={item} isActive={pathname === item.href} />
                             ))}
@@ -119,7 +119,7 @@ function NavItem({ item, isActive }: { item: any, isActive: boolean }) {
         <Link
             href={item.href}
             className={cn(
-                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 group relative overflow-hidden",
+                "flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 group relative overflow-hidden",
                 isActive
                     ? "bg-primary/10 text-primary shadow-sm border border-primary/20"
                     : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"

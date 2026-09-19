@@ -45,21 +45,23 @@ export default function AdminRawActivityLogsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-3xl font-bold text-zinc-100 flex items-center gap-2">
-                    <Terminal className="text-sky-500" />
-                    Log Bruto de Atividade
-                </h1>
-                <p className="text-zinc-400">
-                    Toda ação que muda estado no backend (criar campanha, enviar disparo, conectar
-                    WhatsApp, login, etc.), de todos os usuários. Sem filtro nem formatação bonita — é
-                    pra copiar um período e colar direto numa conversa de análise.
-                </p>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-sky-500/10 shrink-0">
+                    <Terminal className="size-5 text-sky-500" />
+                </div>
+                <div>
+                    <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Log Bruto de Atividade</h1>
+                    <p className="text-zinc-400 text-sm">
+                        Toda ação que muda estado no backend (criar campanha, enviar disparo, conectar
+                        WhatsApp, login, etc.), de todos os usuários. Sem filtro nem formatação bonita — é
+                        pra copiar um período e colar direto numa conversa de análise.
+                    </p>
+                </div>
             </div>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100">Exportar período</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100">Exportar período</CardTitle>
                     <CardDescription className="text-zinc-500">
                         Escolha o intervalo de datas e clique em copiar — o texto vai direto pra área de
                         transferência.
@@ -73,7 +75,7 @@ export default function AdminRawActivityLogsPage() {
                                 type="date"
                                 value={from}
                                 onChange={(e) => setFrom(e.target.value)}
-                                className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200"
+                                className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-200"
                             />
                         </div>
                         <div className="space-y-1">
@@ -82,10 +84,10 @@ export default function AdminRawActivityLogsPage() {
                                 type="date"
                                 value={to}
                                 onChange={(e) => setTo(e.target.value)}
-                                className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200"
+                                className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-200"
                             />
                         </div>
-                        <Button onClick={handleCopy} disabled={loading} className="gap-2">
+                        <Button onClick={handleCopy} disabled={loading} className="rounded-full font-extrabold gap-2">
                             {copied ? <Check className="w-4 h-4" /> : <ClipboardCopy className="w-4 h-4" />}
                             {loading ? 'Gerando...' : copied ? 'Copiado!' : 'Copiar log do período'}
                         </Button>

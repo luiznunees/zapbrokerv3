@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -57,34 +58,36 @@ export default function AdminLogsPage() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-3">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold text-zinc-100 flex items-center gap-2">
-                        <ShieldAlert className="text-red-500" />
-                        Logs do Sistema
-                    </h1>
-                    <p className="text-zinc-400">Eventos reais do sistema — atualiza automaticamente a cada 20s.</p>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center size-12 rounded-2xl bg-red-500/10 shrink-0">
+                        <ShieldAlert className="size-5 text-red-500" />
+                    </div>
+                    <div>
+                        <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Logs do Sistema</h1>
+                        <p className="text-zinc-400 text-sm">Eventos reais do sistema — atualiza automaticamente a cada 20s.</p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+                    <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-full p-1">
                         {SEVERITY_FILTERS.map(f => (
                             <button
                                 key={f.value}
                                 onClick={() => setSeverity(f.value)}
-                                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${severity === f.value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                className={`px-3 py-1.5 text-xs rounded-full font-medium transition-colors ${severity === f.value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
                             >
                                 {f.label}
                             </button>
                         ))}
                     </div>
-                    <Button onClick={() => fetchLogs()} variant="outline" className="gap-2 border-zinc-700 hover:bg-zinc-800 text-zinc-300">
+                    <Button onClick={() => fetchLogs()} variant="outline" className="rounded-full gap-2 border-zinc-700 hover:bg-zinc-800 text-zinc-300">
                         <RefreshCcw className="w-4 h-4" /> Atualizar
                     </Button>
                 </div>
             </div>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100">Eventos Recentes</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100">Eventos Recentes</CardTitle>
                     <CardDescription className="text-zinc-500">Últimos eventos do sistema (autenticação, WhatsApp, campanhas, pagamentos, admin).</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -92,7 +95,7 @@ export default function AdminLogsPage() {
                         {loading ? (
                             <div className="text-center py-8 text-zinc-500">Carregando logs...</div>
                         ) : logs.length === 0 ? (
-                            <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-lg">
+                            <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl">
                                 <ShieldAlert className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                 <p>Nenhum evento encontrado.</p>
                                 <p className="text-xs mt-2">O sistema está operando normalmente.</p>
@@ -100,13 +103,13 @@ export default function AdminLogsPage() {
                         ) : (
                             <div className="space-y-4">
                                 {logs.map((log) => (
-                                    <div key={log.id} className="flex items-start gap-4 p-4 rounded-lg bg-zinc-950/50 border border-zinc-800">
+                                    <div key={log.id} className="flex items-start gap-4 p-4 rounded-2xl bg-zinc-950/50 border border-zinc-800">
                                         <div className={`p-2 rounded-full ${LEVEL_STYLES[log.level] || LEVEL_STYLES.INFO}`}>
                                             <AlertTriangle className="w-4 h-4" />
                                         </div>
                                         <div className="flex-1 space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <Badge variant="outline" className={LEVEL_STYLES[log.level] || LEVEL_STYLES.INFO}>
+                                                <Badge variant="outline" className={cn("rounded-full", LEVEL_STYLES[log.level] || LEVEL_STYLES.INFO)}>
                                                     {log.level}
                                                 </Badge>
                                                 <span className="text-xs font-mono text-zinc-500">

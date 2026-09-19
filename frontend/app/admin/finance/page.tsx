@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, TrendingDown, DollarSign, Cpu, Zap } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Cpu, Zap, Wallet } from 'lucide-react'
 
 interface FinanceOverview {
     period: { startDate: string; endDate: string }
@@ -42,11 +42,16 @@ export default function AdminFinancePage() {
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold text-zinc-100">Financeiro</h1>
-                <p className="text-sm text-zinc-500 mt-1">
-                    Mês atual · câmbio usado: 1 USD ≈ {brl(data.exchangeRateUsed)}
-                </p>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <Wallet className="size-5 text-primary" />
+                </div>
+                <div>
+                    <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Financeiro</h1>
+                    <p className="text-sm text-zinc-500 mt-1">
+                        Mês atual · câmbio usado: 1 USD ≈ {brl(data.exchangeRateUsed)}
+                    </p>
+                </div>
             </div>
 
             {aiCredits?.configured && (
@@ -73,31 +78,31 @@ export default function AdminFinancePage() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-medium text-zinc-400">Faturamento</p>
                             <DollarSign className="w-5 h-5 text-emerald-500" />
                         </div>
-                        <h3 className="text-3xl font-bold text-zinc-100">{brl(data.revenue.totalBRL)}</h3>
+                        <h3 className="font-display text-3xl font-extrabold text-zinc-100">{brl(data.revenue.totalBRL)}</h3>
                         <p className="text-xs text-zinc-500 mt-2">{data.revenue.paymentCount} pagamento(s) confirmado(s)</p>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-medium text-zinc-400">Custo de IA</p>
                             <Cpu className="w-5 h-5 text-amber-500" />
                         </div>
-                        <h3 className="text-3xl font-bold text-zinc-100">{brl(data.cost.totalBRL)}</h3>
+                        <h3 className="font-display text-3xl font-extrabold text-zinc-100">{brl(data.cost.totalBRL)}</h3>
                         <p className="text-xs text-zinc-500 mt-2">
                             {data.cost.aiCallCount} chamada(s) · ${data.cost.totalUsd.toFixed(4)} USD
                         </p>
                     </CardContent>
                 </Card>
 
-                <Card className={`bg-zinc-900 border-zinc-800 ${isProfitable ? '' : 'border-red-900/50'}`}>
+                <Card className={`bg-zinc-900 border-zinc-800 rounded-3xl ${isProfitable ? '' : 'border-red-900/50'}`}>
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-medium text-zinc-400">Lucro estimado</p>
@@ -105,7 +110,7 @@ export default function AdminFinancePage() {
                                 ? <TrendingUp className="w-5 h-5 text-emerald-500" />
                                 : <TrendingDown className="w-5 h-5 text-red-500" />}
                         </div>
-                        <h3 className={`text-3xl font-bold ${isProfitable ? 'text-zinc-100' : 'text-red-400'}`}>
+                        <h3 className={`font-display text-3xl font-extrabold ${isProfitable ? 'text-zinc-100' : 'text-red-400'}`}>
                             {brl(data.profit.totalBRL)}
                         </h3>
                         <p className="text-xs text-zinc-500 mt-2">
@@ -117,9 +122,9 @@ export default function AdminFinancePage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardHeader>
-                        <CardTitle className="text-zinc-100 text-base">Receita por plano</CardTitle>
+                        <CardTitle className="font-display font-bold text-zinc-100 text-base">Receita por plano</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         {Object.entries(data.revenue.byPlan).length === 0 && (
@@ -134,9 +139,9 @@ export default function AdminFinancePage() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardHeader>
-                        <CardTitle className="text-zinc-100 text-base">Custo de IA por provedor</CardTitle>
+                        <CardTitle className="font-display font-bold text-zinc-100 text-base">Custo de IA por provedor</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         {Object.entries(data.cost.byProvider).length === 0 && (
@@ -152,9 +157,9 @@ export default function AdminFinancePage() {
                 </Card>
             </div>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100 text-base">Usuários que mais custam em IA</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100 text-base">Usuários que mais custam em IA</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {data.cost.topUsers.length === 0 ? (

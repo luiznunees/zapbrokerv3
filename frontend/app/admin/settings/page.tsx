@@ -27,14 +27,16 @@ export default function AdminSettingsPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-zinc-100 flex items-center gap-2">
-                <Settings className="text-zinc-500" />
-                Configurações do Sistema
-            </h1>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <Settings className="size-5 text-primary" />
+                </div>
+                <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Configurações do Sistema</h1>
+            </div>
 
-            <Card className="bg-zinc-900 border-zinc-800 opacity-50 pointer-events-none">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl opacity-50 pointer-events-none">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100">Manutenção & Acesso</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100">Manutenção & Acesso</CardTitle>
                     <CardDescription className="text-zinc-500">Controle global de acesso ao sistema — planejado, ainda não implementado. Os controles abaixo são apenas ilustrativos.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -55,21 +57,21 @@ export default function AdminSettingsPage() {
                 </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100">Cache do Servidor</CardTitle>
+                    <CardTitle className="font-display font-bold text-zinc-100">Cache do Servidor</CardTitle>
                     <CardDescription className="text-zinc-500">Ações de manutenção.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => window.location.reload()}>
+                    <Button variant="outline" className="rounded-full border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => window.location.reload()}>
                         Recarregar Aplicação
                     </Button>
                 </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
-                    <CardTitle className="text-zinc-100 flex items-center gap-2">
+                    <CardTitle className="font-display font-bold text-zinc-100 flex items-center gap-2">
                         <Rocket className="size-4 text-primary" />
                         Deploy (EasyPanel)
                     </CardTitle>
@@ -82,7 +84,7 @@ export default function AdminSettingsPage() {
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                            className="rounded-full border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                             disabled={deploying !== null}
                             onClick={() => handleDeploy('api')}
                         >
@@ -90,7 +92,7 @@ export default function AdminSettingsPage() {
                         </Button>
                         <Button
                             variant="outline"
-                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                            className="rounded-full border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                             disabled={deploying !== null}
                             onClick={() => handleDeploy('app')}
                         >

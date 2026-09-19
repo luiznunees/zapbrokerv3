@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, AlertTriangle, MessageSquare, Server, ArrowRight, Zap } from 'lucide-react'
+import { Users, AlertTriangle, MessageSquare, Server, ArrowRight, Zap, LayoutDashboard } from 'lucide-react'
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<any>(null)
@@ -36,7 +36,15 @@ export default function AdminDashboardPage() {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-zinc-100">Visão Geral do Sistema</h1>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <LayoutDashboard className="size-5 text-primary" />
+                </div>
+                <div>
+                    <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Visão Geral do Sistema</h1>
+                    <p className="text-zinc-400 text-sm">Status em tempo real do ZapBroker.</p>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
@@ -67,9 +75,9 @@ export default function AdminDashboardPage() {
 
             {/* Placeholder for charts or recent activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardHeader>
-                        <CardTitle className="text-zinc-100">Logs Recentes</CardTitle>
+                        <CardTitle className="font-display font-bold text-zinc-100">Logs Recentes</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <Link
@@ -82,9 +90,9 @@ export default function AdminDashboardPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-zinc-900 border-zinc-800">
+                <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                     <CardHeader>
-                        <CardTitle className="text-zinc-100">Alertas do Sistema</CardTitle>
+                        <CardTitle className="font-display font-bold text-zinc-100">Alertas do Sistema</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {hasAnyAlert ? (
@@ -133,11 +141,11 @@ export default function AdminDashboardPage() {
 
 function StatCard({ title, value, icon: Icon, color }: any) {
     return (
-        <Card className="bg-zinc-900 border-zinc-800">
+        <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
             <CardContent className="p-6 flex items-center justify-between">
                 <div>
                     <p className="text-sm font-medium text-zinc-400">{title}</p>
-                    <h3 className="text-3xl font-bold text-zinc-100 mt-2">{value}</h3>
+                    <h3 className="font-display text-3xl font-extrabold text-zinc-100 mt-2">{value}</h3>
                 </div>
                 <div className={`p-4 rounded-full bg-zinc-800/50 ${color}`}>
                     <Icon className="w-6 h-6" />

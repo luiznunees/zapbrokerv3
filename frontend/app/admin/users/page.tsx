@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Ban, CheckCircle2, MoreVertical, Smartphone } from 'lucide-react'
+import { Search, Ban, CheckCircle2, MoreVertical, Smartphone, Users } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function AdminUsersPage() {
@@ -47,17 +48,23 @@ export default function AdminUsersPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-zinc-100">Gerenciar Usuários</h1>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <Users className="size-5 text-primary" />
+                </div>
+                <div>
+                    <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Usuários</h1>
+                    <p className="text-zinc-400 text-sm">Buscar, acompanhar e moderar contas do ZapBroker.</p>
+                </div>
             </div>
 
-            <Card className="bg-zinc-900 border-zinc-800">
+            <Card className="bg-zinc-900 border-zinc-800 rounded-3xl">
                 <CardHeader>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
                         <Input
                             placeholder="Buscar por nome ou email..."
-                            className="pl-10 bg-zinc-950 border-zinc-800 text-zinc-100"
+                            className="pl-10 bg-zinc-950 border-zinc-800 text-zinc-100 rounded-xl"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
@@ -98,7 +105,7 @@ export default function AdminUsersPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="border-primary/20 text-primary bg-primary/10">
+                                            <Badge variant="outline" className="rounded-full border-primary/20 text-primary bg-primary/10">
                                                 {user.plan}
                                             </Badge>
                                         </TableCell>
@@ -109,7 +116,7 @@ export default function AdminUsersPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant={user.status === 'active' ? 'default' : 'secondary'} className={user.status === 'active' ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" : "bg-zinc-700 text-zinc-400"}>
+                                            <Badge variant={user.status === 'active' ? 'default' : 'secondary'} className={cn("rounded-full", user.status === 'active' ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" : "bg-zinc-700 text-zinc-400")}>
                                                 {user.status || 'Free'}
                                             </Badge>
                                         </TableCell>
@@ -120,7 +127,7 @@ export default function AdminUsersPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="hover:text-red-500 hover:bg-red-500/10"
+                                                className="rounded-full hover:text-red-500 hover:bg-red-500/10"
                                                 onClick={() => handleBan(user.id)}
                                             >
                                                 <Ban className="w-4 h-4" />
@@ -138,7 +145,7 @@ export default function AdminUsersPage() {
                             size="sm"
                             disabled={page === 1}
                             onClick={() => setPage(page - 1)}
-                            className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                            className="rounded-full border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
                         >
                             Anterior
                         </Button>
@@ -147,7 +154,7 @@ export default function AdminUsersPage() {
                             size="sm"
                             disabled={users.length < 20}
                             onClick={() => setPage(page + 1)}
-                            className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                            className="rounded-full border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
                         >
                             Próximo
                         </Button>

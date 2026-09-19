@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/services/api'
-import { AlertTriangle, Star, Loader2, Mail, User } from 'lucide-react'
+import { AlertTriangle, Star, Loader2, Mail, User, MessageSquareHeart } from 'lucide-react'
 
 interface FeedbackRow {
     id: string
@@ -37,23 +37,28 @@ export default function AdminFeedbackPage() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-zinc-100">Feedback do Beta</h1>
-                <p className="text-zinc-400 text-sm mt-1">Respostas da página de feedback (não-linkada) dos testers do trial.</p>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-primary/10 shrink-0">
+                    <MessageSquareHeart className="size-5 text-primary" />
+                </div>
+                <div>
+                    <h1 className="font-display text-2xl font-extrabold text-zinc-100 tracking-tight">Feedback do Beta</h1>
+                    <p className="text-zinc-400 text-sm mt-1">Respostas da página de feedback (linkada em Configurações → Perfil) dos testers do trial.</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4">
                     <p className="text-xs text-zinc-500">Respostas</p>
-                    <p className="text-2xl font-bold text-zinc-100 mt-1">{rows.length}</p>
+                    <p className="font-display text-2xl font-extrabold text-zinc-100 mt-1">{rows.length}</p>
                 </div>
-                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4">
                     <p className="text-xs text-zinc-500">Nota média (0-10)</p>
-                    <p className="text-2xl font-bold text-zinc-100 mt-1">{avgOverall}</p>
+                    <p className="font-display text-2xl font-extrabold text-zinc-100 mt-1">{avgOverall}</p>
                 </div>
-                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4">
                     <p className="text-xs text-zinc-500">Relataram erro</p>
-                    <p className="text-2xl font-bold text-amber-400 mt-1">{errorCount}</p>
+                    <p className="font-display text-2xl font-extrabold text-amber-400 mt-1">{errorCount}</p>
                 </div>
             </div>
 
@@ -71,7 +76,7 @@ export default function AdminFeedbackPage() {
 
             <div className="space-y-3">
                 {rows.map((r) => (
-                    <div key={r.id} className="rounded-xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
+                    <div key={r.id} className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 {r.overall_rating != null && (
