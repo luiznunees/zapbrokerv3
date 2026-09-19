@@ -16,6 +16,8 @@ const APP_PATH_PREFIXES = [
     "/checkout",
     "/assinar",
     "/admin",
+    "/feedback",
+    "/zbteam",
 ];
 
 function isAppPath(pathname: string) {

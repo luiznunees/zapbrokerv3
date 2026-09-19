@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { User, CreditCard, Loader2, LogOut, Trash2, Check, Zap, Shield } from 'lucide-react'
+import Link from 'next/link'
+import { User, CreditCard, Loader2, LogOut, Trash2, Check, Zap, Shield, MessageSquareHeart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import { api } from '@/services/api'
@@ -262,6 +263,21 @@ export default function SettingsPage() {
                             <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors text-sm">
                                 <LogOut className="w-4 h-4" /> Sair da conta
                             </button>
+                        </div>
+
+                        <div className="pt-4 border-t border-border">
+                            <div className="flex items-center justify-between p-4 bg-background rounded-lg border border-border">
+                                <div>
+                                    <h5 className="font-medium">Ajudou a testar o ZapBroker?</h5>
+                                    <p className="text-xs text-muted-foreground">Conta pra gente o que achou, o que confundiu, ou se algo deu erro.</p>
+                                </div>
+                                <Link
+                                    href="/feedback"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors shrink-0"
+                                >
+                                    <MessageSquareHeart className="w-4 h-4" /> Deixar feedback
+                                </Link>
+                            </div>
                         </div>
 
                         <div className="pt-6 border-t border-border">
