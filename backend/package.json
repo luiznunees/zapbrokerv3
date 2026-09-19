@@ -10,7 +10,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:agent": "ts-node scripts/agent-regression.ts",
     "test:agent:e2e": "ts-node scripts/agent-e2e.ts",
-    "test:agent:corretor": "ts-node scripts/agent-corretor.ts"
+    "test:agent:corretor": "ts-node scripts/agent-corretor.ts",
+    "relatorio:agente": "ts-node scripts/relatorio-agente.ts"
   },
   "keywords": [],
   "author": "",

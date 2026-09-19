@@ -38,6 +38,7 @@ backend/node_modules
 backend/.env
 backend/uploads/
 backend/*.log
+backend/relatorios/
 
 # Frontend specific
 frontend/.next
