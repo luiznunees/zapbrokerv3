@@ -45,6 +45,7 @@ create table if not exists instances (
   connected_at timestamp with time zone,
   self_reported_chip_days integer, -- idade real do chip no WhatsApp, informada pelo usuário (base do aquecimento, não connected_at)
   unstable_since timestamp with time zone, -- desde quando uma instância conectada começou a responder algo != "open" (debounce de desconexão)
+  status_since timestamp with time zone default now(), -- desde quando o status atual (já confirmado) está valendo
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );

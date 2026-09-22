@@ -18,6 +18,23 @@ const processQueue = async () => {
     isProcessing = true;
 
     try {
+        // Rede de segurança: mensagens que ficaram em QUEUED por muito tempo sem progredir
+        // (worker reiniciado/travado no meio do job) voltam pra PENDING pra serem
+        // reenfileiradas — sem isso, uma falha silenciosa deixava a campanha presa pra sempre
+        // (achado real em produção — ver relatório /relatorio-agente). Com o timeout novo em
+        // evolutionService.ts isso deve virar FAILED sozinho na maioria dos casos; isso aqui
+        // cobre o resto (crash do processo, por exemplo).
+        const stuckCutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+        const { data: requeued } = await supabase
+            .from('campaign_messages')
+            .update({ status: 'PENDING', updated_at: new Date().toISOString() })
+            .eq('status', 'QUEUED')
+            .lt('updated_at', stuckCutoff)
+            .select('id');
+        if (requeued && requeued.length > 0) {
+            console.warn(`[CampaignProcessor] ${requeued.length} mensagem(ns) travada(s) em QUEUED por mais de 3min — revertidas pra PENDING.`);
+        }
+
         // Fetch PENDING messages
         const { data: messages, error } = await supabase
             .from('campaign_messages')

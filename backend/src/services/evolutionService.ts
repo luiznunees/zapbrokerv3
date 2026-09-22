@@ -12,6 +12,11 @@ if (!EVOLUTION_API_KEY) {
 
 const api = axios.create({
     baseURL: EVOLUTION_API_URL,
+    // Sem isso, uma instância desconectada podia deixar a requisição pendurada
+    // indefinidamente — com concurrency:1 no worker (campaignWorker.ts), isso travava a fila
+    // inteira depois da 1ª mensagem, sem erro nem log (achado real em produção: disparo saía
+    // pra 1 lead e nunca mais avançava — ver relatório /relatorio-agente).
+    timeout: 45000,
     headers: {
         'apikey': EVOLUTION_API_KEY,
         'Content-Type': 'application/json'

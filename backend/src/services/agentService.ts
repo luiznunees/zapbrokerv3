@@ -86,6 +86,9 @@ export interface CampaignDraft {
   // needsAntiBanWarning cobre os três, isso só define o texto mostrado.
   antiBanReasons?: Array<'volume' | 'cooldown' | 'warmup_limit'>;
   antiBanWarmupInfo?: { daysSinceConnected: number | null; recommendedDailyLimit: number | null; sentLast24h: number; basis?: 'chip' | 'connection' };
+  // 'extreme' bloqueia de verdade no confirm_campaign (ver checagem redundante lá) — não
+  // dá pra confirmar mesmo com antiBanAcknowledged=true. 'moderate' é o aviso de sempre.
+  antiBanSeverity?: 'moderate' | 'extreme';
   needsQuotaWarning?: boolean;
   quotaAcknowledged?: boolean;
   readyToSend?: boolean;
@@ -169,7 +172,7 @@ const AGENT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          contactListName: { type: 'string', description: 'Nome (ou parte) da lista de contatos que o usuário confirmou por texto (ex: respondeu "sim" depois de você oferecer o nome dela, ou citou o nome). Prefira request_contact_list_selection quando ainda não estiver claro qual lista ou houver mais de uma.' },
+          contactListName: { type: 'string', description: 'Nome (ou parte) da lista de contatos que o usuário confirmou por texto (ex: respondeu "sim" depois de você oferecer o nome dela, ou citou o nome). Prefira request_contact_list_selection quando ainda não estiver claro qual lista ou houver mais de uma. NUNCA preencha isso a partir de um bloco de nomes/telefones que o usuário colou no chat — isso não importa os contatos, só amarra o disparo a uma lista já existente (possivelmente errada). Se o usuário colou uma lista, chame suggest_import_leads.' },
           instanceName: { type: 'string', description: 'Nome (ou parte) do WhatsApp que o usuário quer usar (disparo por um único número)' },
           instanceNames: { type: 'array', items: { type: 'string' }, description: 'Nomes (ou partes) de 2+ WhatsApps quando o corretor quer dividir o disparo entre vários números — use em vez de instanceName' },
           messageVariations: { type: 'array', items: { type: 'string' }, description: 'Uma ou mais variações da mensagem a enviar' },
@@ -275,7 +278,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'suggest_import_leads',
-      description: 'Sugere (mostra um botão) pro usuário importar novos leads/contatos pra plataforma.',
+      description: 'Sugere (mostra um botão) pro usuário importar novos leads/contatos pra plataforma. O importador SÓ aceita upload de arquivo (CSV, Excel ou PDF) — não existe (e nunca existiu) importação por texto colado no chat. Nunca diga ao usuário que ele pode "colar a lista aqui" ou similar; a única forma de importar é pelo arquivo.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -531,6 +534,21 @@ function messageReferencesContacts(text: string): boolean {
   return /\b(lista|listas|contato|contatos|lead|leads)\b/i.test(text);
 }
 
+// Conta telefones únicos citados no texto — usado tanto pra detectar que o usuário colou uma
+// lista de leads no chat quanto pra flagrar o agente confirmando uma quantidade que não bate
+// com o draft (achado real em produção: 467 leads colados, draft amarrado a uma lista antiga
+// de 2, disparo confirmado e enviado só pros 2 — ver resolveDraftReferences/confirm_campaign).
+function countUniquePhoneMatches(text: string): number {
+  const matches = [...text.matchAll(contactService.PHONE_REGEX)].map((m) => m[0].replace(/\D/g, ''));
+  return new Set(matches).size;
+}
+
+const PASTED_LEAD_LIST_MIN_PHONES = 5;
+
+function looksLikePastedLeadList(text: string): boolean {
+  return countUniquePhoneMatches(text) >= PASTED_LEAD_LIST_MIN_PHONES;
+}
+
 function userWantsToConnectWhatsApp(text: string): boolean {
   const t = text.toLowerCase();
   const verb = /\b(conectar|conecta|conecte|conecto|vincular|vincule|parear|pareia|sincronizar|escanear|scanear)\b/.test(t);
@@ -652,6 +670,7 @@ function deriveRiskComponent(draft: CampaignDraft | null): AgentComponent | null
         leadCount: draft.leadCount,
         reasons: draft.antiBanReasons ?? ['volume'],
         warmup: draft.antiBanWarmupInfo,
+        severity: draft.antiBanSeverity ?? 'moderate',
       }),
     };
   }
@@ -721,10 +740,6 @@ function correctFalseDispatchClaim(reply: string, state: ToolState): string {
   return `Ainda não — esse disparo não saiu (o envio só acontece depois de clicar em "Confirmar disparo") e ainda falta configurar:\n\n${buildDraftChecklist(state.draft)}`;
 }
 
-// Acima disso, disparar pra uma lista grande usando um único número aumenta bastante o
-// risco de bloqueio do WhatsApp — vale um aviso explícito, não só uma sugestão em texto.
-const ANTIBAN_LEAD_THRESHOLD = 300;
-
 async function recomputeDraftMeta(userId: string, planId: string, draft: CampaignDraft): Promise<CampaignDraft> {
   if (draft.contactListId && draft.leadCount !== undefined) {
     const quota = await QuotaService.checkAvailability(userId, planId, 1);
@@ -734,45 +749,39 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
   }
 
   // Avisos de risco calculados aqui (não pelo LLM) — garantem que o corretor sempre vê o
-  // aviso antes de poder disparar, independente do modelo "lembrar" de mencionar.
-  const usingSingleInstance = !draft.instanceIds || draft.instanceIds.length <= 1;
-  const soleInstanceId = draft.instanceIds?.[0] ?? draft.instanceId;
+  // aviso antes de poder disparar, independente do modelo "lembrar" de mencionar. Mesma
+  // função usada por campaignService.createCampaign pro bloqueio de verdade (checkAntiBanSeverity)
+  // — uma fonte só de verdade, pra não divergir entre o aviso do chat e o bloqueio real.
   const leadCount = draft.leadCount ?? 0;
-  const riskReasons: Array<'volume' | 'cooldown' | 'warmup_limit'> = [];
+  const soleInstanceId = draft.instanceIds?.[0] ?? draft.instanceId;
+  const instanceIdsForCheck = draft.instanceIds && draft.instanceIds.length > 0 ? draft.instanceIds : (soleInstanceId ? [soleInstanceId] : []);
 
-  if (draft.contactListId && leadCount > ANTIBAN_LEAD_THRESHOLD && usingSingleInstance) {
-    riskReasons.push('volume');
-  }
-
-  // Aquecimento só é checado com 1 número — com vários, o volume já se divide entre
-  // eles (mesma regra do aviso por volume acima).
-  if (draft.contactListId && usingSingleInstance && soleInstanceId) {
+  if (draft.contactListId && instanceIdsForCheck.length > 0) {
     try {
-      const { data: instanceRow } = await supabase
-        .from('instances')
-        .select('connected_at, self_reported_chip_days')
-        .eq('id', soleInstanceId)
-        .single();
-      const warmup = await campaignService.getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null, instanceRow?.self_reported_chip_days ?? null);
-      if (warmup.inCooldown) {
-        riskReasons.push('cooldown');
-      } else if (warmup.recommendedDailyLimit !== null && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit) {
-        riskReasons.push('warmup_limit');
+      const antiban = await campaignService.checkAntiBanSeverity(userId, leadCount, instanceIdsForCheck);
+      draft.antiBanReasons = antiban.reasons;
+      draft.antiBanSeverity = antiban.severity;
+      if (antiban.warmup) {
+        draft.antiBanWarmupInfo = {
+          daysSinceConnected: antiban.warmup.daysSinceConnected,
+          recommendedDailyLimit: antiban.warmup.recommendedDailyLimit,
+          sentLast24h: antiban.warmup.sentLast24h,
+          basis: antiban.warmup.basis,
+        };
       }
-      draft.antiBanWarmupInfo = {
-        daysSinceConnected: warmup.daysSinceConnected,
-        recommendedDailyLimit: warmup.recommendedDailyLimit,
-        sentLast24h: warmup.sentLast24h,
-        basis: warmup.basis,
-      };
     } catch {
       // Falha na checagem não deve travar o draft — só não gera esse aviso específico.
+      draft.antiBanReasons = [];
     }
+  } else {
+    draft.antiBanReasons = [];
   }
 
-  draft.antiBanReasons = riskReasons;
-  draft.needsAntiBanWarning = riskReasons.length > 0;
-  if (!draft.needsAntiBanWarning) draft.antiBanAcknowledged = false;
+  draft.needsAntiBanWarning = (draft.antiBanReasons?.length ?? 0) > 0;
+  if (!draft.needsAntiBanWarning) {
+    draft.antiBanAcknowledged = false;
+    draft.antiBanSeverity = undefined;
+  }
 
   draft.needsQuotaWarning = Boolean(draft.quota && draft.quota.available && draft.quota.remaining === 1);
   if (!draft.needsQuotaWarning) draft.quotaAcknowledged = false;
@@ -861,7 +870,7 @@ ${recentSessionsText}
 VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder de memória:
 - get_contact_lists / get_whatsapp_instances / get_campaign_stats: chame ANTES de responder qualquer pergunta sobre listas, WhatsApps conectados ou desempenho de campanhas. Nunca invente números ou nomes.
 - update_campaign_draft: chame toda vez que entender uma informação nova relevante pro disparo (mensagem, WhatsApp, agendamento). Use "instanceName" pra um único número, ou "instanceNames" (lista) quando o corretor quiser dividir o disparo entre 2+ números conectados — o envio real faz o balanceamento automático entre eles, você só precisa registrar quais números usar.
-- request_contact_list_selection: chame quando faltar a lista no rascunho e o assunto de lista/contatos/leads vier à tona pela primeira vez — isso mostra um seletor visual pro usuário. Se depois disso o usuário confirmar por TEXTO (ex: "sim", "essa mesma", citar o nome da lista) em vez de clicar no seletor, chame update_campaign_draft com "contactListName" pra registrar — nunca diga "lista selecionada" sem ter chamado uma dessas duas.
+- request_contact_list_selection: chame quando faltar a lista no rascunho e o assunto de lista/contatos/leads vier à tona pela primeira vez — isso mostra um seletor visual pro usuário. Se depois disso o usuário confirmar por TEXTO (ex: "sim", "essa mesma", citar o nome da lista) em vez de clicar no seletor, chame update_campaign_draft com "contactListName" pra registrar — nunca diga "lista selecionada" sem ter chamado uma dessas duas. IMPORTANTE: se o usuário COLOU um bloco de nomes/telefones no chat (uma lista de leads em texto), isso NUNCA é uma confirmação de lista por nome — nunca chame update_campaign_draft com contactListName nesse caso, mesmo que o texto tenha um título parecido com o nome de uma lista existente. Nesse caso chame suggest_import_leads e explique que precisa importar esses contatos pelo importador (upload de arquivo CSV, Excel ou PDF) antes de disparar — o importador NÃO aceita colar a lista aqui no chat, nunca prometa isso.
 - request_media_upload: chame se quiser oferecer anexar imagem/vídeo/áudio ao disparo.
 - request_timing_confirmation: chame quando lista e mensagem já estiverem definidas e faltar confirmar o tempo entre mensagens/tamanho dos lotes — isso mostra um seletor visual com valores recomendados, mas quem decide é o usuário. NUNCA pergunte esses números em texto nem assuma que ele aceitou o valor recomendado sem passar por esse seletor.
 - request_schedule_confirmation: chame sempre que o usuário mencionar agendar/data/hora pro disparo — NÃO tente converter "amanhã de manhã" pra ISO você mesmo, sempre mostre o seletor.
@@ -885,9 +894,9 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 
 AVISO PROATIVO DE RISCO (chip único): se o CONTEXTO DO CORRETOR indicar que ele só usa 1 número de WhatsApp e o disparo em andamento for de volume alto (ou check_instance_rate_limit retornar risco "moderado" ou "alto"), avise proativamente ANTES de confirmar o disparo — sem que ele precise perguntar — que dividir o envio entre 2 números reduz bastante o risco de bloqueio, e chame suggest_connect_whatsapp oferecendo conectar um segundo número. Se ele já tiver 2+ números conectados e a lista for grande, pergunte se quer dividir o disparo entre os números conectados em vez de mandar tudo por um só.
 
-AQUECIMENTO DE CHIP (recomendação, NUNCA bloqueio — o corretor sempre pode seguir em frente mesmo se você avisar): chame check_instance_rate_limit e olhe os campos inCooldown, recommendedDailyLimit e daysSinceConnected antes de ajudar a montar um disparo grande num número recém-conectado.
-- Se inCooldown vier true (número conectado há menos de 24h): desaconselhe fortemente disparar por esse número agora — explique que o ideal é esperar completar 24h desde a conexão pra reduzir risco de bloqueio, mesmo que seja só pra testar. Deixe claro que é uma recomendação forte, não uma trava do sistema.
-- Se o volume pretendido no rascunho for maior que o recommendedDailyLimit retornado (quando ele não vier nulo): avise que está acima do recomendado pra idade daquele número, e sugira reduzir a lista, dividir entre os números conectados (ver AVISO PROATIVO DE RISCO acima), ou esperar mais alguns dias antes de ir com tudo.
+AQUECIMENTO DE CHIP: chame check_instance_rate_limit e olhe os campos inCooldown, recommendedDailyLimit e daysSinceConnected antes de ajudar a montar um disparo grande num número recém-conectado. Existem DOIS níveis — não confunda um com o outro:
+- **Risco moderado (recomendação, o corretor pode seguir em frente mesmo se você avisar)**: se inCooldown vier true, desaconselhe fortemente disparar por esse número agora — explique que o ideal é esperar completar 24h desde a conexão, mesmo que seja só pra testar. Se o volume pretendido for maior que o recommendedDailyLimit (quando não vier nulo), avise que está acima do recomendado e sugira reduzir a lista, dividir entre números conectados (ver AVISO PROATIVO DE RISCO acima), ou esperar mais alguns dias. Nesses casos, suggest_confirm_campaign gera o botão normalmente — é aviso, não trava.
+- **Risco extremo (bloqueio de verdade, sem exceção)**: quando o chip está em cooldown total (dia 0) e a lista é grande (dezenas de leads), ou o volume passa muito do teto recomendado, o confirm_campaign vai recusar o disparo mesmo depois do usuário confirmar o aviso — o sistema devolve uma mensagem explicando isso. NÃO prometa que "é só confirmar mesmo assim" nesse cenário; se o usuário insistir, explique que não tem como pular essa checagem e ofereça as alternativas (reduzir lista, esperar aquecer, dividir entre números).
 - recommendedDailyLimit ou daysSinceConnected nulos significam chip já maduro ou sem dado de conexão — não há necessidade de avisar sobre aquecimento nesses casos.
 
 PRIORIDADE DA CONVERSA: se o usuário fizer uma pergunta ou comentário que não seja sobre o rascunho de disparo em andamento (dúvida de vendas, pergunta sobre um lead, bate-papo, qualquer coisa fora do fluxo), RESPONDA ISSO PRIMEIRO, de forma direta e completa — mesmo que exista um disparo em andamento. Só depois de responder, se fizer sentido, retome o disparo com uma frase curta tipo "quer continuar de onde paramos no disparo?". Nunca ignore a pergunta do usuário pra insistir no que falta no rascunho — isso é o erro mais irritante que você pode cometer.
@@ -1225,11 +1234,31 @@ async function executeTool(
       return { campaigns: campaignsSummary, stalledLeads: stalledCount };
 
     case 'update_campaign_draft': {
-      state.draft = resolveDraftReferences(state.draft ?? {}, args || {}, lists, instances);
+      // Rede de segurança no servidor: mesmo se o modelo ignorar a instrução do prompt (linha
+      // ~873) e tentar amarrar um bloco de nomes/telefones colado a uma lista existente por
+      // nome, isso nunca deve vincular o draft silenciosamente a uma lista errada (achado real
+      // em produção — 467 leads colados, draft amarrado a uma lista antiga de 2, disparo
+      // confirmado e enviado só pros 2). Processa o resto do patch normalmente — a mesma
+      // chamada pode trazer outras infos válidas (mensagem, WhatsApp etc).
+      let patch = args || {};
+      let pastedListWarning: string | undefined;
+      if (typeof patch.contactListName === 'string' && looksLikePastedLeadList(patch.contactListName)) {
+        const { contactListName, ...rest } = patch;
+        patch = rest;
+        state.actions.push({ type: 'import_leads', title: 'Importar leads' });
+        pastedListWarning = 'Esse texto parece uma lista de leads colada, não o nome de uma lista existente — não vinculei o disparo a nenhuma lista. Explique pro usuário que precisa importar esses contatos pelo botão "Importar leads" (upload de arquivo CSV, Excel ou PDF) antes de montar o disparo — colar a lista aqui no chat não importa os contatos.';
+      }
+
+      state.draft = resolveDraftReferences(state.draft ?? {}, patch, lists, instances);
       state.draft = await recomputeDraftMeta(userId, planId, state.draft);
       await saveDraft(userId, sessionId, state.draft);
       state.component = state.component ?? deriveRiskComponent(state.draft);
-      return { draftStatus: buildDraftChecklist(state.draft), readyToSend: state.draft.readyToSend, quota: state.draft.quota };
+      return {
+        draftStatus: buildDraftChecklist(state.draft),
+        readyToSend: state.draft.readyToSend,
+        quota: state.draft.quota,
+        ...(pastedListWarning ? { warning: pastedListWarning } : {}),
+      };
     }
 
     case 'request_contact_list_selection':
@@ -2686,6 +2715,24 @@ export async function executeAction(
         return {
           success: false,
           message: 'Antes de disparar, confirme o tempo entre mensagens e o tamanho dos lotes no seletor.',
+        };
+      }
+
+      // Combinação extrema de risco de bloqueio (chip em cooldown total + lista grande, ou
+      // volume muito acima do teto de aquecimento) — bloqueio de verdade, igual à cota
+      // abaixo. Lido do draft já persistido (recalculado em todo set_draft_*), nunca de uma
+      // flag vinda do cliente — diferente do aviso moderado, isso não tem "confirmar mesmo assim".
+      if (draft.antiBanSeverity === 'extreme') {
+        logEvent({
+          type: 'campaign.antiban_blocked',
+          severity: 'warn',
+          message: `Disparo de ${userId} bloqueado por combinação extrema de risco de bloqueio (${draft.leadCount ?? 0} leads, motivos: ${(draft.antiBanReasons || []).join(', ')})`,
+          userId,
+          metadata: { leadCount: draft.leadCount, reasons: draft.antiBanReasons, warmup: draft.antiBanWarmupInfo },
+        });
+        return {
+          success: false,
+          message: 'Esse disparo não pode ser confirmado — o número está numa combinação de risco extremo de bloqueio (chip muito novo ou volume muito acima do recomendado). Reduza a lista, espere o aquecimento avançar, ou divida o envio entre mais números conectados.',
         };
       }
 

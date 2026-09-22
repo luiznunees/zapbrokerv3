@@ -79,7 +79,8 @@ export const addContact = async (userId: string, listId: string, name: string, p
 };
 
 // Regex for Brazilian Phone Numbers (tolerates space between DDD and the mobile "9")
-const PHONE_REGEX = /(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\s?\d|[2-9])\d{3})[-.\s]?(\d{4}))/g;
+// Exportado pra reuso em agentService.ts (detecção de lista colada) e activityLogService.ts (redação de PII em logs).
+export const PHONE_REGEX = /(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\s?\d|[2-9])\d{3})[-.\s]?(\d{4}))/g;
 
 const isMobile = (m: RegExpMatchArray) => (m[3] || '').replace(/\s/g, '').startsWith('9');
 const normalizePhone = (m: RegExpMatchArray) => `55${m[2] || ''}${m[3] || ''}${m[4]}`.replace(/\D/g, '');

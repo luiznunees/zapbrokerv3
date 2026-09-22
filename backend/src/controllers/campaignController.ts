@@ -72,7 +72,10 @@ export const create = async (req: AuthRequest, res: Response) => {
                 message: issues[0]?.message || "Dados inválidos"
             });
         }
-        res.status(500).json({ error: 'Internal server error', details: error.message });
+        // error.message é o que fetchAPI (frontend) mostra pro usuário — sem isso, rejeições
+        // reais (lista vazia, sem WhatsApp selecionado, bloqueio por risco extremo de
+        // banimento) apareciam só como "Internal server error" genérico na UI.
+        res.status(400).json({ error: error.message || 'Erro ao criar campanha.', message: error.message });
     }
 };
 

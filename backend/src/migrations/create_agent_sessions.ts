@@ -362,6 +362,14 @@ const DISCONNECT_DEBOUNCE_SQL = `
 alter table instances add column if not exists unstable_since timestamptz;
 `;
 
+// Desde quando o status ATUAL (confirmado, já persistido) está valendo — diferente de
+// unstable_since (que é só durante a janela de tolerância). Usado pra avisar na tela de
+// conexão quando um número fica desconectado por muito tempo seguido, sem alegar
+// banimento (a gente não tem como saber isso — ver instanceService.getInstances).
+const STATUS_SINCE_SQL = `
+alter table instances add column if not exists status_since timestamptz default now();
+`;
+
 const BETA_FEEDBACK_SQL = `
 create table if not exists beta_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -626,6 +634,18 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar instances.unstable_since:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: STATUS_SINCE_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível adicionar instances.status_since automaticamente:', rpcError.message);
+      console.warn('[Migrations] Execute manualmente: alter table instances add column if not exists status_since timestamptz default now();');
+    } else {
+      console.log('[Migrations] Coluna instances.status_since verificada/criada.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar instances.status_since:', err.message);
   }
 
   try {

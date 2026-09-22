@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { Smartphone, Loader2, Plus, Trash2, LogOut, X } from 'lucide-react'
+import Link from 'next/link'
+import { Smartphone, Loader2, Plus, Trash2, LogOut, X, LifeBuoy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import { api } from '@/services/api'
@@ -9,6 +10,34 @@ import { toFullPhoneDigits } from '@/lib/phone'
 import { PhoneInput } from '@/components/ui/PhoneInput'
 import { HelpBadge } from '@/components/ui/HelpBadge'
 import { BrandLoader } from '@/components/ui/BrandLoader'
+
+// Instância não conectada há mais que isso vira o aviso de "pode ter sido banido" — nunca
+// afirma banimento (a gente não tem como confirmar isso, só o WhatsApp no celular sabe),
+// só oferece o guia de recuperação de forma proativa.
+const PROLONGED_DISCONNECT_MS = 24 * 60 * 60 * 1000;
+
+function statusMeta(status: string) {
+    switch (status) {
+        case 'connected':
+        case 'open':
+            return { dot: 'bg-green-500', iconBg: 'bg-green-500/10 text-green-500', label: 'Conectado' };
+        case 'connecting':
+            return { dot: 'bg-sky-500 animate-pulse', iconBg: 'bg-sky-500/10 text-sky-500', label: 'Conectando' };
+        case 'error':
+            return { dot: 'bg-red-500', iconBg: 'bg-red-500/10 text-red-500', label: 'Erro' };
+        default:
+            return { dot: 'bg-zinc-400', iconBg: 'bg-zinc-400/10 text-zinc-500', label: 'Desconectado' };
+    }
+}
+
+function healthMeta(level?: 'boa' | 'atencao' | 'risco') {
+    switch (level) {
+        case 'risco': return { label: 'Risco', className: 'bg-red-500/10 text-red-600' };
+        case 'atencao': return { label: 'Atenção', className: 'bg-amber-500/10 text-amber-600' };
+        case 'boa': return { label: 'Saudável', className: 'bg-emerald-500/10 text-emerald-600' };
+        default: return null;
+    }
+}
 
 export default function ConnectionPage() {
     const [instances, setInstances] = useState<any[]>([]);
@@ -249,57 +278,91 @@ export default function ConnectionPage() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid gap-4">
-                            {instances.map((instance) => (
-                                <div key={instance.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-background/50 hover:bg-background transition-colors">
-                                    <div className="flex items-center gap-4">
-                                        <div className={cn(
-                                            "w-12 h-12 rounded-full flex items-center justify-center",
-                                            instance.status === 'connected' || instance.status === 'open' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-                                        )}>
-                                            <Smartphone className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold">{instance.name}</h4>
+                        <div className="grid gap-3">
+                            {instances.map((instance) => {
+                                const isConnected = instance.status === 'connected' || instance.status === 'open';
+                                const status = statusMeta(instance.status);
+                                const health = healthMeta(instance.health?.level);
+                                const disconnectedTooLong = !isConnected && instance.status_since &&
+                                    (Date.now() - new Date(instance.status_since).getTime()) > PROLONGED_DISCONNECT_MS;
+
+                                return (
+                                    <div key={instance.id} className="border border-border rounded-xl bg-background/50 hover:bg-background transition-colors overflow-hidden">
+                                        <div className="flex items-center justify-between p-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center shrink-0", status.iconBg)}>
+                                                    <Smartphone className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold">{instance.name}</h4>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={cn("w-2 h-2 rounded-full", status.dot)} />
+                                                        <span className="text-xs uppercase font-medium text-muted-foreground">{status.label}</span>
+                                                        {isConnected && health && (
+                                                            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full", health.className)}>
+                                                                {health.label}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {isConnected && instance.health && (
+                                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                            {instance.health.warmup?.daysSinceConnected !== null
+                                                                ? `${instance.health.warmup.daysSinceConnected}d de chip`
+                                                                : 'idade do chip não informada'}
+                                                            {instance.health.replyRatePct !== null ? ` · ${instance.health.replyRatePct}% de resposta` : ''}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
                                             <div className="flex items-center gap-2">
-                                                <span className={cn(
-                                                    "w-2 h-2 rounded-full",
-                                                    instance.status === 'connected' || instance.status === 'open' ? "bg-green-500" : "bg-red-500"
-                                                )} />
-                                                <span className="text-xs uppercase font-medium text-muted-foreground">
-                                                    {instance.status === 'connected' || instance.status === 'open' ? 'Conectado' : 'Desconectado'}
-                                                </span>
+                                                {isConnected ? (
+                                                    <button
+                                                        onClick={() => handleLogoutInstance(instance.id)}
+                                                        className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                        title="Desconectar"
+                                                    >
+                                                        <LogOut className="w-5 h-5" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleConnect(instance.id)}
+                                                        className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-lg text-sm font-bold transition-all"
+                                                    >
+                                                        Conectar
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => handleDeleteInstance(instance.id)}
+                                                    className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-center gap-2">
-                                        {instance.status === 'connected' || instance.status === 'open' ? (
-                                            <button
-                                                onClick={() => handleLogoutInstance(instance.id)}
-                                                className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                                title="Desconectar"
-                                            >
-                                                <LogOut className="w-5 h-5" />
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleConnect(instance.id)}
-                                                className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-lg text-sm font-bold transition-all"
-                                            >
-                                                Conectar
-                                            </button>
+                                        {disconnectedTooLong && (
+                                            <div className="flex items-center justify-between gap-3 bg-red-500/5 border-t border-red-500/20 px-4 py-2.5">
+                                                <p className="text-xs text-red-600">Esse número está desconectado há mais de 1 dia.</p>
+                                                <Link href="/dashboard/connection/banido" className="text-xs font-bold text-red-600 underline underline-offset-2 shrink-0">
+                                                    Pode ter sido banido? Veja o que fazer
+                                                </Link>
+                                            </div>
                                         )}
-                                        <button
-                                            onClick={() => handleDeleteInstance(instance.id)}
-                                            className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
+
+                            <div className="text-center pt-1">
+                                <Link
+                                    href="/dashboard/connection/banido"
+                                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                                >
+                                    <LifeBuoy className="w-3.5 h-3.5" />
+                                    Um número foi banido? Veja o que fazer
+                                </Link>
+                            </div>
                         </div>
                     )}
 

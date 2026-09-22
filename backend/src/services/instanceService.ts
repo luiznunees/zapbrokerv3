@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import * as evolutionService from './evolutionService';
 import * as eventLogService from './eventLogService';
+import * as campaignService from './campaignService';
 
 export const createInstance = async (userId: string, name: string, phoneNumber?: string, chipAgeDays?: number | null) => {
     // Evolution API: Instance name acts as the ID/Token
@@ -154,16 +155,19 @@ export const getInstances = async (userId: string) => {
                 // campaignService.getWarmupInfo) — reconexões não resetam essa data.
                 const isFirstConnection = dbStatus === 'connected' && !instance.connected_at;
 
+                const statusSince = new Date().toISOString();
                 await supabase
                     .from('instances')
                     .update({
                         status: dbStatus,
                         unstable_since: null,
-                        ...(isFirstConnection ? { connected_at: new Date().toISOString() } : {}),
+                        status_since: statusSince,
+                        ...(isFirstConnection ? { connected_at: statusSince } : {}),
                     })
                     .eq('id', instance.id);
 
-                if (isFirstConnection) instance.connected_at = new Date().toISOString();
+                instance.status_since = statusSince;
+                if (isFirstConnection) instance.connected_at = statusSince;
 
                 // Só interessa reportar quando o número CAI num estado ruim — a saída de
                 // erro/desconectado (voltando a conectar) não é um evento de alerta.
@@ -191,6 +195,17 @@ export const getInstances = async (userId: string) => {
             console.error(`Failed to sync status for instance ${instance.name}`);
         }
         return instance;
+    }));
+
+    // Saúde da conexão (aquecimento + taxa de resposta) — passe separado, independente do
+    // polling de status acima, pra não interferir no debounce de desconexão. Falha numa
+    // instância não deve derrubar a lista inteira.
+    await Promise.all(updatedInstances.map(async (instance: any) => {
+        try {
+            instance.health = await campaignService.getInstanceHealth(userId, instance.id, instance.connected_at, instance.self_reported_chip_days);
+        } catch (err) {
+            console.error(`Failed to compute health for instance ${instance.name}`);
+        }
     }));
 
     return updatedInstances;

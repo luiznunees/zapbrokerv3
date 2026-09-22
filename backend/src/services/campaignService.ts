@@ -72,6 +72,14 @@ export const createCampaign = async (
 
     if (totalContacts === 0) throw new Error('A lista de contatos selecionada está vazia (ou todos os contatos foram excluídos).');
 
+    // Bloqueio de verdade pra combinação extrema de risco — checado aqui (não só no chat
+    // do agente) pra cobrir também o "Disparo rápido" manual, que chama createCampaign
+    // direto sem passar pelo agentService. Sem exceção, sem flag de "confirma mesmo assim".
+    const antiban = await checkAntiBanSeverity(userId, totalContacts, instanceIds);
+    if (antiban.severity === 'extreme') {
+        throw new Error('Esse disparo não pode ser confirmado — o número está numa combinação de risco extremo de bloqueio (chip muito novo ou volume muito acima do recomendado). Reduza a lista, espere o aquecimento avançar, ou divida o envio entre mais números conectados.');
+    }
+
     // A checagem/consumo de cota (1 campanha, não por contato) já acontece em
     // checkQuota (middleware) + campaignController.create — não duplicar aqui.
 
@@ -541,6 +549,162 @@ export const getWarmupInfo = async (
         sentLast24h,
         inCooldown: daysSinceConnected < 1,
         basis,
+    };
+};
+
+// Acima disso, disparar pra uma lista grande usando um único número aumenta bastante o
+// risco de bloqueio do WhatsApp — vale um aviso explícito, não só uma sugestão em texto.
+export const ANTIBAN_LEAD_THRESHOLD = 300;
+
+// Combinação extrema (bloqueia de verdade, não é só aviso): chip em cooldown total (dia 0,
+// limite recomendado da rampa = 0) disparando pra mais que isso, ou volume passando esse
+// múltiplo do teto diário recomendado pro estágio de aquecimento atual.
+export const ANTIBAN_EXTREME_COOLDOWN_LEADS = 50;
+export const ANTIBAN_EXTREME_WARMUP_MULTIPLIER = 3;
+
+export interface AntiBanCheck {
+    reasons: Array<'volume' | 'cooldown' | 'warmup_limit'>;
+    severity: 'moderate' | 'extreme' | undefined;
+    warmup?: WarmupInfo;
+}
+
+// Único lugar que calcula risco de bloqueio — usado tanto pelo agente de chat
+// (agentService.recomputeDraftMeta, pro aviso) quanto direto dentro de createCampaign
+// abaixo (pro bloqueio de verdade), pra nenhum caminho de criar campanha escapar da
+// checagem — inclusive o "Disparo rápido" manual, que não passa pelo agente.
+export const checkAntiBanSeverity = async (
+    userId: string,
+    leadCount: number,
+    instanceIds: string[]
+): Promise<AntiBanCheck> => {
+    const usingSingleInstance = !instanceIds || instanceIds.length <= 1;
+    const soleInstanceId = instanceIds?.[0];
+    const reasons: Array<'volume' | 'cooldown' | 'warmup_limit'> = [];
+    let severity: 'moderate' | 'extreme' | undefined;
+    let warmup: WarmupInfo | undefined;
+
+    if (leadCount > ANTIBAN_LEAD_THRESHOLD && usingSingleInstance) {
+        reasons.push('volume');
+    }
+
+    // Aquecimento só é checado com 1 número — com vários, o volume já se divide entre eles.
+    if (usingSingleInstance && soleInstanceId) {
+        const { data: instanceRow } = await supabase
+            .from('instances')
+            .select('connected_at, self_reported_chip_days')
+            .eq('id', soleInstanceId)
+            .single();
+        warmup = await getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null, instanceRow?.self_reported_chip_days ?? null);
+
+        if (warmup.inCooldown) {
+            reasons.push('cooldown');
+        } else if (warmup.recommendedDailyLimit !== null && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit) {
+            reasons.push('warmup_limit');
+        }
+
+        if (
+            (warmup.inCooldown && leadCount > ANTIBAN_EXTREME_COOLDOWN_LEADS) ||
+            (warmup.recommendedDailyLimit !== null && warmup.recommendedDailyLimit > 0 && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit * ANTIBAN_EXTREME_WARMUP_MULTIPLIER)
+        ) {
+            severity = 'extreme';
+        }
+    }
+
+    if (reasons.length > 0 && severity !== 'extreme') severity = 'moderate';
+
+    return { reasons, severity, warmup };
+};
+
+// Statuses de lead_status que indicam que o contato respondeu em algum momento — LOST fica
+// de fora de propósito (pode acontecer sem nunca ter respondido, então contar como
+// "resposta" infla a taxa artificialmente).
+const REPLIED_LEAD_STATUSES = new Set(['REPLIED', 'NEGOTIATION', 'CONVERTED']);
+
+// Mesma aproximação de getInstanceSendVolume: campaign_messages não guarda qual instância
+// específica enviou/recebeu cada mensagem quando o disparo é dividido entre vários números
+// (campaign_instances só registra o pool, não o remetente real por mensagem) — então, pra
+// campanha multi-instância, a taxa aqui é "desse pool", não garantidamente só desse número.
+// Também usa updated_at como proxy de data (a tabela não tem created_at) — impreciso, mas é
+// o que existe.
+export const getInstanceReplyRate = async (userId: string, instanceId: string, days: number = 30) => {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const [{ data: legacyCampaigns, error: legacyError }, { data: linkedCampaigns, error: linkedError }] = await Promise.all([
+        supabase.from('campaigns').select('id').eq('user_id', userId).eq('instance_id', instanceId),
+        supabase.from('campaign_instances').select('campaign_id').eq('instance_id', instanceId),
+    ]);
+
+    if (legacyError) throw new Error(legacyError.message);
+    if (linkedError) throw new Error(linkedError.message);
+
+    const campaignIds = Array.from(new Set([
+        ...(legacyCampaigns || []).map(c => c.id),
+        ...(linkedCampaigns || []).map(c => c.campaign_id),
+    ]));
+    if (campaignIds.length === 0) return { sentCount: 0, repliedCount: 0, replyRatePct: null as number | null };
+
+    const { data: messages, error } = await supabase
+        .from('campaign_messages')
+        .select('lead_status')
+        .in('campaign_id', campaignIds)
+        .neq('status', 'PENDING')
+        .gte('updated_at', cutoff);
+
+    if (error) throw new Error(error.message);
+
+    const sentCount = messages?.length || 0;
+    if (sentCount === 0) return { sentCount: 0, repliedCount: 0, replyRatePct: null as number | null };
+
+    const repliedCount = (messages || []).filter(m => REPLIED_LEAD_STATUSES.has(m.lead_status)).length;
+    const replyRatePct = Math.round((repliedCount / sentCount) * 1000) / 10;
+
+    return { sentCount, repliedCount, replyRatePct };
+};
+
+export interface InstanceHealth {
+    warmup: WarmupInfo;
+    replyRatePct: number | null;
+    repliedCount: number;
+    sentCount: number;
+    level: 'boa' | 'atencao' | 'risco';
+}
+
+// Taxa de resposta muito baixa é um dos sinais que a comunidade associa a risco de
+// detecção de spam (ver pesquisa antiban) — usado aqui só como alerta precoce pro corretor
+// revisar a lista/abordagem, nunca como certeza de bloqueio iminente.
+const LOW_REPLY_RATE_PCT = 5;
+const MIN_SENT_FOR_REPLY_SIGNAL = 10; // amostra pequena demais não deve gerar alarme
+
+// Combina aquecimento + taxa de resposta recente num nível único pra mostrar na tela de
+// conexão — visibilidade contínua, não só o aviso que hoje só aparece na hora de montar
+// o disparo.
+export const getInstanceHealth = async (
+    userId: string,
+    instanceId: string,
+    connectedAt: string | null,
+    selfReportedChipDays?: number | null
+): Promise<InstanceHealth> => {
+    const [warmup, reply] = await Promise.all([
+        getWarmupInfo(userId, instanceId, connectedAt, selfReportedChipDays),
+        getInstanceReplyRate(userId, instanceId),
+    ]);
+
+    const overWarmupLimit = warmup.recommendedDailyLimit !== null && warmup.sentLast24h > warmup.recommendedDailyLimit;
+    const lowReplySignal = reply.sentCount >= MIN_SENT_FOR_REPLY_SIGNAL && reply.replyRatePct !== null && reply.replyRatePct < LOW_REPLY_RATE_PCT;
+
+    let level: 'boa' | 'atencao' | 'risco' = 'boa';
+    if (warmup.inCooldown || overWarmupLimit || lowReplySignal) {
+        level = 'risco';
+    } else if (warmup.recommendedDailyLimit !== null) {
+        level = 'atencao'; // ainda dentro da rampa de aquecimento, sem estourar nada
+    }
+
+    return {
+        warmup,
+        replyRatePct: reply.replyRatePct,
+        repliedCount: reply.repliedCount,
+        sentCount: reply.sentCount,
+        level,
     };
 };
 
