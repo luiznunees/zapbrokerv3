@@ -38,7 +38,10 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
             if (typeof window !== 'undefined' && !endpoint.includes('/auth/login')) {
                 console.warn('⚠️ Authentication failed. Clearing token and redirecting to login...');
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                // Painel admin tem login próprio (/zbteam) — sem isso, uma sessão expirada
+                // dentro do /admin jogava a pessoa pro login de usuário comum.
+                const loginPath = window.location.pathname.startsWith('/admin') ? '/zbteam' : '/login';
+                window.location.href = loginPath;
             }
         }
         const errorBody = await response.json().catch(() => ({}));

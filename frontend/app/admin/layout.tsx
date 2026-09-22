@@ -3,10 +3,8 @@ import Link from 'next/link'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import { AdminPushToggle } from '@/components/admin/AdminPushToggle'
 import { AdminLogoutButton } from '@/components/admin/AdminLogoutButton'
-import ProtectedRoute from '@/components/ProtectedRoute'
+import AdminRoute from '@/components/admin/AdminRoute'
 import { LayoutDashboard } from 'lucide-react'
-// We might want an AdminRoute guard, but ProtectedRoute + Middleware checks role too?
-// Frontend-side role check is good.
 
 // Manifest próprio (não o da app principal) — pra "Adicionar à tela de início" abrir
 // direto aqui, com nome/ícone diferentes do app dos corretores.
@@ -29,9 +27,8 @@ export default function AdminLayout({
 }: {
     children: React.ReactNode
 }) {
-    // Ideally we wrap with <AdminGuard> here
     return (
-        <ProtectedRoute>
+        <AdminRoute>
             <div className="flex flex-col lg:flex-row bg-zinc-950 h-screen overflow-hidden text-zinc-100 font-sans">
                 <AdminSidebar />
                 <main className="flex-1 overflow-y-auto h-full relative scrollbar-hide pb-nav-safe lg:pb-0">
@@ -56,6 +53,6 @@ export default function AdminLayout({
                     </div>
                 </main>
             </div>
-        </ProtectedRoute>
+        </AdminRoute>
     )
 }

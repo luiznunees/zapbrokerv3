@@ -21,9 +21,9 @@ if (typeof window !== 'undefined') {
     })
 }
 
-export async function logoutUser() {
+export async function logoutUser(redirectTo: string = '/login') {
     await supabase.auth.signOut()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    window.location.href = '/login'
+    window.location.href = redirectTo
 }
