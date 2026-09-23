@@ -634,6 +634,23 @@ function resolveDraftReferences(
     }
   }
 
+  // Com só 1 WhatsApp conectado, resolve sozinho em vez de depender do modelo lembrar de
+  // perguntar (ou não) — achado real em produção: o modelo perguntou "profissional ou
+  // pessoal?" pra uma conta com só um número conectado, chamado "DISPAROS", nada a ver com
+  // esses termos; a resposta do usuário não bateu com nenhum WhatsApp real e o campo ficou
+  // vazio em silêncio. Roda em toda chamada de update_campaign_draft, então resolve assim
+  // que a conversa começa a montar o disparo, independente de quanto tempo depois o usuário
+  // voltar. Guard !draft.instanceId: nunca sobrescreve uma escolha já feita (por texto, pelo
+  // seletor visual, ou por já ter 2+ números divididos).
+  if (!draft.instanceId) {
+    const connected = instances.filter(i => i.status === 'connected');
+    if (connected.length === 1) {
+      draft.instanceId = connected[0].id;
+      draft.instanceName = connected[0].name;
+      draft.instanceStatus = connected[0].status;
+    }
+  }
+
   if (Array.isArray(patch.messageVariations) && patch.messageVariations.length > 0) {
     draft.messageVariations = patch.messageVariations.filter((m: any) => typeof m === 'string' && m.trim().length > 0);
   }
@@ -1249,15 +1266,29 @@ async function executeTool(
         pastedListWarning = 'Esse texto parece uma lista de leads colada, não o nome de uma lista existente — não vinculei o disparo a nenhuma lista. Explique pro usuário que precisa importar esses contatos pelo botão "Importar leads" (upload de arquivo CSV, Excel ou PDF) antes de montar o disparo — colar a lista aqui no chat não importa os contatos.';
       }
 
+      // Mesma ideia pro WhatsApp: se o texto não bater com nenhum número real, o modelo não
+      // deve confirmar "WhatsApp definido" mesmo assim (achado real: "profissional ou
+      // pessoal?" não batia com "DISPAROS"/"WhatsApp 1", o campo ficou vazio, e o modelo
+      // disse "Tudo certo!... pronto pra disparar" de qualquer jeito). Guarda a tentativa
+      // antes de resolver pra comparar depois.
+      const instanceNameAttempted = typeof patch.instanceName === 'string' ? patch.instanceName : undefined;
+
       state.draft = resolveDraftReferences(state.draft ?? {}, patch, lists, instances);
       state.draft = await recomputeDraftMeta(userId, planId, state.draft);
       await saveDraft(userId, sessionId, state.draft);
       state.component = state.component ?? deriveRiskComponent(state.draft);
+
+      let instanceWarning: string | undefined;
+      if (instanceNameAttempted && !state.draft.instanceId) {
+        instanceWarning = `O nome de WhatsApp "${instanceNameAttempted}" não bateu com nenhum número conectado de verdade — não confirme que o WhatsApp foi definido. Chame request_instance_selection pra mostrar o seletor visual com os nomes reais.`;
+      }
+
+      const warnings = [pastedListWarning, instanceWarning].filter(Boolean).join('\n\n');
       return {
         draftStatus: buildDraftChecklist(state.draft),
         readyToSend: state.draft.readyToSend,
         quota: state.draft.quota,
-        ...(pastedListWarning ? { warning: pastedListWarning } : {}),
+        ...(warnings ? { warning: warnings } : {}),
       };
     }
 
