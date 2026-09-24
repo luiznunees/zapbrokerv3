@@ -24,7 +24,15 @@ const processQueue = async () => {
         // (achado real em produção — ver relatório /relatorio-agente). Com o timeout novo em
         // evolutionService.ts isso deve virar FAILED sozinho na maioria dos casos; isso aqui
         // cobre o resto (crash do processo, por exemplo).
-        const stuckCutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+        //
+        // 15min, não 3min: um ciclo normal de 3 tentativas já leva bem mais que 3min sozinho
+        // (jitter anti-ban de ~60-78s + digitação simulada por tentativa, x3, mais backoff) —
+        // um cutoff curto pegava mensagens que ainda estavam sendo processadas de verdade e
+        // criava um job duplicado pra elas (achado real em produção: mesma mensagem gerou 2
+        // eventos campaign.message_failed, ~4min de diferença, exatamente esse mecanismo). Se
+        // fosse um envio bem-sucedido em vez de falho, isso arriscava mandar a mesma mensagem
+        // duas vezes pro lead.
+        const stuckCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
         const { data: requeued } = await supabase
             .from('campaign_messages')
             .update({ status: 'PENDING', updated_at: new Date().toISOString() })
@@ -32,7 +40,7 @@ const processQueue = async () => {
             .lt('updated_at', stuckCutoff)
             .select('id');
         if (requeued && requeued.length > 0) {
-            console.warn(`[CampaignProcessor] ${requeued.length} mensagem(ns) travada(s) em QUEUED por mais de 3min — revertidas pra PENDING.`);
+            console.warn(`[CampaignProcessor] ${requeued.length} mensagem(ns) travada(s) em QUEUED por mais de 15min — revertidas pra PENDING.`);
         }
 
         // Fetch PENDING messages
