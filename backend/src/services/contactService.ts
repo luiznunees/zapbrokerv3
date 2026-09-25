@@ -335,8 +335,9 @@ const normalizePhoneDigits = (raw: any): string => {
     let digits = String(raw ?? '').replace(/\D/g, '');
     if (!digits) return '';
 
-    // "0" de discagem interurbana antes do DDD (ex: 011999998888)
-    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('0') && !digits.startsWith('055')) {
+    // "0" de discagem interurbana antes do DDD (ex: 011999998888, ou 05181490816 com número de
+    // 8 dígitos) — DDD nunca começa com 0, então um número com 0 na frente sempre é isso.
+    if (digits.length >= 11 && digits.length <= 13 && digits.startsWith('0') && !digits.startsWith('055')) {
         digits = digits.slice(1);
     }
 
@@ -406,11 +407,31 @@ const buildContactsFromRows = (rows: any[][], listId: string): { contacts: any[]
     const { nameIdx, phoneIdx, dataStartIdx } = detectColumns(rows[0], rows.slice(1, 21));
     if (phoneIdx === -1) return { contacts: [], skipped: Math.max(0, rows.length - dataStartIdx) };
 
+    // Celular sem DDD (ex: "9110-7180", "991026352") é comum em planilha de corretor da mesma
+    // cidade — achado real (Fernanda, 25/09): 177 de 531 proprietários descartados só por isso.
+    // Se a própria lista tem um DDD claramente dominante, completa com ele; sem DDD dominante
+    // (lista de várias regiões), continua descartando em vez de chutar.
+    const dddCounts: Record<string, number> = {};
+    let completeCount = 0;
+    for (let i = dataStartIdx; i < rows.length; i++) {
+        const phone = normalizePhoneDigits(rows[i][phoneIdx]);
+        if (phone.startsWith('55') && (phone.length === 12 || phone.length === 13)) {
+            const ddd = phone.slice(2, 4);
+            dddCounts[ddd] = (dddCounts[ddd] || 0) + 1;
+            completeCount++;
+        }
+    }
+    const [topDdd, topCount] = Object.entries(dddCounts).sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+    const inferredDdd = topDdd && topCount >= 10 && topCount / completeCount >= 0.7 ? topDdd : null;
+    const isMobileWithoutDdd = (digits: string) =>
+        (digits.length === 8 && /^[6-9]/.test(digits)) || (digits.length === 9 && digits.startsWith('9'));
+
     const contacts: any[] = [];
     let skipped = 0;
     for (let i = dataStartIdx; i < rows.length; i++) {
         const row = rows[i];
-        const phone = normalizePhoneDigits(row[phoneIdx]);
+        let phone = normalizePhoneDigits(row[phoneIdx]);
+        if (inferredDdd && isMobileWithoutDdd(phone)) phone = `55${inferredDdd}${phone}`;
         if (!phone || phone.length < 10) { skipped++; continue; }
         const name = (nameIdx !== -1 ? String(row[nameIdx] ?? '').trim() : '') || 'Sem Nome';
         contacts.push({ list_id: listId, name, phone });

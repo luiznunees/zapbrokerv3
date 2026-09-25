@@ -616,14 +616,23 @@ function resolveDraftReferences(
 
   // Disparo dividido entre vários números — resolve cada nome pra um WhatsApp existente.
   if (Array.isArray((patch as any).instanceNames) && (patch as any).instanceNames.length > 0) {
-    const matches: Array<{ id: string; name: string; status: string }> = ((patch as any).instanceNames as string[])
+    const resolved: Array<{ id: string; name: string; status: string }> = ((patch as any).instanceNames as string[])
       .map((name: string) => {
         const query = name.toLowerCase();
         return instances.find(i => i.name.toLowerCase().includes(query) || query.includes(i.name.toLowerCase()));
       })
       .filter((m): m is { id: string; name: string; status: string } => Boolean(m));
 
-    if (matches.length > 0) {
+    // Nomes parecidos ("WhatsApp" e "WhatsApp 2") podem cair no mesmo número — sem
+    // deduplicar, o confirm_campaign falhava com "não foram encontrados ou não pertencem a você".
+    const matches = resolved.filter((m, idx) => resolved.findIndex((o) => o.id === m.id) === idx);
+    if (matches.length === 1) {
+      draft.instanceId = matches[0].id;
+      draft.instanceName = matches[0].name;
+      draft.instanceStatus = matches[0].status;
+      draft.instanceIds = undefined;
+      draft.instanceNames = undefined;
+    } else if (matches.length > 1) {
       draft.instanceIds = matches.map((m) => m.id);
       draft.instanceNames = matches.map((m) => m.name);
       // Mantém os campos singulares como "principal" pra código que ainda só olha um número
@@ -665,8 +674,10 @@ function resolveDraftReferences(
   if (patch.blockDelay !== undefined) draft.blockDelay = patch.blockDelay;
 
   // Recalcula os defaults automáticos sempre que a mensagem ou a lista mudarem,
-  // a não ser que o usuário tenha explicitamente pedido pra ajustar esse turno.
-  if (!patchTouchedTiming && (draft.messageVariations?.length || draft.leadCount !== undefined)) {
+  // a não ser que o usuário tenha explicitamente pedido pra ajustar esse turno — ou já tenha
+  // confirmado o timing no seletor (achado real: ela escolheu modo sequencial desligado e uma
+  // chamada seguinte do agente religou sozinha).
+  if (!patchTouchedTiming && !draft.timingConfirmed && (draft.messageVariations?.length || draft.leadCount !== undefined)) {
     const defaults = computeSmartDefaults(draft.messageVariations, draft.leadCount);
     draft.sequentialMode = defaults.sequentialMode;
     draft.blockDelay = defaults.blockDelay;
@@ -733,6 +744,68 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
   return lines.join('\n');
 }
 
+// Versão pro corretor (não pro modelo) do que ainda impede o disparo — usada quando o código
+// precisa responder direto, sem passar pelo LLM (botão clicado cedo demais, ou o modelo dizendo
+// "tá tudo pronto" com readyToSend=false). buildDraftChecklist é instrução interna pro modelo
+// ("NÃO pergunte de novo...") e já vazou pro chat assim — não usar ele pra texto de usuário.
+function describeBlockersForUser(draft: CampaignDraft | null): string {
+  if (!draft) return 'Não tem nenhum disparo sendo montado nesta conversa. Se quiser fazer um novo, é só me dizer "quero criar um disparo".';
+
+  if (draft.antiBanSeverity === 'extreme') {
+    return 'Esse disparo não pode sair assim: o(s) número(s) escolhido(s) ainda estão aquecendo e a lista é grande demais pra eles agora — o risco de o WhatsApp bloquear o número é muito alto. Dá pra reduzir a lista, esperar o número aquecer, ou usar um número mais antigo.';
+  }
+
+  const missing: string[] = [];
+  if (!draft.contactListId) missing.push('escolher a lista de contatos');
+  else if ((draft.leadCount ?? 0) === 0) missing.push(`a lista "${draft.contactListName}" está sem nenhum contato — importe o arquivo de novo em Contatos → Importar`);
+  if (!draft.instanceId) missing.push('escolher por qual WhatsApp vai sair');
+  if (!(draft.messageVariations?.length || draft.mediaUrl)) missing.push('escrever a mensagem');
+  if (!draft.timingConfirmed) missing.push('confirmar o tempo entre as mensagens no seletor');
+  if (draft.quota && !draft.quota.available) missing.push('você já usou todas as campanhas do seu plano neste mês');
+  if (draft.needsAntiBanWarning && !draft.antiBanAcknowledged) missing.push('confirmar o aviso de risco de bloqueio que apareceu aqui embaixo');
+  if (draft.needsQuotaWarning && !draft.quotaAcknowledged) missing.push('confirmar que quer usar sua última campanha do mês');
+
+  if (missing.length === 0) return '';
+  return `Ainda não dá pra disparar — falta:\n${missing.map((m) => `- ${m}`).join('\n')}`;
+}
+
+// O modelo repete "Tá tudo pronto — é só clicar em Confirmar disparo" mesmo com readyToSend=false
+// e sem botão nenhum na tela — achado real (Fernanda, 24 e 25/09): 5 respostas seguidas assim
+// enquanto faltava confirmar o aviso anti-ban, ela ficou 16 min achando que o botão estava
+// travado. Aqui o código decide: pronto de verdade → garante o botão; não pronto → troca o
+// texto pelo que realmente falta.
+const READY_CLAIM_PATTERN =
+  /t[áa]\s+tudo\s+pronto|est[áa]\s+tudo\s+pronto|tudo\s+certo\s+pra\s+disparar|(?:[ée]\s+s[óo]|s[óo]\s+falta)\s+clicar\s+em\s+\**["“]?confirmar\s+disparo|clica\s+em\s+\**["“]?confirmar\s+disparo/i;
+
+// O agente nunca cancela campanha sozinho (suggest_cancel_scheduled_campaign só gera um botão).
+// Achado real (Fernanda, 25/09): "CANCELA TODAS AS CAMPANHAS" → "Pronto, cancelei as campanhas!"
+// sem nenhuma tool chamada. Troca a frase falsa pelo caminho real.
+const FALSE_CANCEL_CLAIM_PATTERN = /\bcancelei\b/i;
+
+function correctFalseCancelClaim(reply: string, state: ToolState): string {
+  if (!reply || !FALSE_CANCEL_CLAIM_PATTERN.test(reply)) return reply;
+  if (state.actions.some((a) => a.type === 'cancel_scheduled_campaign')) return reply;
+  return 'Não consigo cancelar campanhas daqui do chat. Pra parar uma campanha, abra Campanhas no menu e clique em pausar ou cancelar. Se quiser, sigo montando esse disparo novo enquanto isso.';
+}
+
+function correctFalseReadyClaim(reply: string, state: ToolState): string {
+  reply = correctFalseCancelClaim(reply, state);
+  if (!reply || !READY_CLAIM_PATTERN.test(reply)) return reply;
+
+  if (state.draft?.readyToSend) {
+    if (!state.actions.some((a) => a.type === 'confirm_campaign')) {
+      state.component = state.component ?? { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
+      state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
+    }
+    return reply;
+  }
+
+  // Não está pronto: nunca deixa um botão de confirmar solto (clicaria e falharia).
+  state.actions = state.actions.filter((a) => a.type !== 'confirm_campaign');
+  state.component = deriveRiskComponent(state.draft) ?? state.component;
+  return describeBlockersForUser(state.draft) || reply;
+}
+
 // O envio real só acontece via o botão "Confirmar disparo" (executeAction's confirm_campaign,
 // nunca dentro do chat livre — ver guardrail "ENVIO DE DISPARO" no prompt). Então qualquer
 // frase de "disparo já saiu" vinda de runToolLoop é sempre alucinação, sem exceção — achado
@@ -754,7 +827,7 @@ function correctFalseDispatchClaim(reply: string, state: ToolState): string {
     return 'Quase lá! Tá tudo pronto — é só clicar em "Confirmar disparo" que aí sim ele sai de verdade.';
   }
 
-  return `Ainda não — esse disparo não saiu (o envio só acontece depois de clicar em "Confirmar disparo") e ainda falta configurar:\n\n${buildDraftChecklist(state.draft)}`;
+  return `Ainda não — esse disparo não saiu (o envio só acontece depois de clicar em "Confirmar disparo").\n\n${describeBlockersForUser(state.draft)}`.trim();
 }
 
 async function recomputeDraftMeta(userId: string, planId: string, draft: CampaignDraft): Promise<CampaignDraft> {
@@ -805,7 +878,9 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
 
   draft.readyToSend = Boolean(
     draft.contactListId &&
+    (draft.leadCount ?? 0) > 0 &&
     draft.instanceId &&
+    draft.antiBanSeverity !== 'extreme' &&
     (draft.messageVariations?.length || draft.mediaUrl) &&
     draft.timingConfirmed &&
     (!draft.quota || draft.quota.available) &&
@@ -1356,9 +1431,13 @@ async function executeTool(
       // Rascunho pronto: mostra um resumo estruturado em vez de só um botão solto — o
       // corretor vê tudo que foi confirmado antes de disparar, mesmo se o painel lateral
       // estiver fechado/fora da tela (mobile).
-      if (state.draft?.readyToSend) {
-        state.component = { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
+      // Só gera o botão com o rascunho pronto de verdade — achado real (Fernanda, 23/09): o
+      // botão aparecia faltando o WhatsApp, ela clicava e recebia só "ainda faltam informações".
+      if (!state.draft?.readyToSend) {
+        state.component = deriveRiskComponent(state.draft) ?? state.component;
+        return { error: `Ainda não dá pra confirmar — NÃO diga que está pronto. Explique ao usuário o que falta: ${describeBlockersForUser(state.draft)}` };
       }
+      state.component = { type: 'campaign_summary', purpose: JSON.stringify(state.draft) };
       state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
       return { ok: true };
 
@@ -1953,7 +2032,7 @@ async function continueAfterAction(
     const state: ToolState = { draft: existingDraft, component: null, actions: [] };
     const loopCtx: ToolLoopContext = { userId, sessionId, planId: ctx.planId, lists, instances, campaignsSummary, stalledCount };
     let finalReply = await runToolLoop(workingMessages, loopCtx, state);
-    finalReply = correctFalseDispatchClaim(finalReply, state);
+    finalReply = correctFalseReadyClaim(correctFalseDispatchClaim(finalReply, state), state);
 
     // Essa mensagem não é persistida como 'user' (evitaria mostrar o texto de evento
     // interno como se o usuário tivesse digitado isso ao recarregar a conversa).
@@ -2023,7 +2102,10 @@ export async function chat(
     // Extrai e persiste aqui, antes do modelo processar a mensagem — não depende dele acertar.
     const attachmentMatch = userMessage.match(/\[Anexo dispon[íi]vel:\s*(.+?)\s*\((\w+)\)\s*em\s*(\S+)\]/i);
     let draftForTurn = existingDraft;
-    if (attachmentMatch) {
+    // Documento (PDF/CSV/planilha) nunca é persistido como mídia aqui — anexado no chat é quase
+    // sempre a lista de contatos (ver prompt). Achado real (Fernanda, 25/09): o CSV com os
+    // telefones dos proprietários virou mídia do disparo e iria como arquivo pros 304 leads.
+    if (attachmentMatch && attachmentMatch[2].toLowerCase() !== 'document') {
       const [, , mediaType, mediaUrl] = attachmentMatch;
       let updatedDraft: CampaignDraft = { ...(existingDraft ?? {}), mediaUrl, mediaType };
       updatedDraft = await recomputeDraftMeta(userId, ctx.planId, updatedDraft);
@@ -2087,7 +2169,7 @@ export async function chat(
       state.actions.push({ type: 'confirm_campaign', title: 'Confirmar disparo' });
     }
 
-    finalReply = correctFalseDispatchClaim(finalReply, state);
+    finalReply = correctFalseReadyClaim(correctFalseDispatchClaim(finalReply, state), state);
 
     await persistMessage(userId, currentSessionId, 'user', userMessage);
     await persistMessage(userId, currentSessionId, 'agent', finalReply);
@@ -2425,7 +2507,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || (draft.mediaUrl ? 'Mídia anexada ao disparo!' : 'Mídia removida do disparo.'),
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] set_draft_media error for user ${userId}:`, error.message);
@@ -2465,7 +2547,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Timing confirmado!',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] set_draft_timing error for user ${userId}:`, error.message);
@@ -2494,7 +2576,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Agendamento confirmado!',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] set_draft_schedule error for user ${userId}:`, error.message);
@@ -2582,7 +2664,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Mensagens atualizadas!',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] set_draft_messages error for user ${userId}:`, error.message);
@@ -2611,7 +2693,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Exclusões atualizadas!',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] set_draft_exclusions error for user ${userId}:`, error.message);
@@ -2641,7 +2723,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Feito! Agora é só escolher a lista de contatos pra esse disparo.',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] apply_duplicated_campaign error for user ${userId}:`, error.message);
@@ -2692,7 +2774,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Combinado, seguindo com essa configuração.',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] acknowledge_antiban_warning error for user ${userId}:`, error.message);
@@ -2719,7 +2801,7 @@ export async function executeAction(
         return {
           success: true,
           message: followUp.reply || 'Combinado, seguindo com essa configuração.',
-          result: { draft: followUp.draft || draft, actions: followUp.actions, component: followUp.component },
+          result: { draft: followUp.draft || draft, actions: followUp.actions, component: deriveRiskComponent(followUp.draft || draft) ?? followUp.component },
         };
       } catch (error: any) {
         console.error(`[AgentService] acknowledge_quota_warning error for user ${userId}:`, error.message);
@@ -2736,16 +2818,18 @@ export async function executeAction(
       const draft = await loadDraft(userId, sessionId);
       // Mensagem OU mídia satisfaz o requisito — disparo só com áudio/foto/vídeo, sem
       // legenda, é válido (ver buildDraftChecklist/recomputeDraftMeta acima).
-      if (!draft || !draft.contactListId || !draft.instanceId || !(draft.messageVariations?.length || draft.mediaUrl)) {
+      // Mensagem genérica ("ainda faltam informações") deixava o corretor sem saber o quê —
+      // achado real (Fernanda, 23 e 24/09: "oq falta terminar?"). Agora diz exatamente o que falta.
+      // O aviso anti-ban moderado também é exigido aqui, não só no readyToSend do chat.
+      if (
+        !draft || !draft.contactListId || !draft.instanceId || !(draft.messageVariations?.length || draft.mediaUrl) ||
+        !draft.timingConfirmed || (draft.leadCount ?? 0) === 0 ||
+        (draft.needsAntiBanWarning && !draft.antiBanAcknowledged && draft.antiBanSeverity !== 'extreme')
+      ) {
         return {
           success: false,
-          message: 'Ainda faltam informações pra eu conseguir disparar — vamos terminar de configurar primeiro.',
-        };
-      }
-      if (!draft.timingConfirmed) {
-        return {
-          success: false,
-          message: 'Antes de disparar, confirme o tempo entre mensagens e o tamanho dos lotes no seletor.',
+          message: describeBlockersForUser(draft) || 'Ainda faltam informações pra eu conseguir disparar — vamos terminar de configurar primeiro.',
+          result: draft ? { draft, component: deriveRiskComponent(draft) } : undefined,
         };
       }
 

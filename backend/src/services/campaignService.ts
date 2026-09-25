@@ -16,6 +16,10 @@ export const createCampaign = async (
     blockDelay: number = 5,
     excludedContactIds: string[] = []
 ) => {
+    // O mesmo número pode chegar repetido (ex: agente resolvendo "WhatsApp" e "WhatsApp 2"
+    // pro mesmo registro) — sem deduplicar, a checagem de posse abaixo compara 1 linha
+    // encontrada com 2 IDs pedidos e falha com "não foram encontrados ou não pertencem a você".
+    instanceIds = [...new Set((instanceIds || []).filter(Boolean))];
     if (!instanceIds || instanceIds.length === 0) throw new Error('Selecione ao menos um WhatsApp pro disparo.');
 
     // 0. Verify Ownership of List and Instances
@@ -577,42 +581,56 @@ export const checkAntiBanSeverity = async (
     leadCount: number,
     instanceIds: string[]
 ): Promise<AntiBanCheck> => {
-    const usingSingleInstance = !instanceIds || instanceIds.length <= 1;
-    const soleInstanceId = instanceIds?.[0];
-    const reasons: Array<'volume' | 'cooldown' | 'warmup_limit'> = [];
+    const uniqueIds = [...new Set((instanceIds || []).filter(Boolean))];
+    const usingSingleInstance = uniqueIds.length <= 1;
+    const reasons = new Set<'volume' | 'cooldown' | 'warmup_limit'>();
     let severity: 'moderate' | 'extreme' | undefined;
     let warmup: WarmupInfo | undefined;
+    let warmupRank = -1;
 
     if (leadCount > ANTIBAN_LEAD_THRESHOLD && usingSingleInstance) {
-        reasons.push('volume');
+        reasons.add('volume');
     }
 
-    // Aquecimento só é checado com 1 número — com vários, o volume já se divide entre eles.
-    if (usingSingleInstance && soleInstanceId) {
+    // Aquecimento é checado em CADA número, com a fatia de leads que cabe a ele. Dividir
+    // entre vários números reduz o volume por número, mas não tira nenhum deles do
+    // aquecimento — achado real (Fernanda, 25/09): 304 leads divididos entre 2 chips
+    // conectados no mesmo dia passavam sem aviso nenhum, porque com 2+ números essa
+    // checagem era pulada inteira (152 por chip em cooldown = combinação extrema).
+    const leadsPerInstance = Math.ceil(leadCount / Math.max(uniqueIds.length, 1));
+    for (const instanceId of uniqueIds) {
         const { data: instanceRow } = await supabase
             .from('instances')
             .select('connected_at, self_reported_chip_days')
-            .eq('id', soleInstanceId)
+            .eq('id', instanceId)
             .single();
-        warmup = await getWarmupInfo(userId, soleInstanceId, instanceRow?.connected_at ?? null, instanceRow?.self_reported_chip_days ?? null);
+        const info = await getWarmupInfo(userId, instanceId, instanceRow?.connected_at ?? null, instanceRow?.self_reported_chip_days ?? null);
 
-        if (warmup.inCooldown) {
-            reasons.push('cooldown');
-        } else if (warmup.recommendedDailyLimit !== null && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit) {
-            reasons.push('warmup_limit');
+        let flagged = false;
+        if (info.inCooldown) {
+            reasons.add('cooldown');
+            flagged = true;
+        } else if (info.recommendedDailyLimit !== null && info.sentLast24h + leadsPerInstance > info.recommendedDailyLimit) {
+            reasons.add('warmup_limit');
+            flagged = true;
         }
 
-        if (
-            (warmup.inCooldown && leadCount > ANTIBAN_EXTREME_COOLDOWN_LEADS) ||
-            (warmup.recommendedDailyLimit !== null && warmup.recommendedDailyLimit > 0 && warmup.sentLast24h + leadCount > warmup.recommendedDailyLimit * ANTIBAN_EXTREME_WARMUP_MULTIPLIER)
-        ) {
-            severity = 'extreme';
+        const extreme =
+            (info.inCooldown && leadsPerInstance > ANTIBAN_EXTREME_COOLDOWN_LEADS) ||
+            (info.recommendedDailyLimit !== null && info.recommendedDailyLimit > 0 && info.sentLast24h + leadsPerInstance > info.recommendedDailyLimit * ANTIBAN_EXTREME_WARMUP_MULTIPLIER);
+
+        // O warmup devolvido (texto do aviso) é o do número mais arriscado: extremo > sinalizado > qualquer.
+        const rank = extreme ? 2 : flagged ? 1 : 0;
+        if (!warmup || rank > warmupRank) {
+            warmup = info;
+            warmupRank = rank;
         }
+        if (extreme) severity = 'extreme';
     }
 
-    if (reasons.length > 0 && severity !== 'extreme') severity = 'moderate';
+    if (reasons.size > 0 && severity !== 'extreme') severity = 'moderate';
 
-    return { reasons, severity, warmup };
+    return { reasons: [...reasons], severity, warmup };
 };
 
 // Statuses de lead_status que indicam que o contato respondeu em algum momento — LOST fica
