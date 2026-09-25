@@ -21,6 +21,10 @@ router.get('/ai-credits', adminController.getAiCredits);
 // Users
 router.get('/users', adminController.listUsers);
 router.post('/users/:id/ban', adminController.banUser);
+router.get('/users/:id', adminController.getUserDetail);
+router.get('/users/:id/raw-logs', adminController.getUserRawLogs);
+router.get('/users/:id/conversations', adminController.getUserConversations);
+router.post('/users/:id/campaigns/:campaignId/:action', adminController.setUserCampaignPaused);
 
 // Invites
 router.get('/invites', adminController.listInvites);

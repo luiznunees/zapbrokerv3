@@ -2,7 +2,9 @@ import { Request, Response } from 'express';
 import * as adminService from '../services/adminService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import * as eventLogService from '../services/eventLogService';
-import { getRawActivityLogsText } from '../services/activityLogService';
+import { getRawActivityLogsText, getUserRawActivity } from '../services/activityLogService';
+import * as campaignService from '../services/campaignService';
+import { supabase } from '../config/supabase';
 
 export const getStats = async (req: AuthRequest, res: Response) => {
     try {
@@ -164,6 +166,69 @@ export const getRawActivityLogs = async (req: AuthRequest, res: Response) => {
         res.status(200).json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
+    }
+};
+
+// ─── Suporte a um cliente específico (/admin/users/[id]) ─────────
+
+export const getUserDetail = async (req: AuthRequest, res: Response) => {
+    try {
+        const detail = await adminService.getUserDetail(req.params.id);
+        res.status(200).json(detail);
+    } catch (error: any) {
+        res.status(404).json({ error: error.message });
+    }
+};
+
+// Modo ao vivo: o painel chama de poucos em poucos segundos passando `since` = createdAt
+// da última linha que já tem, e recebe só o que chegou depois.
+export const getUserRawLogs = async (req: AuthRequest, res: Response) => {
+    try {
+        const { data: user } = await supabase.from('users').select('email').eq('id', req.params.id).single();
+        const result = await getUserRawActivity(req.params.id, user?.email ?? null, {
+            since: (req.query.since as string) || undefined,
+            limit: Number(req.query.limit) || undefined,
+        });
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const getUserConversations = async (req: AuthRequest, res: Response) => {
+    try {
+        const result = await adminService.getUserConversationsText(req.params.id, {
+            sessionId: (req.query.sessionId as string) || undefined,
+            days: Number(req.query.days) || undefined,
+        });
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Pausar/retomar a campanha de um cliente pelo suporte (ex: disparo que ia rodar de
+// madrugada). Reusa as funções do próprio cliente passando o id dele — mesma checagem de
+// posse — e registra quem fez.
+export const setUserCampaignPaused = async (req: AuthRequest, res: Response) => {
+    const { id, campaignId, action } = req.params;
+    try {
+        if (action !== 'pause' && action !== 'resume') {
+            return res.status(400).json({ error: 'Ação inválida.' });
+        }
+        const campaign = action === 'pause'
+            ? await campaignService.pauseCampaign(id, campaignId)
+            : await campaignService.resumeCampaign(id, campaignId);
+        eventLogService.logEvent({
+            type: action === 'pause' ? 'admin.campaign_paused' : 'admin.campaign_resumed',
+            severity: 'info',
+            message: `Admin ${req.user.id} ${action === 'pause' ? 'pausou' : 'retomou'} a campanha "${campaign.name}" do usuário ${id}`,
+            userId: id,
+            metadata: { adminId: req.user.id, campaignId },
+        });
+        res.status(200).json({ campaign: { id: campaign.id, status: campaign.status } });
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
     }
 };
 

@@ -170,6 +170,18 @@ export const api = {
         stats: () => fetchAPI('/admin/stats'),
         getUsers: (page = 1, search = '') => fetchAPI(`/admin/users?page=${page}&search=${search}`),
         banUser: (id: string) => fetchAPI(`/admin/users/${id}/ban`, { method: 'POST' }),
+        userDetail: (id: string) => fetchAPI(`/admin/users/${id}`),
+        userRawLogs: (id: string, since?: string) =>
+            fetchAPI(`/admin/users/${id}/raw-logs${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+        userConversations: (id: string, opts: { sessionId?: string; days?: number } = {}) => {
+            const params = new URLSearchParams()
+            if (opts.sessionId) params.set('sessionId', opts.sessionId)
+            if (opts.days) params.set('days', String(opts.days))
+            const qs = params.toString()
+            return fetchAPI(`/admin/users/${id}/conversations${qs ? `?${qs}` : ''}`)
+        },
+        setUserCampaignPaused: (id: string, campaignId: string, action: 'pause' | 'resume') =>
+            fetchAPI(`/admin/users/${id}/campaigns/${campaignId}/${action}`, { method: 'POST' }),
         createInvite: (planId: string, trialDays?: number, email?: string, maxUses?: number) => fetchAPI('/admin/invites', { method: 'POST', body: JSON.stringify({ planId, trialDays, email, maxUses }) }),
         listInvites: () => fetchAPI('/admin/invites'),
         revokeInvite: (id: string) => fetchAPI(`/admin/invites/${id}/revoke`, { method: 'POST' }),

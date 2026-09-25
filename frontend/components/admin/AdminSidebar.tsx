@@ -55,7 +55,8 @@ export default function AdminSidebar() {
                 antes mesmo de mostrar o conteúdo. Mesmo padrão do NavRail do app principal. */}
             <nav className="flex lg:hidden items-center justify-around fixed bottom-0 inset-x-0 z-30 bg-zinc-900 border-t border-zinc-800 px-1 pb-safe shadow-xl">
                 {allItems.map((item) => {
-                    const isActive = pathname === item.href
+                    // Subpáginas (ex: /admin/users/[id]) mantêm o item do menu marcado.
+                    const isActive = item.href === '/admin' ? pathname === item.href : pathname?.startsWith(item.href)
                     return (
                         <Link
                             key={item.href}

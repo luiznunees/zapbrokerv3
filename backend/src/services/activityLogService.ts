@@ -80,7 +80,17 @@ export async function getRawActivityLogsText(from: string, to: string, limit = 5
     const truncated = rows.length > limit;
     const visibleRows = truncated ? rows.slice(0, limit) : rows;
 
-    const userIds = [...new Set(visibleRows.map((r) => r.user_id).filter(Boolean))];
+    const lines = await formatRawRows(visibleRows);
+
+    return {
+        text: lines.join('\n---\n'),
+        count: visibleRows.length,
+        truncated,
+    };
+}
+
+async function formatRawRows(rows: any[]): Promise<string[]> {
+    const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
     const usersById: Record<string, { name: string; email: string }> = {};
     if (userIds.length > 0) {
         const { data: users } = await supabase.from('users').select('id, name, email').in('id', userIds);
@@ -89,7 +99,7 @@ export async function getRawActivityLogsText(from: string, to: string, limit = 5
         }
     }
 
-    const lines = visibleRows.map((row) => {
+    return rows.map((row) => {
         const user = row.user_id ? usersById[row.user_id] : null;
         const userLabel = user ? `${user.name} <${user.email}>` : row.user_id ? row.user_id : 'anonimo';
         const header = `[${row.created_at}] user=${userLabel} ${row.method} ${row.path} status=${row.status_code} dur=${row.duration_ms}ms`;
@@ -97,10 +107,36 @@ export async function getRawActivityLogsText(from: string, to: string, limit = 5
         const respLine = row.response_body ? `  resp: ${row.response_body}` : null;
         return [header, bodyLine, respLine].filter(Boolean).join('\n');
     });
+}
 
+// Log bruto de UM cliente, pro suporte no painel admin. Mesmo formato do export geral.
+// Inclui também as requests anônimas que citam o email dele (login, cadastro, "esqueci a
+// senha") — sem isso, uma falha de login do cliente não aparecia no log dele.
+// `since` (ISO) é pro modo ao vivo: o painel pergunta só o que chegou depois da última linha.
+export async function getUserRawActivity(
+    userId: string,
+    email: string | null,
+    opts: { since?: string; limit?: number } = {}
+): Promise<{ entries: Array<{ id: string; createdAt: string; text: string }> }> {
+    const limit = Math.min(opts.limit ?? 300, 2000);
+    const safeEmail = email && /^[^,()\s%]+$/.test(email) ? email : null;
+
+    let query = supabase
+        .from('raw_activity_logs')
+        .select('id, created_at, user_id, method, path, status_code, duration_ms, request_body, response_body')
+        .or(safeEmail ? `user_id.eq.${userId},and(user_id.is.null,request_body.ilike.%${safeEmail}%)` : `user_id.eq.${userId}`);
+
+    // Ao vivo: só o que é mais novo, em ordem. Carga inicial: as N mais recentes.
+    query = opts.since
+        ? query.gt('created_at', opts.since).order('created_at', { ascending: true }).limit(limit)
+        : query.order('created_at', { ascending: false }).limit(limit);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const rows = opts.since ? data || [] : (data || []).reverse();
+    const texts = await formatRawRows(rows);
     return {
-        text: lines.join('\n---\n'),
-        count: visibleRows.length,
-        truncated,
+        entries: rows.map((row, i) => ({ id: row.id, createdAt: row.created_at, text: texts[i] })),
     };
 }

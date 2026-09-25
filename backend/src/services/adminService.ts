@@ -72,7 +72,8 @@ export const getUsers = async (page = 1, limit = 20, search = '') => {
     if (error) throw new Error(error.message);
 
     return {
-        data: data.map(u => ({
+        // `password` é coluna legada (auth real é o Supabase Auth) — nunca vai pro cliente.
+        data: data.map(({ password: _password, ...u }: any) => ({
             ...u,
             instanceCount: u.instances?.[0]?.count || 0,
             plan: u.subscriptions?.[0]?.plan_id || 'Free',
@@ -234,4 +235,174 @@ export const getFinanceOverview = async (startDate: string, endDate: string) => 
         },
         exchangeRateUsed: USD_TO_BRL,
     };
+};
+
+// ─── Suporte: visão completa de um cliente ──────────────────────
+// Tudo que o cliente está usando, numa chamada só, pra tela de suporte do painel admin
+// (/admin/users/[id]): conta, plano, WhatsApps, listas, campanhas com o placar de envio
+// (e os erros agrupados), eventos de sistema e conversas com o agente.
+
+// O PostgREST corta em 1000 linhas por request — pagina pra contar mensagens de campanha
+// grande (304+ leads) sem perder o final.
+async function fetchAllCampaignMessages(campaignIds: string[]) {
+    const rows: Array<{ campaign_id: string; status: string; error_message: string | null; updated_at: string }> = [];
+    if (campaignIds.length === 0) return rows;
+    const pageSize = 1000;
+    for (let from = 0; from < 50000; from += pageSize) {
+        const { data, error } = await supabase
+            .from('campaign_messages')
+            .select('campaign_id, status, error_message, updated_at')
+            .in('campaign_id', campaignIds)
+            .range(from, from + pageSize - 1);
+        if (error) throw new Error(error.message);
+        rows.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+    }
+    return rows;
+}
+
+export const getUserDetail = async (userId: string) => {
+    const [userRes, subRes, instancesRes, listsRes, campaignsRes, eventsRes, sessionsRes] = await Promise.all([
+        supabase
+            .from('users')
+            .select('id, name, email, role, created_at, last_active_at, onboarding_steps, first_message_sent')
+            .eq('id', userId)
+            .single(),
+        supabase
+            .from('subscriptions')
+            .select('plan_id, status, trial_ends_at, next_billing_date, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        supabase
+            .from('instances')
+            .select('id, name, status, phone_number, connected_at, status_since, unstable_since, self_reported_chip_days, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true }),
+        supabase
+            .from('contact_lists')
+            .select('id, name, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('campaigns')
+            .select('id, name, status, instance_id, contact_list_id, created_at, scheduled_at, last_message_at, delay_seconds, batch_size, batch_delay_seconds, sequential_mode, media_type, media_url, message, message_variations')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(30),
+        supabase
+            .from('system_events')
+            .select('id, type, severity, message, metadata, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(100),
+        supabase
+            .from('agent_sessions')
+            .select('id, title, created_at, updated_at')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false })
+            .limit(30),
+    ]);
+
+    if (userRes.error || !userRes.data) throw new Error('Usuário não encontrado.');
+
+    const instances = instancesRes.data || [];
+    const lists = listsRes.data || [];
+    const campaigns = campaignsRes.data || [];
+    const campaignIds = campaigns.map((c) => c.id);
+
+    const [listCounts, messages, campaignInstancesRes] = await Promise.all([
+        Promise.all(lists.map(async (l) => {
+            const { count } = await supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('list_id', l.id);
+            return count ?? 0;
+        })),
+        fetchAllCampaignMessages(campaignIds),
+        campaignIds.length
+            ? supabase.from('campaign_instances').select('campaign_id, instance_id').in('campaign_id', campaignIds)
+            : Promise.resolve({ data: [] as Array<{ campaign_id: string; instance_id: string }> }),
+    ]);
+
+    const instanceNameById: Record<string, string> = Object.fromEntries(instances.map((i) => [i.id, i.name]));
+    const listNameById: Record<string, string> = Object.fromEntries(lists.map((l) => [l.id, l.name]));
+
+    const statsByCampaign: Record<string, { counts: Record<string, number>; errors: Record<string, number>; lastUpdate: string | null }> = {};
+    for (const m of messages) {
+        const s = (statsByCampaign[m.campaign_id] ??= { counts: {}, errors: {}, lastUpdate: null });
+        s.counts[m.status] = (s.counts[m.status] || 0) + 1;
+        if (m.error_message) s.errors[m.error_message] = (s.errors[m.error_message] || 0) + 1;
+        if (!s.lastUpdate || m.updated_at > s.lastUpdate) s.lastUpdate = m.updated_at;
+    }
+
+    const instancesByCampaign: Record<string, string[]> = {};
+    for (const ci of campaignInstancesRes.data || []) {
+        (instancesByCampaign[ci.campaign_id] ??= []).push(instanceNameById[ci.instance_id] || ci.instance_id);
+    }
+
+    return {
+        user: userRes.data,
+        subscription: subRes.data || null,
+        instances,
+        lists: lists.map((l, idx) => ({ ...l, contactCount: listCounts[idx] })),
+        campaigns: campaigns.map((c) => {
+            const stats = statsByCampaign[c.id];
+            return {
+                ...c,
+                listName: c.contact_list_id ? listNameById[c.contact_list_id] ?? null : null,
+                instanceNames: instancesByCampaign[c.id] ?? (c.instance_id ? [instanceNameById[c.instance_id] || c.instance_id] : []),
+                messageCounts: stats?.counts ?? {},
+                errors: Object.entries(stats?.errors ?? {}).map(([message, count]) => ({ message, count })),
+                lastMessageUpdate: stats?.lastUpdate ?? null,
+            };
+        }),
+        events: eventsRes.data || [],
+        sessions: sessionsRes.data || [],
+    };
+};
+
+// Conversas com o agente em texto puro (mesmo espírito do log bruto: pra ler e copiar).
+// Sem sessionId: todas as sessões dos últimos `days` dias, com os eventos de sistema
+// intercalados na ordem real.
+export const getUserConversationsText = async (userId: string, opts: { sessionId?: string; days?: number } = {}) => {
+    const since = new Date(Date.now() - (opts.days ?? 7) * 24 * 60 * 60 * 1000).toISOString();
+
+    let msgQuery = supabase
+        .from('agent_messages')
+        .select('session_id, role, content, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true })
+        .limit(3000);
+    msgQuery = opts.sessionId ? msgQuery.eq('session_id', opts.sessionId) : msgQuery.gte('created_at', since);
+
+    const [msgRes, eventsRes, sessionsRes] = await Promise.all([
+        msgQuery,
+        opts.sessionId
+            ? Promise.resolve({ data: [] as Array<{ type: string; severity: string; message: string; created_at: string }> })
+            : supabase.from('system_events').select('type, severity, message, created_at').eq('user_id', userId).gte('created_at', since).order('created_at', { ascending: true }),
+        supabase.from('agent_sessions').select('id, title').eq('user_id', userId),
+    ]);
+    if (msgRes.error) throw new Error(msgRes.error.message);
+
+    const titleById: Record<string, string> = Object.fromEntries((sessionsRes.data || []).map((s) => [s.id, s.title]));
+    type Item = { at: string; line?: string; msg?: { session_id: string; role: string; content: string } };
+    const items: Item[] = [
+        ...(msgRes.data || []).map((m) => ({ at: m.created_at, msg: m })),
+        ...(eventsRes.data || []).map((e) => ({ at: e.created_at, line: `⚠️ evento ${e.severity} [${e.type}] ${e.message}` })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+
+    let lastSession: string | null = null;
+    const lines: string[] = [];
+    for (const item of items) {
+        if (!item.msg) {
+            lines.push(`[${item.at}] ${item.line}`);
+            continue;
+        }
+        if (item.msg.session_id !== lastSession) {
+            lastSession = item.msg.session_id;
+            lines.push(`\n=== conversa "${titleById[item.msg.session_id] || 'sem título'}" (${item.msg.session_id}) ===`);
+        }
+        lines.push(`[${item.at}] ${item.msg.role === 'user' ? 'usuário' : 'agente'}: ${item.msg.content}`);
+    }
+
+    return { text: lines.join('\n').trim(), count: (msgRes.data || []).length };
 };

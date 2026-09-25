@@ -10,12 +10,14 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Search, Ban, CheckCircle2, MoreVertical, Smartphone, Users } from 'lucide-react'
 import { format } from 'date-fns'
+import { useRouter } from 'next/navigation'
 
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [page, setPage] = useState(1)
+    const router = useRouter()
 
     const fetchUsers = async () => {
         setLoading(true)
@@ -54,7 +56,7 @@ export default function AdminUsersPage() {
                 </div>
                 <div>
                     <h1 className="font-display text-3xl font-extrabold text-zinc-100 tracking-tight">Usuários</h1>
-                    <p className="text-zinc-400 text-sm">Buscar, acompanhar e moderar contas do ZapBroker.</p>
+                    <p className="text-zinc-400 text-sm">Clique num cliente pra ver WhatsApps, campanhas, log bruto ao vivo e conversas com o agente.</p>
                 </div>
             </div>
 
@@ -97,7 +99,11 @@ export default function AdminUsersPage() {
                                 </TableRow>
                             ) : (
                                 users.map(user => (
-                                    <TableRow key={user.id} className="border-zinc-800 hover:bg-zinc-800/50 text-zinc-300">
+                                    <TableRow
+                                        key={user.id}
+                                        onClick={() => router.push(`/admin/users/${user.id}`)}
+                                        className="border-zinc-800 hover:bg-zinc-800/50 text-zinc-300 cursor-pointer"
+                                    >
                                         <TableCell>
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-zinc-100">{user.name}</span>
@@ -128,7 +134,7 @@ export default function AdminUsersPage() {
                                                 variant="ghost"
                                                 size="icon"
                                                 className="rounded-full hover:text-red-500 hover:bg-red-500/10"
-                                                onClick={() => handleBan(user.id)}
+                                                onClick={(e) => { e.stopPropagation(); handleBan(user.id) }}
                                             >
                                                 <Ban className="w-4 h-4" />
                                             </Button>
