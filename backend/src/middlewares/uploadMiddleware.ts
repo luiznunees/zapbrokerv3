@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 // Ensure uploads directory exists
 const uploadDir = 'uploads/';
@@ -12,9 +13,14 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, uploadDir);
     },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    // Prefixo com o id do dono: é o que GET /uploads/media/:filename usa pra só entregar o
+    // arquivo pra quem subiu (antes qualquer conta logada baixava arquivo de outra — listas
+    // de telefone de clientes inclusive). Sufixo com crypto em vez de Math.random pra não
+    // ser adivinhável. Todas as rotas que usam esse middleware passam por authenticateToken antes.
+    filename: (req: any, file, cb) => {
+        const ownerId = String(req.user?.id || 'anon').replace(/[^a-zA-Z0-9-]/g, '');
+        const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(12).toString('hex');
+        cb(null, `${ownerId}_${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
     }
 });
 

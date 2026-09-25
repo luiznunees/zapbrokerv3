@@ -256,6 +256,9 @@ export const getProfile = async (req: any, res: Response) => {
             // But we should have it.
         }
 
+        // Coluna legada `password` (auth real é o Supabase Auth) — nunca devolver pro cliente.
+        if (dbUser) delete (dbUser as any).password;
+
         const profile = dbUser || {
             id: user.id,
             email: user.email,
@@ -450,7 +453,9 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 
         if (error) throw error;
 
-        res.status(200).json(data);
+        // Coluna legada (auth real é o Supabase Auth) — nunca devolver pro cliente.
+        const { password: _password, ...safeData } = data || {};
+        res.status(200).json(safeData);
     } catch (error: any) {
         console.error('Update profile error:', error);
         res.status(400).json({ error: error.message });
