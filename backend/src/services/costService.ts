@@ -8,25 +8,40 @@ interface LogAiCostParams {
     model: string;
     inputTokens: number;
     outputTokens: number;
+    cachedTokens?: number;
+    cacheWriteTokens?: number;
 }
 
 // Fire-and-forget: nunca deve atrapalhar a resposta do agente por causa de log de custo.
 export function logAiCost(params: LogAiCostParams): void {
-    const costUsd = estimateCostUsd(params.model, params.inputTokens, params.outputTokens);
+    const cachedTokens = params.cachedTokens || 0;
+    const cacheWriteTokens = params.cacheWriteTokens || 0;
+    const costUsd = estimateCostUsd(params.model, params.inputTokens, params.outputTokens, cachedTokens, cacheWriteTokens);
+
+    const row = {
+        user_id: params.userId,
+        session_id: params.sessionId || null,
+        provider: params.provider,
+        model: params.model,
+        input_tokens: params.inputTokens,
+        output_tokens: params.outputTokens,
+        cost_usd: costUsd,
+    };
 
     supabase
         .from('ai_cost_events')
-        .insert({
-            user_id: params.userId,
-            session_id: params.sessionId || null,
-            provider: params.provider,
-            model: params.model,
-            input_tokens: params.inputTokens,
-            output_tokens: params.outputTokens,
-            cost_usd: costUsd,
-        })
+        .insert({ ...row, cached_tokens: cachedTokens, cache_write_tokens: cacheWriteTokens })
         .then(({ error }: any) => {
-            if (error) console.error('[CostService] Failed to log AI cost:', error.message);
+            if (!error) return;
+            // Migration ai_cost_events_cache_tokens.sql ainda não aplicada — grava sem as colunas
+            // de cache em vez de perder o evento (cost_usd já vem com o desconto do cache).
+            if (/cached_tokens|cache_write_tokens/.test(error.message)) {
+                supabase.from('ai_cost_events').insert(row).then(({ error: retryError }: any) => {
+                    if (retryError) console.error('[CostService] Failed to log AI cost:', retryError.message);
+                });
+                return;
+            }
+            console.error('[CostService] Failed to log AI cost:', error.message);
         });
 }
 

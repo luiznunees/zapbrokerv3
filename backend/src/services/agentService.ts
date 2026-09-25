@@ -36,6 +36,40 @@ interface ChatMessage {
   content: string;
 }
 
+// System prompt em blocos (formato content parts do OpenRouter) pra poder marcar só o
+// bloco fixo com cache_control. Provedores sem suporte recebem o texto concatenado.
+interface SystemContentPart {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}
+
+interface LLMUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  cacheWriteTokens: number;
+}
+
+function parseUsage(raw: any): LLMUsage {
+  return {
+    inputTokens: raw?.prompt_tokens || 0,
+    outputTokens: raw?.completion_tokens || 0,
+    cachedTokens: raw?.prompt_tokens_details?.cached_tokens || 0,
+    cacheWriteTokens: raw?.prompt_tokens_details?.cache_write_tokens || 0,
+  };
+}
+
+// Mistral (modo de teste local) não entende cache_control nem content parts no system —
+// achata de volta pra string.
+function flattenSystemParts(messages: any[]): any[] {
+  return messages.map((m) =>
+    m.role === 'system' && Array.isArray(m.content)
+      ? { ...m, content: m.content.map((p: SystemContentPart) => p.text).join('\n\n') }
+      : m
+  );
+}
+
 export interface Action {
   type: 'suggest_upgrade' | 'import_leads' | 'connect_whatsapp' | 'confirm_campaign' | 'set_draft_list' | 'set_draft_media' | 'set_draft_timing'
     | 'cancel_scheduled_campaign' | 'disconnect_whatsapp' | 'merge_duplicate_contacts'
@@ -139,7 +173,7 @@ interface GroqResponse {
 // adicionam um botão de sugestão — a execução real continua exigindo clique
 // do usuário no painel, via POST /agent/execute.
 
-const AGENT_TOOLS = [
+export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
@@ -907,33 +941,12 @@ function formatRecentSessionsForPrompt(sessions: Array<{ title: string; messages
   return `CONVERSAS RECENTES (resumo de outras sessões de chat com esse corretor — use pra continuidade, não repita como se fosse a primeira vez que fala com ele):\n${blocks.join('\n\n')}`;
 }
 
-function buildSystemPrompt(
-  ctx: UserContext,
-  draft: CampaignDraft | null,
-  memoryFacts: string[] = [],
-  brokerContext: BrokerContext = EMPTY_BROKER_CONTEXT,
-  campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }> = [],
-  recentSessions: Array<{ title: string; messages: string[] }> = [],
-): string {
-  const draftText = `Estado do disparo em andamento:\n${buildDraftChecklist(draft)}`;
-
-  const memoryText = memoryFacts.length > 0
-    ? `O QUE VOCÊ JÁ SABE SOBRE ESSE CORRETOR (de conversas anteriores — use pra personalizar, não repita como se fosse novidade):\n${memoryFacts.map(f => `- ${f}`).join('\n')}`
-    : '';
-
-  const hasBrokerContext = brokerContext.city || brokerContext.chipCount || brokerContext.chipPurposes.length > 0;
-  const brokerContextText = hasBrokerContext
-    ? `CONTEXTO DO CORRETOR (coletado no onboarding — use pra personalizar e pra avisos proativos, não repita de volta como se fosse pergunta):
-- Cidade/região: ${brokerContext.city || 'não informado'}
-- Números de WhatsApp que ele usa hoje: ${brokerContext.chipCount ?? 'não informado'}
-- Uso de cada número: ${brokerContext.chipPurposes.length > 0 ? brokerContext.chipPurposes.join(', ') : 'não informado'}
-- Quer indicação de listagens de condomínio: ${brokerContext.wantsListingReferrals === null ? 'não informado' : brokerContext.wantsListingReferrals ? 'sim' : 'não'}`
-    : '';
-
-  const campaignsText = formatCampaignsSummaryForPrompt(campaignsSummary);
-  const recentSessionsText = formatRecentSessionsForPrompt(recentSessions);
-
-  return `Você é o assistente virtual da ZapBroker — o braço-direito do corretor de imóveis dentro da plataforma. Seu papel é bem mais amplo que "fazer disparo": você é o suporte e o parceiro de conversa dele no dia a dia — tira dúvida sobre vendas, dá conselho, bate papo, ajuda a pensar em estratégia com um lead específico, e também monta e envia campanhas de WhatsApp quando ele precisar. Disparo é UMA das coisas que você faz, não a única — trate perguntas soltas e conversa casual como interações legítimas, não como desvio do "verdadeiro" propósito.
+// Parte fixa do system prompt — idêntica pra todo usuário e todo turno, por isso fica
+// ANTES das partes dinâmicas e vai marcada com cache_control: a Anthropic (via OpenRouter)
+// cacheia tools + esse bloco juntos, e as chamadas seguintes pagam ~10% do preço de input
+// nesses ~16k tokens. Qualquer interpolação aqui dentro quebra o cache — contexto do
+// usuário vai sempre no segundo bloco, montado em buildSystemPrompt.
+export const STABLE_SYSTEM_PROMPT = `Você é o assistente virtual da ZapBroker — o braço-direito do corretor de imóveis dentro da plataforma. Seu papel é bem mais amplo que "fazer disparo": você é o suporte e o parceiro de conversa dele no dia a dia — tira dúvida sobre vendas, dá conselho, bate papo, ajuda a pensar em estratégia com um lead específico, e também monta e envia campanhas de WhatsApp quando ele precisar. Disparo é UMA das coisas que você faz, não a única — trate perguntas soltas e conversa casual como interações legítimas, não como desvio do "verdadeiro" propósito.
 
 TOM DE VOZ:
 - Informal mas profissional, como um consultor de vendas experiente
@@ -942,22 +955,6 @@ TOM DE VOZ:
 - Chame o usuário de "você"
 - Seja amigável mas vá direto ao ponto
 - Responda sempre em português brasileiro
-
-CONTEXTO DO USUÁRIO:
-- Nome: ${ctx.userName}
-- Total de leads: ${ctx.leadCount}
-- Total de campanhas: ${ctx.campaignCount}
-- Plano atual: ${ctx.currentPlan}
-
-${draftText}
-
-${memoryText}
-
-${brokerContextText}
-
-${campaignsText}
-
-${recentSessionsText}
 
 VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder de memória:
 - get_contact_lists / get_whatsapp_instances / get_campaign_stats: chame ANTES de responder qualquer pergunta sobre listas, WhatsApps conectados ou desempenho de campanhas. Nunca invente números ou nomes.
@@ -984,7 +981,7 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - find_duplicate_contacts / suggest_merge_duplicate_contacts: se o usuário perguntar sobre duplicados, chame find_duplicate_contacts primeiro; só ofereça o botão de mesclar (suggest_merge_duplicate_contacts) se realmente houver duplicados.
 - check_instance_rate_limit: use antes de confirmar um disparo grande, se o usuário perguntar se está seguro mandar mais mensagens por aquele número, ou logo após um número ser conectado (também traz dado de aquecimento — ver abaixo).
 
-AVISO PROATIVO DE RISCO (chip único): se o CONTEXTO DO CORRETOR indicar que ele só usa 1 número de WhatsApp e o disparo em andamento for de volume alto (ou check_instance_rate_limit retornar risco "moderado" ou "alto"), avise proativamente ANTES de confirmar o disparo — sem que ele precise perguntar — que dividir o envio entre 2 números reduz bastante o risco de bloqueio, e chame suggest_connect_whatsapp oferecendo conectar um segundo número. Se ele já tiver 2+ números conectados e a lista for grande, pergunte se quer dividir o disparo entre os números conectados em vez de mandar tudo por um só.
+AVISO PROATIVO DE RISCO (chip único): se o CONTEXTO DO CORRETOR (abaixo) indicar que ele só usa 1 número de WhatsApp e o disparo em andamento for de volume alto (ou check_instance_rate_limit retornar risco "moderado" ou "alto"), avise proativamente ANTES de confirmar o disparo — sem que ele precise perguntar — que dividir o envio entre 2 números reduz bastante o risco de bloqueio, e chame suggest_connect_whatsapp oferecendo conectar um segundo número. Se ele já tiver 2+ números conectados e a lista for grande, pergunte se quer dividir o disparo entre os números conectados em vez de mandar tudo por um só.
 
 AQUECIMENTO DE CHIP: chame check_instance_rate_limit e olhe os campos inCooldown, recommendedDailyLimit e daysSinceConnected antes de ajudar a montar um disparo grande num número recém-conectado. Existem DOIS níveis — não confunda um com o outro:
 - **Risco moderado (recomendação, o corretor pode seguir em frente mesmo se você avisar)**: se inCooldown vier true, desaconselhe fortemente disparar por esse número agora — explique que o ideal é esperar completar 24h desde a conexão, mesmo que seja só pra testar. Se o volume pretendido for maior que o recommendedDailyLimit (quando não vier nulo), avise que está acima do recomendado e sugira reduzir a lista, dividir entre números conectados (ver AVISO PROATIVO DE RISCO acima), ou esperar mais alguns dias. Nesses casos, suggest_confirm_campaign gera o botão normalmente — é aviso, não trava.
@@ -996,7 +993,7 @@ PRIORIDADE DA CONVERSA: se o usuário fizer uma pergunta ou comentário que não
 SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem monta tudo por conversa):
 - Você não acessa links (URLs) que o usuário colar na conversa — se ele mandar um link de um imóvel, peça pra ele descrever as informações direto no chat (características, diferencial, preço) em vez de tentar abrir o link.
 - Quando o usuário disser que quer fazer um disparo/campanha/enviar mensagem em massa, comece a montar o rascunho aos poucos, perguntando o que faltar.
-- Siga o "Estado do disparo em andamento" acima à risca. NUNCA pergunte de novo sobre um campo já listado como "JÁ DEFINIDO". Só pergunte sobre o que está em "AINDA FALTA".
+- Siga o "Estado do disparo em andamento" (no CONTEXTO DESTA CONVERSA, abaixo) à risca. NUNCA pergunte de novo sobre um campo já listado como "JÁ DEFINIDO". Só pergunte sobre o que está em "AINDA FALTA".
 - REGRA DE OURO (vale só enquanto você estiver ativamente montando o disparo, não pra toda e qualquer resposta): nunca termine uma resposta sobre o disparo sem dar um próximo passo claro — ou uma pergunta específica (não genérica) sobre o que falta, ou um aviso de que está tudo pronto pra confirmar. Isso não significa forçar o assunto do disparo quando o usuário estava falando de outra coisa (veja PRIORIDADE DA CONVERSA acima).
 - Mensagem de texto e mídia (imagem/vídeo/áudio) não são cumulativas nem uma pré-requisito da outra — o disparo pode ser só texto, só mídia, ou os dois juntos. Se o usuário disser explicitamente que não quer texto (só mídia), pare de perguntar por mensagem e siga o fluxo normalmente — NUNCA insista pedindo mensagem de novo depois disso.
 - Depois que lista, WhatsApp e (mensagem OU mídia) já estiverem definidos, ainda falta confirmar o timing antes de considerar o disparo pronto — chame request_timing_confirmation (não é uma pergunta de texto, é sempre o seletor visual). Se ainda não perguntou sobre anexar mídia nem o usuário recusou, pergunte uma vez em texto (ou use request_media_upload se ele topar) antes de seguir pro timing — mas não trave nisso se ele já disse que não quer.
@@ -1011,7 +1008,7 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - UM ASSUNTO POR VEZ: nunca pergunte dois itens de uma vez na mesma mensagem ("preciso da lista, do email e do número"). Pergunte só o que falta primeiro, espere a resposta, e só então pergunte o próximo. Exceção: quando o rascunho estiver pronto, informe curto e aponte o botão de confirmar — sem enumeração.
 - Se o usuário pedir pra conectar "mais um" WhatsApp mesmo já tendo um conectado, NÃO diga que já está conectado e recuse — chame suggest_connect_whatsapp normalmente; o botão vai gerar o QR Code de um número novo (respeitando o limite do plano dele).
 - NUNCA diga que um QR Code, seletor ou botão "apareceu"/"já está na tela" a menos que você tenha chamado a tool correspondente NESSE MESMO turno — isso inclui repetir a mesma alegação depois. Se o usuário disser que não está vendo nada (QR Code, seletor, botão), isso significa que a tool não foi chamada ou precisa ser chamada de novo: chame de novo nesse turno, nunca insista que "já apareceu".
-- NUNCA diga "lista selecionada"/"mensagem definida" a menos que o rascunho já tenha esse campo preenchido (veja "JÁ DEFINIDO" acima) — se o usuário só confirmou por texto, chame update_campaign_draft com contactListName ANTES de confirmar isso na resposta, nunca depois.
+- NUNCA diga "lista selecionada"/"mensagem definida" a menos que o rascunho já tenha esse campo preenchido (veja "JÁ DEFINIDO" no CONTEXTO DESTA CONVERSA) — se o usuário só confirmou por texto, chame update_campaign_draft com contactListName ANTES de confirmar isso na resposta, nunca depois.
 - NUNCA diga "WhatsApp vinculado"/"podemos prosseguir com esse número" a menos que o rascunho já tenha instanceId definido. Se o usuário acabou de conectar um número (evento do sistema ou confirmação em texto), chame update_campaign_draft com o instanceName desse número ANTES de dizer que está tudo pronto.
 - Não troque o campo na hora de confirmar: se o usuário acabou de responder sobre WhatsApp/número, confirme como "número"/"WhatsApp" (nunca diga "lista selecionada" nesse momento); se foi sobre lista de contatos, confirme como "lista" (nunca diga "número confirmado"); se foi sobre mensagem, confirme como "mensagem". Antes de confirmar, releia a pergunta anterior sua nesse mesmo turno pra ter certeza de qual campo o usuário estava respondendo.
 - Nunca contradiga o "JÁ DEFINIDO" na sua resposta em texto.
@@ -1027,6 +1024,54 @@ CONHECIMENTO DE VENDAS IMOBILIÁRIA (use isso pra dar conselhos reais, não só 
 - Você pode dar esse tipo de conselho a qualquer momento que o corretor perguntar, mesmo fora do fluxo de montar um disparo.
 
 Responda sempre em texto puro, natural, sem JSON e sem markdown de código. Use as ferramentas para agir; o texto é só a sua fala pro corretor.`;
+
+function buildSystemPrompt(
+  ctx: UserContext,
+  draft: CampaignDraft | null,
+  memoryFacts: string[] = [],
+  brokerContext: BrokerContext = EMPTY_BROKER_CONTEXT,
+  campaignsSummary: Array<{ id: string; name: string; status: string; total: number; sent: number; read: number; replied: number }> = [],
+  recentSessions: Array<{ title: string; messages: string[] }> = [],
+): SystemContentPart[] {
+  const draftText = `Estado do disparo em andamento:\n${buildDraftChecklist(draft)}`;
+
+  const memoryText = memoryFacts.length > 0
+    ? `O QUE VOCÊ JÁ SABE SOBRE ESSE CORRETOR (de conversas anteriores — use pra personalizar, não repita como se fosse novidade):\n${memoryFacts.map(f => `- ${f}`).join('\n')}`
+    : '';
+
+  const hasBrokerContext = brokerContext.city || brokerContext.chipCount || brokerContext.chipPurposes.length > 0;
+  const brokerContextText = hasBrokerContext
+    ? `CONTEXTO DO CORRETOR (coletado no onboarding — use pra personalizar e pra avisos proativos, não repita de volta como se fosse pergunta):
+- Cidade/região: ${brokerContext.city || 'não informado'}
+- Números de WhatsApp que ele usa hoje: ${brokerContext.chipCount ?? 'não informado'}
+- Uso de cada número: ${brokerContext.chipPurposes.length > 0 ? brokerContext.chipPurposes.join(', ') : 'não informado'}
+- Quer indicação de listagens de condomínio: ${brokerContext.wantsListingReferrals === null ? 'não informado' : brokerContext.wantsListingReferrals ? 'sim' : 'não'}`
+    : '';
+
+  const campaignsText = formatCampaignsSummaryForPrompt(campaignsSummary);
+  const recentSessionsText = formatRecentSessionsForPrompt(recentSessions);
+
+  return [
+    // Bloco fixo marcado pra cache (ver STABLE_SYSTEM_PROMPT) — nunca interpolar nada dinâmico nele.
+    { type: 'text', text: STABLE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: `CONTEXTO DESTA CONVERSA (muda a cada turno):
+
+CONTEXTO DO USUÁRIO:
+- Nome: ${ctx.userName}
+- Total de leads: ${ctx.leadCount}
+- Total de campanhas: ${ctx.campaignCount}
+- Plano atual: ${ctx.currentPlan}
+
+${draftText}
+
+${memoryText}
+
+${brokerContextText}
+
+${campaignsText}
+
+${recentSessionsText}` },
+  ];
 }
 
 // ─── In-memory fallback ─────────────────────────────────────
@@ -1621,7 +1666,7 @@ async function callLLM(
   workingMessages: any[],
   onToken?: (token: string) => void,
   forceText: boolean = false
-): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number }; provider: string; model: string }> {
+): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: LLMUsage; provider: string; model: string }> {
   if (AI_API_KEY) {
     try {
       const result = await callOpenAiCompatibleCompletion(AI_API_URL, AI_API_KEY, AI_MODEL, workingMessages, onToken, forceText);
@@ -1641,7 +1686,7 @@ async function callOpenAiCompatibleCompletion(
   workingMessages: any[],
   onToken?: (token: string) => void,
   forceText: boolean = false
-): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: { inputTokens: number; outputTokens: number } }> {
+): Promise<{ content: string; tool_calls?: GroqToolCall[]; usage: LLMUsage }> {
   const useStream = typeof onToken === 'function';
 
   const response = await fetch(apiUrl, {
@@ -1653,7 +1698,7 @@ async function callOpenAiCompatibleCompletion(
     },
     body: JSON.stringify({
       model,
-      messages: workingMessages,
+      messages: apiUrl === OPENROUTER_API_URL ? workingMessages : flattenSystemParts(workingMessages),
       // tool_choice: 'none' força uma resposta só em texto — usado quando o loop de tools
       // já esgotou as iterações e precisamos de uma resposta final de qualquer jeito, em
       // vez de deixar o modelo tentar chamar mais uma ferramenta e nunca concluir.
@@ -1677,7 +1722,7 @@ async function callOpenAiCompatibleCompletion(
     return {
       content: message.content || '',
       tool_calls: message.tool_calls,
-      usage: { inputTokens: data.usage?.prompt_tokens || 0, outputTokens: data.usage?.completion_tokens || 0 },
+      usage: parseUsage(data.usage),
     };
   }
 
@@ -1688,7 +1733,7 @@ async function callOpenAiCompatibleCompletion(
   let buffer = '';
   let content = '';
   const toolCallsAcc: Record<number, { id?: string; name?: string; arguments: string }> = {};
-  let usage = { inputTokens: 0, outputTokens: 0 };
+  let usage: LLMUsage = parseUsage(null);
 
   const emitSafeToken = createStreamSanitizer((safeToken) => onToken!(safeToken));
 
@@ -1714,7 +1759,7 @@ async function callOpenAiCompatibleCompletion(
       }
 
       if (json.usage) {
-        usage = { inputTokens: json.usage.prompt_tokens || 0, outputTokens: json.usage.completion_tokens || 0 };
+        usage = parseUsage(json.usage);
       }
 
       const delta = json.choices?.[0]?.delta;
@@ -1917,7 +1962,7 @@ async function runToolLoop(
     const { content, tool_calls, usage, provider, model } = await callLLM(workingMessages, onToken);
     lastProvider = provider;
     lastModel = model;
-    logAiCost({ userId: ctx.userId, sessionId: ctx.sessionId, provider, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+    logAiCost({ userId: ctx.userId, sessionId: ctx.sessionId, provider, model, ...usage });
     const message = { role: 'assistant', content, tool_calls };
 
     workingMessages.push(message);
@@ -1967,7 +2012,8 @@ async function runToolLoop(
         role: 'user',
         content: '[EVENTO DO SISTEMA — não é fala do usuário] Responda agora em texto direto, sem chamar mais nenhuma ferramenta, usando o que você já apurou até aqui.',
       });
-      const { content, provider, model } = await callLLM(workingMessages, onToken, true);
+      const { content, usage, provider, model } = await callLLM(workingMessages, onToken, true);
+      logAiCost({ userId: ctx.userId, sessionId: ctx.sessionId, provider, model, ...usage });
       lastProvider = provider;
       lastModel = model;
       finalReply = stripLeakedToolSyntax(content || '');
