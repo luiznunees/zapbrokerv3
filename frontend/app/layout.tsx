@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { PushPromptModal } from "@/components/dashboard/PushPromptModal";
+import { CrispWidget } from "@/components/crisp/CrispWidget";
 
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display" });
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-body" });
@@ -79,6 +80,7 @@ export default function RootLayout({
           {children}
           <ToastProvider />
           <PushPromptModal />
+          <CrispWidget />
         </ThemeProvider>
         <script
           type="application/ld+json"

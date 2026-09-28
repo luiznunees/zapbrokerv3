@@ -5,7 +5,7 @@ import { WHATSAPP_CTA_URL } from "./constants"
 // CTA fixo só no mobile — é de onde vem a maior parte do tráfego pago via Instagram/Meta Ads.
 export function LpStickyBar() {
     return (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-50 p-3 bg-white/95 backdrop-blur-md border-t border-landing-navy/10">
+        <div data-lp-sticky-bar className="md:hidden fixed bottom-0 inset-x-0 z-50 p-3 bg-white/95 backdrop-blur-md border-t border-landing-navy/10">
             <Link
                 href={WHATSAPP_CTA_URL}
                 target="_blank"

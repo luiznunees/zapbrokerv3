@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { resetCrisp } from './crisp'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -22,6 +23,7 @@ if (typeof window !== 'undefined') {
 }
 
 export async function logoutUser(redirectTo: string = '/login') {
+    resetCrisp()
     await supabase.auth.signOut()
     localStorage.removeItem('token')
     localStorage.removeItem('user')

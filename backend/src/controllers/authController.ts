@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request, Response } from 'express';
 import * as authService from '../services/authService';
 import { supabase } from '../config/supabase';
@@ -306,6 +307,15 @@ export const getProfile = async (req: any, res: Response) => {
             }
         }
 
+        // Identity verification do Crisp: o email do corretor vai assinado com o secret do site —
+        // sem isso qualquer um setava o email de outro no widget e o contato aparecia como se
+        // fosse ele. Sem o secret configurado fica null e o email vai sem assinatura (o Crisp
+        // mostra como "não verificado").
+        const crispIdentitySecret = process.env.CRISP_IDENTITY_SECRET;
+        const crispEmailSignature = crispIdentitySecret && user.email
+            ? crypto.createHmac('sha256', crispIdentitySecret).update(user.email).digest('hex')
+            : null;
+
         // Mock tenant for now, but include subscriptionStatus and planName
         res.status(200).json({
             user: {
@@ -315,6 +325,7 @@ export const getProfile = async (req: any, res: Response) => {
                 planId: subscription?.plan_id || null,
                 pixCpf: subscription?.pix_cpf || null,
                 pixCellphone: subscription?.pix_cellphone || null,
+                crispEmailSignature,
             },
             tenant: { id: 'default', name: 'Default Tenant' }
         });

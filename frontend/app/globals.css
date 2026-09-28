@@ -211,3 +211,10 @@ body {
   background: radial-gradient(120% 100% at 50% 0%, var(--color-landing-sky-light) 0%, var(--color-landing-sky) 45%, var(--color-landing-sky-deep) 100%);
 }
 
+/* Crisp: no mobile, a LP tem uma barra fixa de CTA de WhatsApp no rodapé e a bolha do chat
+   cairia em cima dela. Ali o WhatsApp já é o canal de conversa, então o Crisp some. */
+@media (max-width: 767px) {
+  body:has([data-lp-sticky-bar]) .crisp-client {
+    display: none !important;
+  }
+}

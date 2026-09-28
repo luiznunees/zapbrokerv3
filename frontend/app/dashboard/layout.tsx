@@ -4,6 +4,7 @@ import { UserProvider } from '@/contexts/user-context'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PaymentGuard from '@/components/auth/PaymentGuard'
 import SupportButton from '@/components/SupportButton'
+import { CrispIdentify } from '@/components/crisp/CrispIdentify'
 
 export default function DashboardLayout({
   children,
@@ -21,6 +22,7 @@ export default function DashboardLayout({
                 <div className="p-4 pt-3 h-full">{children}</div>
               </main>
               <SupportButton />
+              <CrispIdentify />
             </div>
           </DashboardProvider>
         </PaymentGuard>
