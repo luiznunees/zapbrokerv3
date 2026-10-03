@@ -6,18 +6,40 @@ const BATCH_SIZE = 50; // Can process more now as we just enqueue
 const INTERVAL_MS = 5000; // Check every 5 seconds
 
 let isProcessing = false;
+let processorTimer: NodeJS.Timeout | null = null;
 
 export const startProcessor = () => {
     console.log('Starting Campaign Processor (Queue Mode)...');
-    setInterval(processQueue, INTERVAL_MS);
+    processorTimer = setInterval(processQueue, INTERVAL_MS);
+};
+
+// Desligamento controlado (deploy): para de enfileirar e espera o ciclo em andamento acabar.
+export const stopProcessor = async () => {
+    if (processorTimer) clearInterval(processorTimer);
+    processorTimer = null;
+    for (let i = 0; i < 50 && isProcessing; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+    }
 };
 
 const processQueue = async () => {
-    // console.log('[CampaignProcessor] Heartbeat...'); 
+    // console.log('[CampaignProcessor] Heartbeat...');
     if (isProcessing) return;
     isProcessing = true;
 
     try {
+        // Mensagem presa em SENDING (processo morreu no meio do envio e o job se perdeu): não
+        // reenvia — parte pode ter chegado ao lead. Marca como falha pra aparecer no painel.
+        await supabase
+            .from('campaign_messages')
+            .update({
+                status: 'FAILED',
+                error_message: 'Envio interrompido no meio (reinício do servidor) — parte da mensagem pode ter chegado ao lead.',
+                updated_at: new Date().toISOString(),
+            })
+            .eq('status', 'SENDING')
+            .lt('updated_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
+
         // Rede de segurança: mensagens que ficaram em QUEUED por muito tempo sem progredir
         // (worker reiniciado/travado no meio do job) voltam pra PENDING pra serem
         // reenfileiradas — sem isso, uma falha silenciosa deixava a campanha presa pra sempre
@@ -32,6 +54,11 @@ const processQueue = async () => {
         // eventos campaign.message_failed, ~4min de diferença, exatamente esse mecanismo). Se
         // fosse um envio bem-sucedido em vez de falho, isso arriscava mandar a mesma mensagem
         // duas vezes pro lead.
+        //
+        // Numa campanha grande a mensagem espera HORAS em QUEUED de forma legítima (304 leads a
+        // ~2,5min cada). Reenfileirar isso duplicava jobs a cada 15min (achado real, Fernanda
+        // 25/09). Agora é seguro: o job usa o id da mensagem como jobId (BullMQ ignora add de
+        // um job que ainda está na fila) e o worker só envia se a mensagem ainda não saiu.
         const stuckCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
         const { data: requeued } = await supabase
             .from('campaign_messages')
@@ -97,17 +124,24 @@ const processQueue = async () => {
 
         console.log(`[CampaignProcessor] Found ${validMessages.length} active messages (filtered from ${messages.length}). Enqueuing...`);
 
-        // Mark as QUEUED immediately
+        // Mark as QUEUED immediately — reserva atômica: só enfileira o que ESTE processo
+        // conseguiu virar de PENDING pra QUEUED. Durante um deploy sem downtime dois processos
+        // rodam juntos por alguns segundos; sem isso os dois pegavam as mesmas mensagens.
         const messageIds = validMessages.map(m => m.id);
-        await supabase
+        const { data: claimedRows } = await supabase
             .from('campaign_messages')
             .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
-            .in('id', messageIds);
+            .in('id', messageIds)
+            .eq('status', 'PENDING')
+            .select('id');
+        const claimedIds = new Set((claimedRows || []).map((r: any) => r.id));
+        const toEnqueue = validMessages.filter(m => claimedIds.has(m.id));
+        if (toEnqueue.length === 0) return;
 
-        const campaignIdsInBatch = Array.from(new Set(validMessages.map(m => (m.campaigns as any).id)));
+        const campaignIdsInBatch = Array.from(new Set(toEnqueue.map(m => (m.campaigns as any).id)));
         const roundRobin = await buildRoundRobinPicker(campaignIdsInBatch);
 
-        for (const msg of validMessages) {
+        for (const msg of toEnqueue) {
             const campaign = msg.campaigns as any;
 
             if (!campaign) {
@@ -138,6 +172,9 @@ const processQueue = async () => {
                 mediaUrl: campaign.media_url,
                 delay: delay // Worker will wait this amount
             }, {
+                // jobId = id da mensagem: se já existe um job dela esperando na fila, o BullMQ
+                // ignora esse add — nunca duas cópias da mesma mensagem na fila.
+                jobId: msg.id,
                 removeOnComplete: true,
                 removeOnFail: 500, // Keep failed jobs for inspection
                 attempts: 3,

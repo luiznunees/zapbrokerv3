@@ -57,10 +57,75 @@ function readLocalMediaAsBase64(mediaUrl: string, fallbackMimetype: string): { m
     return { mediaData, mimetype };
 }
 
+// ─── Desligamento controlado (deploy/restart) ───────────────────
+// Quando o processo recebe SIGTERM (deploy no EasyPanel), o worker para de pegar jobs novos
+// e o job atual decide: se ainda está só esperando o intervalo anti-ban (a maior parte do
+// tempo), desiste e devolve a mensagem pra fila na hora; se já começou a enviar, termina o
+// envio antes de desligar. Ver shutdown em server.ts.
+let shuttingDown = false;
+const wakeSleepers = new Set<() => void>();
+
+export function beginWorkerShutdown() {
+    shuttingDown = true;
+    wakeSleepers.forEach((wake) => wake());
+    wakeSleepers.clear();
+}
+
+// Espera que acorda antes da hora se o desligamento começar.
+function interruptibleSleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => { wakeSleepers.delete(done); resolve(); }, ms);
+        const done = () => { clearTimeout(timer); resolve(); };
+        wakeSleepers.add(done);
+    });
+}
+
+async function releaseMessage(messageId: string) {
+    await supabase
+        .from('campaign_messages')
+        .update({ status: 'PENDING', updated_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .in('status', ['QUEUED', 'SENDING']);
+}
+
+async function failWithoutResend(messageId: string, campaignId: string, reason: string) {
+    await supabase
+        .from('campaign_messages')
+        .update({ status: 'FAILED', error_message: reason, updated_at: new Date().toISOString() })
+        .eq('id', messageId);
+    const { data: campaignRow } = await supabase.from('campaigns').select('user_id').eq('id', campaignId).maybeSingle();
+    eventLogService.logEvent({
+        type: 'campaign.message_interrupted',
+        severity: 'warn',
+        message: `Mensagem da campanha ${campaignId} não foi reenviada pra não duplicar: ${reason}`,
+        userId: campaignRow?.user_id,
+        metadata: { campaignId, messageId },
+    });
+}
+
 export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     const { campaignId, contactId, messageVariations, instanceId, mediaType, mediaUrl, delay, sequentialMode, blockDelay } = job.data;
+    const messageId: string = job.data.id;
 
-    // 0. CHECK PAUSE/CANCEL STATUS
+    // 0. IDEMPOTÊNCIA — um job só envia se a mensagem ainda estiver esperando envio.
+    // Achado real (Fernanda, 25/09): a rede de segurança do processor reenfileirava a cada
+    // 15min toda mensagem ainda na fila (numa campanha de 304 leads elas esperam horas de
+    // verdade), criando jobs duplicados; o worker não conferia nada e cada cópia virava um
+    // envio repetido pro mesmo lead.
+    const { data: msgRow } = await supabase.from('campaign_messages').select('status').eq('id', messageId).maybeSingle();
+    if (!msgRow || msgRow.status === 'SENT' || msgRow.status === 'FAILED') {
+        console.log(`[CampaignWorker] Message ${messageId} já está ${msgRow?.status ?? 'inexistente'} — job ${job.id} ignorado (duplicado).`);
+        return;
+    }
+    if (msgRow.status === 'SENDING') {
+        // Outro processo está enviando essa mensagem agora (deploy com dois processos juntos)
+        // ou morreu no meio. Nos dois casos este job não envia nem marca falha: quem morreu de
+        // verdade é pego pela varredura de SENDING>15min do processor (vira FAILED sem reenvio).
+        console.log(`[CampaignWorker] Message ${messageId} já está SENDING — job ${job.id} ignorado.`);
+        return;
+    }
+
+    // 0.1 CHECK PAUSE/CANCEL STATUS
     const { data: campaignData, error: campaignError } = await supabase
         .from('campaigns')
         .select('status')
@@ -69,12 +134,8 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
 
     if (campaignData?.status === 'PAUSED') {
         console.log(`[CampaignWorker] Campaign ${campaignId} is PAUSED. Aborting job ${job.id} and requeuing later.`);
-        // Revert message status to PENDING so it gets picked up again when resumed
-        await supabase
-            .from('campaign_messages')
-            .update({ status: 'PENDING' })
-            .eq('id', job.data.id); // Use the message ID passed in job
-
+        // Volta pra PENDING (só se ainda não foi enviada) pra ser pega de novo ao retomar.
+        await releaseMessage(messageId);
         return; // Exit worker
     }
 
@@ -112,7 +173,48 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     if (finalDelay < 2) finalDelay = 2; // Min 2s safety
 
     console.log(`[CampaignWorker] Anti-Ban Jitter: Base ${baseDelay}s -> Randomized ${finalDelay}s. Waiting...`);
-    await new Promise(resolve => setTimeout(resolve, finalDelay * 1000));
+    await interruptibleSleep(finalDelay * 1000);
+
+    // Deploy/restart chegou durante a espera: nada foi enviado ainda — devolve pra fila e sai
+    // na hora, o processo novo pega de onde parou.
+    if (shuttingDown) {
+        console.log(`[CampaignWorker] Desligando — mensagem ${messageId} devolvida pra fila sem enviar.`);
+        await releaseMessage(messageId);
+        return;
+    }
+
+    // Confere de novo depois da espera: o corretor pode ter pausado ou cancelado nesse meio
+    // tempo (a espera anti-ban passa de 1 min) — pausar tem que valer na hora, são leads reais.
+    const { data: campaignNow } = await supabase.from('campaigns').select('status').eq('id', campaignId).single();
+    if (campaignNow?.status === 'PAUSED' || campaignNow?.status === 'CANCELLED') {
+        console.log(`[CampaignWorker] Campaign ${campaignId} ficou ${campaignNow.status} durante a espera — job ${job.id} não envia.`);
+        if (campaignNow.status === 'PAUSED') await releaseMessage(messageId);
+        return;
+    }
+
+    // Reserva a mensagem de forma atômica antes do primeiro envio: se outro worker (ex: o
+    // processo novo durante um deploy sem downtime) já pegou, este desiste.
+    const { data: claimed } = await supabase
+        .from('campaign_messages')
+        .update({ status: 'SENDING', updated_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .in('status', ['QUEUED', 'PENDING'])
+        .select('id');
+    if (!claimed || claimed.length === 0) {
+        console.log(`[CampaignWorker] Message ${messageId} já foi pega por outro worker — job ${job.id} ignorado.`);
+        return;
+    }
+
+    // Marca se algum pedaço já saiu — decide, numa falha, entre tentar de novo (nada saiu)
+    // ou não reenviar (parte já chegou ao lead).
+    let sentAny = false;
+    const track = async <T>(sending: Promise<T>): Promise<T> => {
+        const r = await sending;
+        sentAny = true;
+        return r;
+    };
+
+    try {
 
     // Send Message
     // NOTE: instanceId here is the Database ID, but Evolution needs the instance Name (evolution_id)
@@ -172,13 +274,13 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Send media alone (without caption, since caption is split below into text blocks)
-            const mediaResult = await evolutionService.sendMedia(targetInstanceName, phone, {
+            const mediaResult = await track(evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
                 caption: '',
                 mimetype,
                 filename: mediaType === 'video' ? 'video.mp4' : 'image.jpg',
                 mediatype: mediaType,
-            });
+            }));
             result = mediaResult;
 
             console.log(`[CampaignWorker] Media sent. Waiting ${blockDelay}s before starting text blocks...`);
@@ -190,12 +292,12 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await evolutionService.sendPresence(targetInstanceName, phone, 'recording');
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            const mediaResult = await evolutionService.sendMedia(targetInstanceName, phone, {
+            const mediaResult = await track(evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
                 mimetype,
                 filename: 'audio.mp3',
                 mediatype: 'audio',
-            });
+            }));
             result = mediaResult;
 
             console.log(`[CampaignWorker] Audio sent. Waiting ${blockDelay}s before starting text blocks...`);
@@ -245,7 +347,11 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
             await new Promise(resolve => setTimeout(resolve, typingTime));
 
-            await evolutionService.sendText(targetInstanceName, phone, block);
+            const blockResult = await track(evolutionService.sendText(targetInstanceName, phone, block));
+            // Sem mídia, o id do último bloco é o que marca a mensagem como enviada — antes o
+            // resultado ficava { success: true } sem id, a mensagem nunca virava SENT e a rede
+            // de segurança do processor a reenviava.
+            if (!result || !(result?.key?.id || result?.id)) result = blockResult;
 
             // Wait before sending next block (except for last block)
             if (i < blocks.length - 1) {
@@ -270,7 +376,7 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await new Promise(resolve => setTimeout(resolve, typingTime));
 
             console.log(`[CampaignWorker] Sending TEXT to ${targetInstanceName} -> ${phone}`);
-            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage);
+            result = await track(evolutionService.sendText(targetInstanceName, phone, finalMessage));
             console.log(`[CampaignWorker] TEXT Sent successfully`);
         } else if (mediaType === 'image' || mediaType === 'video') {
             const fallbackMimetype = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
@@ -280,13 +386,13 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await evolutionService.sendPresence(targetInstanceName, phone, 'composing');
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            result = await evolutionService.sendMedia(targetInstanceName, phone, {
+            result = await track(evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
                 caption: finalMessage,
                 mimetype,
                 filename: mediaType === 'video' ? 'video.mp4' : 'image.jpg',
                 mediatype: mediaType,
-            });
+            }));
         } else if (mediaType === 'audio') {
             const { mediaData, mimetype } = readLocalMediaAsBase64(mediaUrl, 'audio/mpeg');
 
@@ -295,33 +401,47 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
             await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Áudio não aceita legenda na Evolution API — manda o áudio e o texto em seguida
-            result = await evolutionService.sendMedia(targetInstanceName, phone, {
+            result = await track(evolutionService.sendMedia(targetInstanceName, phone, {
                 media: mediaData,
                 mimetype,
                 filename: 'audio.mp3',
                 mediatype: 'audio',
-            });
+            }));
             if (finalMessage) {
-                await evolutionService.sendText(targetInstanceName, phone, finalMessage);
+                await track(evolutionService.sendText(targetInstanceName, phone, finalMessage));
             }
         } else {
             // Fallback for other media types (document, etc.) - send as text link for now
-            result = await evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nArquivo: ${mediaUrl}`);
+            result = await track(evolutionService.sendText(targetInstanceName, phone, finalMessage + `\n\nArquivo: ${mediaUrl}`));
         }
     }
 
-    // Update status in DB
+    // Update status in DB — sempre marca SENT depois de enviar (antes só marcava se a
+    // Evolution devolvesse um id; sem id a mensagem ficava QUEUED e era reenviada depois).
     const evolutionMessageId = result?.key?.id || result?.id;
-    if (evolutionMessageId) {
-        console.log(`[CampaignWorker] Updating message ${job.data.id} with evolution_id ${evolutionMessageId}`);
-        await supabase
-            .from('campaign_messages')
-            .update({
-                evolution_message_id: evolutionMessageId,
-                status: 'SENT',
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', job.data.id);
+    console.log(`[CampaignWorker] Updating message ${messageId} as SENT${evolutionMessageId ? ` (evolution_id ${evolutionMessageId})` : ''}`);
+    await supabase
+        .from('campaign_messages')
+        .update({
+            ...(evolutionMessageId ? { evolution_message_id: evolutionMessageId } : {}),
+            status: 'SENT',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+
+    } catch (err: any) {
+        if (!sentAny) {
+            // Nada chegou ao lead: devolve pra QUEUED e deixa o BullMQ tentar de novo.
+            await supabase
+                .from('campaign_messages')
+                .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
+                .eq('id', messageId)
+                .eq('status', 'SENDING');
+            throw err;
+        }
+        // Parte já saiu (ex: foto enviada, texto falhou): tentar de novo reenviaria o que já
+        // chegou. Marca como falha e não reenvia.
+        await failWithoutResend(messageId, campaignId, `Envio parcial — parte da mensagem chegou ao lead, o resto falhou: ${err?.message || err}`);
     }
 
 }, {

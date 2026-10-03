@@ -46,6 +46,21 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Health check pro deploy sem downtime do EasyPanel: a versão nova só recebe tráfego quando
+// responde 200 aqui (servidor de pé + Redis da fila de disparo acessível). Durante o
+// desligamento responde 503, pra o proxy parar de mandar requisição pra esse processo.
+// Antes do rate limit de propósito — é chamado a cada poucos segundos pela infraestrutura.
+let shuttingDown = false;
+app.get('/health', async (req, res) => {
+    if (shuttingDown) return res.status(503).json({ ok: false, reason: 'shutting_down' });
+    try {
+        await redisConnection.ping();
+        res.status(200).json({ ok: true });
+    } catch {
+        res.status(503).json({ ok: false, reason: 'redis_unreachable' });
+    }
+});
+
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 500, // Limit each IP to 500 requests per windowMs (increased from 100)
@@ -131,7 +146,9 @@ startMonthlyBillingJob();
 import { startReengagementJob } from './jobs/reengagementPush';
 startReengagementJob();
 
-import './workers/campaignWorker'; // Start BullMQ Worker
+import { campaignWorker, beginWorkerShutdown } from './workers/campaignWorker'; // Start BullMQ Worker
+import { stopProcessor } from './services/campaignProcessor';
+import { redisConnection } from './config/redis';
 
 import * as paymentController from './controllers/paymentController';
 
@@ -155,4 +172,40 @@ httpServer.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
     await runMigrations();
 });
+
+// ─── Desligamento controlado ─────────────────────────────────────
+// Deploy/restart manda SIGTERM. Sem isso o processo morria no meio do que estivesse
+// fazendo — inclusive no meio de um envio de disparo. Ordem: para de enfileirar, o worker
+// termina (ou devolve pra fila) a mensagem atual, fecha o servidor HTTP e sai.
+// Se algo travar, sai à força depois de SHUTDOWN_TIMEOUT_MS — mensagem que ficar no meio
+// do envio é marcada como falha pelo processor, nunca reenviada.
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 90_000;
+
+async function shutdown(signal: string) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Shutdown] ${signal} recebido — desligando com calma...`);
+    setTimeout(() => {
+        console.error('[Shutdown] Tempo esgotado, saindo à força.');
+        process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS).unref();
+
+    try {
+        // Para de aceitar conexão nova (não espera as abertas — websocket do socket.io segura
+        // o close pra sempre; o processo sai logo abaixo de qualquer jeito).
+        httpServer.close();
+        await stopProcessor();
+        beginWorkerShutdown();
+        await campaignWorker.close(); // espera o job atual terminar
+        console.log('[Shutdown] Worker de disparo parado.');
+        await redisConnection.quit().catch(() => undefined);
+    } catch (err: any) {
+        console.error('[Shutdown] Erro durante o desligamento:', err?.message || err);
+    }
+    console.log('[Shutdown] Pronto.');
+    process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
