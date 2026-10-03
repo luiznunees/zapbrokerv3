@@ -1,4 +1,5 @@
 "use client"
+import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useState } from 'react'
 import { ArrowLeft, KeyRound, Loader2, MailCheck } from 'lucide-react'
@@ -15,7 +16,6 @@ export default function ForgotPasswordPage() {
         setLoading(true)
         setErrorMsg('')
         try {
-            const { supabase } = await import('@/lib/supabase')
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: `${window.location.origin}/reset-password`,
             })

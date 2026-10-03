@@ -1,9 +1,12 @@
 "use client"
+import { api } from '@/services/api'
+import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { AuthInput, AuthError, AuthButton } from '@/components/auth/AuthFormControls'
+import { reloadOnChunkError } from '@/lib/chunkReload'
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false)
@@ -24,21 +27,19 @@ export default function LoginPage() {
         // revoked. Confirming with the backend first avoids silently bouncing the user to
         // /dashboard only for it to bounce them right back here a moment later (a confusing
         // flicker/loop), and skips the auto-redirect entirely for a genuinely dead session.
-        import('@/services/api').then(({ api }) =>
-            api.auth.me()
-                .then(() => {
-                    if (planId) {
-                        localStorage.removeItem('pendingPlanId');
-                        window.location.href = `/checkout/redirect?planId=${planId}`;
-                    } else {
-                        window.location.href = '/dashboard';
-                    }
-                })
-                .catch(() => {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                })
-        );
+        api.auth.me()
+            .then(() => {
+                if (planId) {
+                    localStorage.removeItem('pendingPlanId');
+                    window.location.href = `/checkout/redirect?planId=${planId}`;
+                } else {
+                    window.location.href = '/dashboard';
+                }
+            })
+            .catch(() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+            });
     }, []);
 
     const handleSubmit = async () => {
@@ -54,7 +55,7 @@ export default function LoginPage() {
                 return
             }
 
-            const { token, user, session } = await import('@/services/api').then(m => m.api.auth.login({ email, password }));
+            const { token, user, session } = await api.auth.login({ email, password });
 
             if (token) {
                 localStorage.setItem('token', token);
@@ -64,7 +65,6 @@ export default function LoginPage() {
                 // token sozinho em segundo plano (autoRefreshToken), então o login não
                 // expira mais em ~1h. Sem isso, só o access_token cru ficava salvo.
                 if (session?.access_token && session?.refresh_token) {
-                    const { supabase } = await import('@/lib/supabase');
                     await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
                 }
 
@@ -79,6 +79,7 @@ export default function LoginPage() {
                 setErrorMsg('Token não recebido. Tente novamente.');
             }
         } catch (error: any) {
+            if (reloadOnChunkError(error)) return
             setErrorMsg(error.message || 'Erro ao fazer login. Verifique suas credenciais.');
         } finally {
             setLoading(false)

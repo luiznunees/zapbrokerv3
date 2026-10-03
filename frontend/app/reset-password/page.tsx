@@ -1,4 +1,5 @@
 "use client"
+import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -19,7 +20,6 @@ export default function ResetPasswordPage() {
     // ao carregar; só precisamos confirmar que a sessão existe antes de deixar trocar a senha.
     useEffect(() => {
         (async () => {
-            const { supabase } = await import('@/lib/supabase')
             const { data } = await supabase.auth.getSession()
             setReady(!!data.session)
             if (!data.session) {
@@ -43,7 +43,6 @@ export default function ResetPasswordPage() {
 
         setLoading(true)
         try {
-            const { supabase } = await import('@/lib/supabase')
             const { error } = await supabase.auth.updateUser({ password })
             if (error) throw error
             setDone(true)

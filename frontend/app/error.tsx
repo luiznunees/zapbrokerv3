@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
+import { reloadOnChunkError } from '@/lib/chunkReload'
 
 export default function Error({
     error,
@@ -11,6 +12,8 @@ export default function Error({
     reset: () => void
 }) {
     useEffect(() => {
+        // Versão velha do app depois de um deploy: recarrega em vez de mostrar erro
+        if (reloadOnChunkError(error)) return
         // Log the error to an error reporting service
         console.error(error)
     }, [error])

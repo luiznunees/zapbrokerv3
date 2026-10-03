@@ -1,5 +1,6 @@
 "use client"
 
+import { supabase } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -77,7 +78,6 @@ export default function SignupPage() {
                 // Mesma lógica do login — entrega a sessão pro client do Supabase pra ele
                 // renovar sozinho depois, em vez do access_token cru expirar em ~1h.
                 if (result.session?.access_token && result.session?.refresh_token) {
-                    const { supabase } = await import('@/lib/supabase')
                     await supabase.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token })
                 }
             }

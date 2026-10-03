@@ -1,5 +1,6 @@
 "use client"
 
+import { supabase } from '@/lib/supabase'
 import { useState } from 'react'
 import { Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { api } from '@/services/api'
@@ -31,7 +32,6 @@ export function AdminLoginForm() {
             localStorage.setItem('token', token)
 
             if (session?.access_token && session?.refresh_token) {
-                const { supabase } = await import('@/lib/supabase')
                 await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token })
             }
 
