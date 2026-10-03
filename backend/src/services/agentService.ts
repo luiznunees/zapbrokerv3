@@ -775,6 +775,13 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
   }
   lines.push(draft.mediaUrl ? 'Já tem mídia anexada ao disparo.' : 'Ainda sem mídia anexada — pergunte se o usuário quer anexar imagem/vídeo/áudio, ou seguir só com texto.');
 
+  if (draft.antiBanSeverity === 'extreme') {
+    const cap = antiBanCapacity(draft);
+    lines.push(cap
+      ? `BLOQUEIO ANTI-BAN: a lista tem ${draft.leadCount ?? 0} contatos e o máximo que passa agora é ${cap.maxLeads} (calculado pelo sistema — use exatamente esse número, nunca invente outro). Pra reduzir, só pelo seletor de exclusão (request_contact_exclusion); você não consegue tirar contatos sozinho nem dizer que tirou.`
+      : `BLOQUEIO ANTI-BAN: a lista de ${draft.leadCount ?? 0} contatos é grande demais pros números escolhidos agora. Não invente um número máximo.`);
+  }
+
   return lines.join('\n');
 }
 
@@ -782,16 +789,50 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
 // precisa responder direto, sem passar pelo LLM (botão clicado cedo demais, ou o modelo dizendo
 // "tá tudo pronto" com readyToSend=false). buildDraftChecklist é instrução interna pro modelo
 // ("NÃO pergunte de novo...") e já vazou pro chat assim — não usar ele pra texto de usuário.
+// Quantos contatos cabem agora sem cair no bloqueio extremo — mesmos limites de
+// campaignService.checkAntiBanSeverity, calculados aqui pra o aviso dizer um número em vez de
+// "reduza a lista". Achado real (Fernanda, 28-30/09): sem número, ela reduziu 304 → 120 →
+// 80 → 50 → 30 no chute e o agente inventava um limite novo a cada tentativa.
+// O warmup guardado no draft é o do número mais arriscado, então multiplicar pela quantidade
+// de números dá um piso (os outros números aguentam igual ou mais).
+function antiBanCapacity(draft: CampaignDraft): { maxLeads: number; numbers: number; dailyLimit: number | null; sent: number; inCooldown: boolean } | null {
+  const w = draft.antiBanWarmupInfo;
+  if (!w) return null;
+  const numbers = Math.max(draft.instanceIds?.length || 0, draft.instanceId ? 1 : 0, 1);
+  const inCooldown = w.recommendedDailyLimit === 0;
+  let perNumber: number;
+  if (inCooldown) perNumber = campaignService.ANTIBAN_EXTREME_COOLDOWN_LEADS;
+  else if (w.recommendedDailyLimit === null) return null; // número maduro: não há teto de aquecimento
+  else perNumber = Math.max(0, w.recommendedDailyLimit * campaignService.ANTIBAN_EXTREME_WARMUP_MULTIPLIER - w.sentLast24h);
+  return { maxLeads: perNumber * numbers, numbers, dailyLimit: w.recommendedDailyLimit, sent: w.sentLast24h, inCooldown };
+}
+
+function describeExtremeAntiBan(draft: CampaignDraft): string {
+  const cap = antiBanCapacity(draft);
+  const lista = draft.leadCount ?? 0;
+  if (!cap) {
+    return `Esse disparo não pode sair assim: a lista tem ${lista} contatos e é grande demais pro(s) número(s) escolhido(s) agora — o risco de o WhatsApp bloquear é muito alto.`;
+  }
+  const numeros = cap.numbers > 1 ? `nos ${cap.numbers} números escolhidos` : 'nesse número';
+  const motivo = cap.inCooldown
+    ? 'o número foi conectado há menos de 24h'
+    : `o limite de aquecimento é ${cap.dailyLimit} por dia e já saíram ${cap.sent} nas últimas 24h`;
+  if (cap.maxLeads === 0) {
+    return `Esse disparo não pode sair agora: ${motivo}, então ${numeros} não cabe nenhum contato hoje. Libera de novo conforme as 24h desde os últimos envios forem passando.`;
+  }
+  return `Esse disparo não pode sair assim: a lista tem ${lista} contatos e ${numeros} cabem até ${cap.maxLeads} agora (${motivo}). Dá pra tirar contatos pelo seletor até chegar em ${cap.maxLeads}, ou esperar o número aquecer.`;
+}
+
 function describeBlockersForUser(draft: CampaignDraft | null): string {
   if (!draft) return 'Não tem nenhum disparo sendo montado nesta conversa. Se quiser fazer um novo, é só me dizer "quero criar um disparo".';
 
   if (draft.antiBanSeverity === 'extreme') {
-    return 'Esse disparo não pode sair assim: o(s) número(s) escolhido(s) ainda estão aquecendo e a lista é grande demais pra eles agora — o risco de o WhatsApp bloquear o número é muito alto. Dá pra reduzir a lista, esperar o número aquecer, ou usar um número mais antigo.';
+    return describeExtremeAntiBan(draft);
   }
 
   const missing: string[] = [];
   if (!draft.contactListId) missing.push('escolher a lista de contatos');
-  else if ((draft.leadCount ?? 0) === 0) missing.push(`a lista "${draft.contactListName}" está sem nenhum contato — importe o arquivo de novo em Contatos → Importar`);
+  else if ((draft.leadCount ?? 0) === 0) missing.push(`a lista "${draft.contactListName}" está sem nenhum contato — importe o arquivo de novo em Leads → Importar`);
   if (!draft.instanceId) missing.push('escolher por qual WhatsApp vai sair');
   if (!(draft.messageVariations?.length || draft.mediaUrl)) missing.push('escrever a mensagem');
   if (!draft.timingConfirmed) missing.push('confirmar o tempo entre as mensagens no seletor');
@@ -822,7 +863,40 @@ function correctFalseCancelClaim(reply: string, state: ToolState): string {
   return 'Não consigo cancelar campanhas daqui do chat. Pra parar uma campanha, abra Campanhas no menu e clique em pausar ou cancelar. Se quiser, sigo montando esse disparo novo enquanto isso.';
 }
 
+// O checklist do rascunho é instrução interna pro modelo — se ele ecoar alguma linha disso
+// na resposta, o corretor lê "JÁ DEFINIDO (NÃO pergunte de novo...)" no chat (aconteceu com
+// a Fernanda em 23/09). Remove essas linhas antes de mostrar.
+const INTERNAL_CHECKLIST_LINE = /^\s*(?:JÁ DEFINIDO|AINDA FALTA|BLOQUEIO ANTI-BAN)\b.*$/gim;
+
+function stripInternalChecklist(reply: string, state: ToolState): string {
+  if (!reply || !INTERNAL_CHECKLIST_LINE.test(reply)) return reply;
+  INTERNAL_CHECKLIST_LINE.lastIndex = 0;
+  const cleaned = reply.replace(INTERNAL_CHECKLIST_LINE, '').replace(/\n{3,}/g, '\n\n').trim();
+  return cleaned || describeBlockersForUser(state.draft) || 'Vamos seguir com o disparo — me diz o próximo passo.';
+}
+
+// O agente não tem ferramenta pra tirar contatos de um disparo por quantidade nem pra
+// "corrigir" erro do sistema — achados reais (Fernanda, 25 a 30/09): "Pronto, lista zerada",
+// "Pronto, reduzindo pra 30 contatos", "Pronto, corrigi!", sem nada ter mudado.
+const FALSE_REDUCE_CLAIM_PATTERN = /lista\s+zerada|reduzindo\s+(?:a\s+lista\s+)?(?:pra|para)\s+\d+|\btirei\s+(?:os|as)\b|\bremovi\s+(?:os|as)\b/i;
+const FALSE_FIX_CLAIM_PATTERN = /\b(?:corrigi|consertei)\b/i;
+
+function correctFalseEditClaim(reply: string, state: ToolState): string {
+  if (!reply) return reply;
+  if (FALSE_REDUCE_CLAIM_PATTERN.test(reply)) {
+    return state.component?.type === 'contact_exclusion'
+      ? 'Marca no seletor aqui embaixo quem sai desse disparo — eu não consigo tirar contatos sozinho.'
+      : 'Eu não consigo tirar contatos do disparo sozinho. Me diz que quer excluir alguns que eu abro o seletor aqui embaixo pra você marcar quem sai.';
+  }
+  if (FALSE_FIX_CLAIM_PATTERN.test(reply)) {
+    return 'Não consigo corrigir esse erro daqui do chat. Me manda a mensagem exata que apareceu na tela que eu te digo o próximo passo — ou fala com o suporte pelo botão de ajuda (?).';
+  }
+  return reply;
+}
+
 function correctFalseReadyClaim(reply: string, state: ToolState): string {
+  reply = stripInternalChecklist(reply, state);
+  reply = correctFalseEditClaim(reply, state);
   reply = correctFalseCancelClaim(reply, state);
   if (!reply || !READY_CLAIM_PATTERN.test(reply)) return reply;
 
@@ -999,7 +1073,7 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - Depois que lista, WhatsApp e (mensagem OU mídia) já estiverem definidos, ainda falta confirmar o timing antes de considerar o disparo pronto — chame request_timing_confirmation (não é uma pergunta de texto, é sempre o seletor visual). Se ainda não perguntou sobre anexar mídia nem o usuário recusou, pergunte uma vez em texto (ou use request_media_upload se ele topar) antes de seguir pro timing — mas não trave nisso se ele já disse que não quer.
 - O tempo/modo de envio/tamanho de lote têm valores recomendados calculados automaticamente, mas NUNCA são aplicados sozinhos — a confirmação é sempre via request_timing_confirmation (seletor visual com inputs editáveis), nunca perguntando em texto e aceitando a resposta em texto livre.
 - Se "AINDA FALTA" incluir "mensagem" e o usuário escrever qualquer texto que pareça ser o conteúdo a enviar (entre aspas, depois de "essa mensagem", "manda isso", "pode ser assim", ou uma frase que faça sentido pra um lead) — SEMPRE capture esse texto via update_campaign_draft, mesmo que o tom seja informal ou pareça um desabafo. Você não decide se a mensagem é "boa o suficiente" — só captura, e se quiser, sugere uma versão melhorada como opção.
-- Se a mensagem do usuário contiver um trecho "[Anexo disponível: nome (tipo) em URL]", é um arquivo que ele já anexou pela interface — a vinculação já foi persistida automaticamente antes desse turno chegar até você, então trate normalmente como "JÁ DEFINIDO" (confira no checklist) e confirme no reply. Nunca diga que uma mídia ficou vinculada se o checklist não mostrar isso. EXCEÇÃO IMPORTANTE: se o tipo do anexo for "document" (PDF, Word etc.), NÃO confirme como "mídia vinculada ao disparo" — um documento anexado aqui no chat é quase sempre, na verdade, uma lista de contatos que a pessoa queria importar. Avise que esse PDF/documento não vira lista de contatos por aqui, e que o caminho certo é o menu Contatos → Importar (aceita upload de PDF, CSV ou Excel direto e extrai nome+telefone automaticamente) — só trate como mídia de verdade pro disparo (ex: uma brochura de imóvel) se o usuário confirmar explicitamente que é essa a intenção.
+- Se a mensagem do usuário contiver um trecho "[Anexo disponível: nome (tipo) em URL]", é um arquivo que ele já anexou pela interface — a vinculação já foi persistida automaticamente antes desse turno chegar até você, então trate normalmente como "JÁ DEFINIDO" (confira no checklist) e confirme no reply. Nunca diga que uma mídia ficou vinculada se o checklist não mostrar isso. EXCEÇÃO IMPORTANTE: se o tipo do anexo for "document" (PDF, Word etc.), NÃO confirme como "mídia vinculada ao disparo" — um documento anexado aqui no chat é quase sempre, na verdade, uma lista de contatos que a pessoa queria importar. Avise que esse PDF/documento não vira lista de contatos por aqui, e que o caminho certo é o menu Leads → Importar (aceita upload de PDF, CSV ou Excel direto e extrai nome+telefone automaticamente) — só trate como mídia de verdade pro disparo (ex: uma brochura de imóvel) se o usuário confirmar explicitamente que é essa a intenção.
 - Personalização: o placeholder {nome} dentro de uma mensagem é substituído automaticamente pelo nome de cada lead no envio. Ofereça isso proativamente quando ajudar a escrever/melhorar uma mensagem (ex: "Oi {nome}, tudo bem?") — não é necessário perguntar, só avise que vai personalizar.
 - Se faltar WhatsApp conectado, avise e chame suggest_connect_whatsapp antes de seguir com o disparo.
 - Se o usuário disser que "já tem" WhatsApp conectado (sem citar qual), chame get_whatsapp_instances antes de perguntar mais nada. Se só existir um conectado, já use esse via update_campaign_draft e confirme pelo nome — NÃO pergunte "qual número" como se houvesse várias opções quando só tem uma.
@@ -1012,6 +1086,8 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - NUNCA diga "WhatsApp vinculado"/"podemos prosseguir com esse número" a menos que o rascunho já tenha instanceId definido. Se o usuário acabou de conectar um número (evento do sistema ou confirmação em texto), chame update_campaign_draft com o instanceName desse número ANTES de dizer que está tudo pronto.
 - Não troque o campo na hora de confirmar: se o usuário acabou de responder sobre WhatsApp/número, confirme como "número"/"WhatsApp" (nunca diga "lista selecionada" nesse momento); se foi sobre lista de contatos, confirme como "lista" (nunca diga "número confirmado"); se foi sobre mensagem, confirme como "mensagem". Antes de confirmar, releia a pergunta anterior sua nesse mesmo turno pra ter certeza de qual campo o usuário estava respondendo.
 - Nunca contradiga o "JÁ DEFINIDO" na sua resposta em texto.
+- Campanha que já foi criada e está pausada ou parada (inclusive depois de um WhatsApp desconectar e voltar) continua de onde parou: o corretor abre Campanhas no menu e clica em Retomar — os contatos que já receberam não recebem de novo. NUNCA diga que a campanha "fica travada" ou "não consegue retomar", e não proponha criar um disparo novo pra continuar uma campanha que dá pra retomar.
+- Nunca diga que tirou, reduziu ou removeu contatos de um disparo, nem que "corrigiu" um erro do sistema — você não tem ferramenta pra isso. Pra excluir contatos, use request_contact_exclusion e peça pro corretor marcar no seletor.
 - Mensagens que começam com "[EVENTO DO SISTEMA — não é fala do usuário]" não foram digitadas pelo usuário — são notificações automáticas de uma ação que ele fez pela interface (escolheu uma lista, anexou mídia). Reaja normalmente continuando a conversa a partir disso, seguindo a REGRA DE OURO acima — nunca pare depois de um evento desses sem fazer a próxima pergunta ou confirmar que está tudo pronto.
 
 CONHECIMENTO DE VENDAS IMOBILIÁRIA (use isso pra dar conselhos reais, não só operar o sistema):
@@ -2893,7 +2969,7 @@ export async function executeAction(
         });
         return {
           success: false,
-          message: 'Esse disparo não pode ser confirmado — o número está numa combinação de risco extremo de bloqueio (chip muito novo ou volume muito acima do recomendado). Reduza a lista, espere o aquecimento avançar, ou divida o envio entre mais números conectados.',
+          message: describeExtremeAntiBan(draft),
         };
       }
 

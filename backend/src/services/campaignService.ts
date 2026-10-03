@@ -488,7 +488,11 @@ export const getInstanceSendVolume = async (userId: string, instanceId: string, 
         .from('campaign_messages')
         .select('*', { count: 'exact', head: true })
         .in('campaign_id', campaignIds)
-        .neq('status', 'PENDING')
+        // Só envio de verdade conta. Antes era "tudo que não é PENDING": mensagem presa em
+        // QUEUED (com updated_at renovado a cada volta da fila), FAILED e SENDING entravam
+        // como enviadas — achado real: WhatsApp da Fernanda "com 272 envios nas últimas 24h"
+        // por 4 dias seguidos sem ter mandado nada.
+        .in('status', ['SENT', 'DELIVERED', 'READ'])
         .gte('updated_at', cutoff);
 
     if (error) throw new Error(error.message);
@@ -534,7 +538,13 @@ export const getWarmupInfo = async (
     let basis: 'chip' | 'connection' = 'connection';
 
     if (selfReportedChipDays !== undefined && selfReportedChipDays !== null) {
-        daysSinceConnected = selfReportedChipDays;
+        // A idade informada vale pro dia da conexão — o chip continua envelhecendo depois.
+        // Sem somar o tempo desde então, quem informou "0 dias" ficava em cooldown pra sempre
+        // (achado real: Fernanda, número conectado em 17/09 ainda "conectado hoje" em 01/10).
+        const daysSinceConnection = connectedAt
+            ? Math.max(0, (Date.now() - new Date(connectedAt).getTime()) / (24 * 60 * 60 * 1000))
+            : 0;
+        daysSinceConnected = selfReportedChipDays + daysSinceConnection;
         basis = 'chip';
     } else if (connectedAt) {
         daysSinceConnected = (Date.now() - new Date(connectedAt).getTime()) / (24 * 60 * 60 * 1000);
@@ -665,7 +675,8 @@ export const getInstanceReplyRate = async (userId: string, instanceId: string, d
         .from('campaign_messages')
         .select('lead_status')
         .in('campaign_id', campaignIds)
-        .neq('status', 'PENDING')
+        // Mesmo critério do getInstanceSendVolume: mensagem que não saiu não entra no total.
+        .in('status', ['SENT', 'DELIVERED', 'READ'])
         .gte('updated_at', cutoff);
 
     if (error) throw new Error(error.message);
