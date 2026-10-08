@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Rocket, Users, Wifi, MessageSquare, Paperclip, Clock, Zap, AlertTriangle, Loader2, X, CheckCircle2, Pencil, Plus, Copy, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { describeSendWindow, formatInterval, parseSendWindow } from "@/lib/sendWindow"
 
 export type CampaignDraft = {
   name?: string
@@ -21,6 +22,7 @@ export type CampaignDraft = {
   blockDelay?: number
   batchSize?: number
   batchDelaySeconds?: number
+  sendWindow?: unknown
   timingConfirmed?: boolean
   readyToSend?: boolean
   quota?: { available: boolean; remaining: number; requested: number }
@@ -138,6 +140,7 @@ function MessageCanvasEditor({
 export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMessages, autoEditMessageTrigger, isConfirming }: CampaignDraftPanelProps) {
   const [isEditingMessage, setIsEditingMessage] = useState(false)
   const messageCount = draft.messageVariations?.length ?? 0
+  const sendWindow = parseSendWindow(draft.sendWindow)
   const scheduleLabel = draft.scheduledAt
     ? new Date(draft.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : "Imediato"
@@ -257,14 +260,14 @@ export function CampaignDraftPanel({ draft, onConfirm, onRemoveMedia, onSaveMess
             <span className="px-2 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground">
               {draft.sequentialMode ? "Modo sequencial ativado" : "Mensagem única"}
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground">
-              {draft.delaySeconds ?? 5}s entre leads
-            </span>
-            {draft.timingConfirmed && (
+            {draft.timingConfirmed && sendWindow && (
               <span className="px-2 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground">
-                lotes de {draft.batchSize ?? 30}
+                {describeSendWindow(sendWindow)}
               </span>
             )}
+            <span className="px-2 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground">
+              ~{formatInterval(draft.delaySeconds ?? 60)} entre leads
+            </span>
           </div>
           {draft.timingConfirmed ? (
             <p className="text-[11px] text-emerald-500 mt-1 flex items-center gap-1">

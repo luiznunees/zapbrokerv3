@@ -370,6 +370,18 @@ const STATUS_SINCE_SQL = `
 alter table instances add column if not exists status_since timestamptz default now();
 `;
 
+// Janela de envio do disparo (horário, dias, teto diário) + quando cada mensagem saiu de
+// fato. Ver backend/migrations/campaign_send_window.sql e utils/sendWindow.ts. Sem essas
+// colunas o processor não consegue nem buscar a fila — se falhar, rodar o .sql na mão.
+const CAMPAIGN_SEND_WINDOW_SQL = `
+alter table campaigns add column if not exists window_start_minute smallint not null default 480;
+alter table campaigns add column if not exists window_end_minute smallint not null default 1200;
+alter table campaigns add column if not exists window_weekdays smallint[] not null default '{1,2,3,4,5,6}';
+alter table campaigns add column if not exists window_max_per_day integer;
+alter table campaign_messages add column if not exists sent_at timestamptz;
+create index if not exists campaign_messages_campaign_sent_at_idx on campaign_messages (campaign_id, sent_at);
+`;
+
 const BETA_FEEDBACK_SQL = `
 create table if not exists beta_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -622,6 +634,18 @@ export async function runMigrations() {
     }
   } catch (err: any) {
     console.warn('[Migrations] Erro ao verificar/criar self_reported_chip_days:', err.message);
+  }
+
+  try {
+    const { error: rpcError } = await supabase.rpc('exec_sql', { sql: CAMPAIGN_SEND_WINDOW_SQL });
+    if (rpcError) {
+      console.warn('[Migrations] Não foi possível criar a janela de envio automaticamente:', rpcError.message);
+      console.warn('[Migrations] URGENTE — sem isso o disparo para. Execute manualmente: backend/migrations/campaign_send_window.sql');
+    } else {
+      console.log('[Migrations] Colunas de janela de envio (campaigns.window_*, campaign_messages.sent_at) verificadas/criadas.');
+    }
+  } catch (err: any) {
+    console.warn('[Migrations] Erro ao verificar/criar janela de envio:', err.message);
   }
 
   try {

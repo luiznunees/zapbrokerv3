@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { SendWindow, normalizeSendWindow, computeWindowDelaySeconds, sendWindowToCampaignColumns, todayWindowStartIso } from '../utils/sendWindow';
 
 export const createCampaign = async (
     userId: string,
@@ -14,8 +15,16 @@ export const createCampaign = async (
     mediaUrl?: string,
     sequentialMode: boolean = false,
     blockDelay: number = 5,
-    excludedContactIds: string[] = []
+    excludedContactIds: string[] = [],
+    sendWindowInput?: Partial<SendWindow> | null
 ) => {
+    // Janela de envio: horário/dias/teto diário. Com teto diário, o intervalo entre
+    // mensagens é calculado aqui (fonte única) pra caber o teto dentro do horário — o valor
+    // que veio do front/agente só vale quando não há teto.
+    const sendWindow = normalizeSendWindow(sendWindowInput);
+    const windowDelay = computeWindowDelaySeconds(sendWindow);
+    if (windowDelay !== null) delaySeconds = windowDelay;
+
     // O mesmo número pode chegar repetido (ex: agente resolvendo "WhatsApp" e "WhatsApp 2"
     // pro mesmo registro) — sem deduplicar, a checagem de posse abaixo compara 1 linha
     // encontrada com 2 IDs pedidos e falha com "não foram encontrados ou não pertencem a você".
@@ -79,7 +88,10 @@ export const createCampaign = async (
     // Bloqueio de verdade pra combinação extrema de risco — checado aqui (não só no chat
     // do agente) pra cobrir também o "Disparo rápido" manual, que chama createCampaign
     // direto sem passar pelo agentService. Sem exceção, sem flag de "confirma mesmo assim".
-    const antiban = await checkAntiBanSeverity(userId, totalContacts, instanceIds);
+    // Com teto diário, o que pesa pro WhatsApp é o volume de cada dia, não o tamanho da lista
+    // inteira — 304 contatos a 100/dia saem em 4 dias, nunca 304 de uma vez.
+    const dailyVolume = sendWindow.maxPerDay ? Math.min(totalContacts, sendWindow.maxPerDay) : totalContacts;
+    const antiban = await checkAntiBanSeverity(userId, dailyVolume, instanceIds);
     if (antiban.severity === 'extreme') {
         throw new Error('Esse disparo não pode ser confirmado — o número está numa combinação de risco extremo de bloqueio (chip muito novo ou volume muito acima do recomendado). Reduza a lista, espere o aquecimento avançar, ou divida o envio entre mais números conectados.');
     }
@@ -103,6 +115,7 @@ export const createCampaign = async (
             delay_seconds: delaySeconds,
             batch_size: batchSize,
             batch_delay_seconds: batchDelaySeconds,
+            ...sendWindowToCampaignColumns(sendWindow),
             media_type: mediaType,
             media_url: mediaUrl,
             status: 'PENDING'
@@ -460,6 +473,19 @@ export const cancelScheduledCampaign = async (userId: string, campaignId: string
 
     if (error) throw new Error(error.message);
     return data;
+};
+
+// Quantas mensagens desse disparo já saíram desde o início da janela de hoje (horário de
+// Brasília) — base do teto diário. Usa sent_at, não updated_at: o webhook de entregue/lido
+// reescreve updated_at, e mensagem de ontem lida hoje não pode contar como enviada hoje.
+export const getCampaignSentToday = async (campaignId: string, sendWindow: SendWindow): Promise<number> => {
+    const { count, error } = await supabase
+        .from('campaign_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId)
+        .gte('sent_at', todayWindowStartIso(sendWindow));
+    if (error) throw new Error(error.message);
+    return count || 0;
 };
 
 // Heurística simples de risco de bloqueio: quantas mensagens esse número já

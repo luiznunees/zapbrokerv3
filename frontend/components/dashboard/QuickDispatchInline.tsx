@@ -128,10 +128,14 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
       formData.append("blockDelay", String(timing.blockDelay))
       formData.append("batchSize", String(timing.batchSize))
       formData.append("batchDelaySeconds", String(timing.batchDelaySeconds))
+      formData.append("windowStartMinute", String(timing.sendWindow.startMinute))
+      formData.append("windowEndMinute", String(timing.sendWindow.endMinute))
+      formData.append("windowWeekdays", JSON.stringify(timing.sendWindow.weekdays))
+      formData.append("windowMaxPerDay", String(timing.sendWindow.maxPerDay))
       formData.append("mediaType", "text")
 
       const created = await api.campaigns.create(formData)
-      toast.success("Disparo criado! Já entrou na fila de envio.")
+      toast.success("Disparo criado! Já entrou na fila — sai dentro do horário escolhido.")
       pollCountRef.current = 0
       setCampaignId(created.id)
       setStep("status")
@@ -281,8 +285,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
           <ChatTimingConfirm
             purpose={JSON.stringify({
               delaySeconds: defaultDelaySeconds(list.leadCount),
-              batchSize: 30,
-              batchDelaySeconds: 60,
+              leadCount: list.leadCount,
             })}
             onConfirm={(values) => {
               setTiming(values)
@@ -300,7 +303,7 @@ export function QuickDispatchInline({ onExit }: QuickDispatchInlineProps) {
               messageVariations: validMessages,
               scheduledAt: null,
               delaySeconds: timing.delaySeconds,
-              batchSize: timing.batchSize,
+              sendWindow: timing.sendWindow,
             })}
             onConfirm={handleSubmit}
             isConfirming={isSubmitting}

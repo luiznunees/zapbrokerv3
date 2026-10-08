@@ -35,6 +35,26 @@ const baseCampaignSchema = z.object({
     delaySeconds: z.coerce.number().min(1, 'Delay deve ser pelo menos 1 segundo'),
     batchSize: z.coerce.number().min(1, 'Lote deve ser pelo menos 1'),
     batchDelaySeconds: z.coerce.number().min(1, 'Pausa do lote deve ser pelo menos 1 segundo'),
+    // Janela de envio (ver utils/sendWindow.ts) — vem como FormData, então tudo chega string.
+    // Campo faltando = padrão (8h–17h, seg a sáb, até 100/dia); normalizeSendWindow valida o resto.
+    windowStartMinute: z.coerce.number().int().min(0).max(1440).optional(),
+    windowEndMinute: z.coerce.number().int().min(0).max(1440).optional(),
+    windowWeekdays: z.string().optional().transform((str, ctx) => {
+        if (!str) return undefined;
+        try {
+            const parsed = JSON.parse(str);
+            if (!Array.isArray(parsed)) throw new Error('deve ser um array');
+            return parsed.map(Number);
+        } catch (e) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'windowWeekdays inválido: ' + (e as Error).message });
+            return z.NEVER;
+        }
+    }),
+    windowMaxPerDay: z.string().optional().transform((str) => {
+        if (str === undefined || str === '') return undefined;
+        if (str === 'null') return null; // sem teto diário, só horário
+        return Number(str);
+    }),
     mediaType: z.enum(['text', 'image', 'video', 'audio', 'document']).optional().default('text'),
     excludedContactIds: z.string().transform((str) => {
         try {

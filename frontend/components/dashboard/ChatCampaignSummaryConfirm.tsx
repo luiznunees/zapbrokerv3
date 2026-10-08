@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Rocket, Users, Wifi, MessageSquare, Clock, Loader2 } from "lucide-react"
+import { describeSendWindow, formatInterval, parseSendWindow } from "@/lib/sendWindow"
 
 type DraftSummary = {
   contactListName?: string
@@ -11,7 +12,7 @@ type DraftSummary = {
   messageVariations?: string[]
   scheduledAt?: string | null
   delaySeconds?: number
-  batchSize?: number
+  sendWindow?: unknown
 }
 
 interface ChatCampaignSummaryConfirmProps {
@@ -45,6 +46,10 @@ export function ChatCampaignSummaryConfirm({ purpose, onConfirm, disabled, isCon
   const scheduleLabel = draft.scheduledAt
     ? new Date(draft.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : "Imediato"
+  const sendWindow = parseSendWindow(draft.sendWindow)
+  const timingLabel = sendWindow
+    ? `${describeSendWindow(sendWindow)} · ~${formatInterval(draft.delaySeconds ?? 60)} entre mensagens`
+    : `${draft.delaySeconds ?? 5}s entre mensagens`
   const instanceLabel = draft.instanceNames?.length ? draft.instanceNames.join(" + ") : draft.instanceName
 
   const handleConfirm = () => {
@@ -66,7 +71,7 @@ export function ChatCampaignSummaryConfirm({ purpose, onConfirm, disabled, isCon
           {draft.messageVariations?.[0]?.slice(0, 50)}
           {(draft.messageVariations?.length ?? 0) > 1 ? ` (+${(draft.messageVariations!.length - 1)} variações)` : ""}
         </Row>
-        <Row icon={Clock}>{scheduleLabel} · {draft.delaySeconds ?? 5}s entre mensagens · lotes de {draft.batchSize ?? 30}</Row>
+        <Row icon={Clock}>{scheduleLabel} · {timingLabel}</Row>
       </div>
 
       <button
@@ -75,7 +80,7 @@ export function ChatCampaignSummaryConfirm({ purpose, onConfirm, disabled, isCon
         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary hover:bg-landing-sky-light text-white text-sm font-medium shadow-lg shadow-primary/30 transition-all disabled:opacity-50"
       >
         {isConfirming ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
-        {isConfirming ? "Disparando..." : "Disparar agora"}
+        {isConfirming ? "Disparando..." : "Confirmar disparo"}
       </button>
     </div>
   )

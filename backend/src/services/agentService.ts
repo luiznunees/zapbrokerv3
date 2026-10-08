@@ -8,6 +8,7 @@ import { PLAN_LIMITS, DEFAULT_LIMITS } from '../config/limits';
 import { logAiCost } from './costService';
 import { logAgentTurn } from './agentLogService';
 import { logEvent } from './eventLogService';
+import { SendWindow, DEFAULT_SEND_WINDOW, normalizeSendWindow, computeWindowDelaySeconds, describeSendWindow } from '../utils/sendWindow';
 
 // Provedor de produção (único): OpenRouter com modelo pago (claude-haiku-4.5). Os fallbacks
 // free (gpt-oss-20b:free, Groq llama-3.3-70b, Gemini flash-lite) foram removidos porque
@@ -107,6 +108,9 @@ export interface CampaignDraft {
   blockDelay?: number;
   batchSize?: number;
   batchDelaySeconds?: number;
+  // Horário/dias/teto diário do disparo, escolhidos no seletor de timing (ver utils/sendWindow.ts).
+  // Com teto diário, delaySeconds é calculado a partir daqui.
+  sendWindow?: SendWindow;
   // Vira true só depois que o corretor confirma explicitamente o timing pelo componente
   // visual (request_timing_confirmation) — nunca setado por heurística automática.
   timingConfirmed?: boolean;
@@ -240,7 +244,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'request_timing_confirmation',
-      description: 'Mostra um seletor visual pro usuário confirmar ou ajustar o tempo entre mensagens, o modo de envio (sequencial ou não) e o tamanho dos lotes. Use quando o rascunho já tiver lista e mensagem definidos e ainda faltar essa confirmação — NÃO pergunte esses valores em texto, sempre use essa ferramenta.',
+      description: 'Mostra um seletor visual pro usuário confirmar ou ajustar o horário de envio (início, fim e dias da semana), quantas mensagens por dia (o intervalo entre mensagens é calculado disso) e o modo de envio (sequencial ou não). Use quando o rascunho já tiver lista e mensagem definidos e ainda faltar essa confirmação — NÃO pergunte esses valores em texto, sempre use essa ferramenta.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -614,6 +618,30 @@ function computeSmartDefaults(messageVariations: string[] | undefined, leadCount
   return { sequentialMode, blockDelay: 5, delaySeconds };
 }
 
+// Janela sugerida no seletor de timing: o padrão (8h–17h, seg a sáb, até 100/dia), com o teto
+// diário nunca acima do tamanho da lista nem do limite de aquecimento do número.
+function recommendedSendWindow(draft: CampaignDraft | undefined | null): SendWindow {
+  if (draft?.sendWindow) return draft.sendWindow;
+  let maxPerDay = DEFAULT_SEND_WINDOW.maxPerDay ?? 100;
+  const warmupLimit = draft?.antiBanWarmupInfo?.recommendedDailyLimit;
+  if (typeof warmupLimit === 'number' && warmupLimit > 0) maxPerDay = Math.min(maxPerDay, warmupLimit);
+  if (draft?.leadCount && draft.leadCount > 0) maxPerDay = Math.min(maxPerDay, draft.leadCount);
+  return { ...DEFAULT_SEND_WINDOW, maxPerDay };
+}
+
+function describeTimingForModel(draft: CampaignDraft): string {
+  const parts: string[] = [];
+  if (draft.sendWindow) {
+    parts.push(`envio ${describeSendWindow(draft.sendWindow)}`);
+    if (draft.sendWindow.maxPerDay && draft.leadCount) {
+      parts.push(`a lista inteira leva ~${Math.ceil(draft.leadCount / draft.sendWindow.maxPerDay)} dia(s) de envio`);
+    }
+  }
+  parts.push(`~${Math.round((draft.delaySeconds ?? 60) / 60 * 10) / 10} min entre mensagens`);
+  if (draft.sequentialMode) parts.push('modo sequencial (quebra em blocos)');
+  return parts.join(', ');
+}
+
 function resolveDraftReferences(
   current: CampaignDraft,
   patch: NonNullable<AgentResponse['draftPatch']>,
@@ -769,15 +797,17 @@ function buildDraftChecklist(draft: CampaignDraft | null): string {
   ];
 
   if (draft.timingConfirmed) {
-    lines.push(`JÁ DEFINIDO (NÃO pergunte de novo): timing confirmado pelo usuário — ${draft.delaySeconds}s entre mensagens${draft.sequentialMode ? ', modo sequencial (quebra em blocos)' : ''}, lotes de ${draft.batchSize ?? 30} leads a cada ${draft.batchDelaySeconds ?? 60}s.`);
+    lines.push(`JÁ DEFINIDO (NÃO pergunte de novo): timing confirmado pelo usuário — ${describeTimingForModel(draft)}.`);
   } else if (draft.contactListId && (draft.messageVariations?.length || draft.mediaUrl)) {
-    lines.push('AINDA FALTA: confirmar o tempo entre mensagens e o tamanho dos lotes — chame request_timing_confirmation (não pergunte isso em texto, é sempre por seletor visual).');
+    lines.push('AINDA FALTA: confirmar o horário de envio e quantas mensagens por dia — chame request_timing_confirmation (não pergunte isso em texto, é sempre por seletor visual).');
   }
   lines.push(draft.mediaUrl ? 'Já tem mídia anexada ao disparo.' : 'Ainda sem mídia anexada — pergunte se o usuário quer anexar imagem/vídeo/áudio, ou seguir só com texto.');
 
   if (draft.antiBanSeverity === 'extreme') {
     const cap = antiBanCapacity(draft);
-    lines.push(cap
+    lines.push(cap && draft.sendWindow?.maxPerDay
+      ? `BLOQUEIO ANTI-BAN: o horário de envio está em ${draft.sendWindow.maxPerDay} mensagens por dia e o máximo que passa agora é ${cap.maxLeads} por dia (calculado pelo sistema — use exatamente esse número). A solução é baixar a quantidade por dia: chame request_timing_confirmation de novo. A lista inteira continua, só leva mais dias.`
+      : cap
       ? `BLOQUEIO ANTI-BAN: a lista tem ${draft.leadCount ?? 0} contatos e o máximo que passa agora é ${cap.maxLeads} (calculado pelo sistema — use exatamente esse número, nunca invente outro). Pra reduzir, só pelo seletor de exclusão (request_contact_exclusion); você não consegue tirar contatos sozinho nem dizer que tirou.`
       : `BLOQUEIO ANTI-BAN: a lista de ${draft.leadCount ?? 0} contatos é grande demais pros números escolhidos agora. Não invente um número máximo.`);
   }
@@ -819,6 +849,11 @@ function describeExtremeAntiBan(draft: CampaignDraft): string {
     : `o limite de aquecimento é ${cap.dailyLimit} por dia e já saíram ${cap.sent} nas últimas 24h`;
   if (cap.maxLeads === 0) {
     return `Esse disparo não pode sair agora: ${motivo}, então ${numeros} não cabe nenhum contato hoje. Libera de novo conforme as 24h desde os últimos envios forem passando.`;
+  }
+  // Com teto diário a lista inteira pode ficar — o que precisa baixar é a quantidade por dia.
+  const perDay = draft.sendWindow?.maxPerDay;
+  if (perDay) {
+    return `Esse disparo não pode sair assim: o horário está em ${perDay} mensagens por dia e ${numeros} cabem até ${cap.maxLeads} por dia agora (${motivo}). Ajusta pra ${cap.maxLeads} por dia ou menos no horário de envio — a lista inteira continua, só leva mais dias.`;
   }
   return `Esse disparo não pode sair assim: a lista tem ${lista} contatos e ${numeros} cabem até ${cap.maxLeads} agora (${motivo}). Dá pra tirar contatos pelo seletor até chegar em ${cap.maxLeads}, ou esperar o número aquecer.`;
 }
@@ -956,7 +991,10 @@ async function recomputeDraftMeta(userId: string, planId: string, draft: Campaig
 
   if (draft.contactListId && instanceIdsForCheck.length > 0) {
     try {
-      const antiban = await campaignService.checkAntiBanSeverity(userId, leadCount, instanceIdsForCheck);
+      // Mesma conta do createCampaign: com teto diário, o risco é o volume de cada dia.
+      const window = draft.sendWindow ?? recommendedSendWindow(draft);
+      const dailyVolume = window.maxPerDay ? Math.min(leadCount, window.maxPerDay) : leadCount;
+      const antiban = await campaignService.checkAntiBanSeverity(userId, dailyVolume, instanceIdsForCheck);
       draft.antiBanReasons = antiban.reasons;
       draft.antiBanSeverity = antiban.severity;
       if (antiban.warmup) {
@@ -1035,7 +1073,7 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - update_campaign_draft: chame toda vez que entender uma informação nova relevante pro disparo (mensagem, WhatsApp, agendamento). Use "instanceName" pra um único número, ou "instanceNames" (lista) quando o corretor quiser dividir o disparo entre 2+ números conectados — o envio real faz o balanceamento automático entre eles, você só precisa registrar quais números usar.
 - request_contact_list_selection: chame quando faltar a lista no rascunho e o assunto de lista/contatos/leads vier à tona pela primeira vez — isso mostra um seletor visual pro usuário. Se depois disso o usuário confirmar por TEXTO (ex: "sim", "essa mesma", citar o nome da lista) em vez de clicar no seletor, chame update_campaign_draft com "contactListName" pra registrar — nunca diga "lista selecionada" sem ter chamado uma dessas duas. IMPORTANTE: se o usuário COLOU um bloco de nomes/telefones no chat (uma lista de leads em texto), isso NUNCA é uma confirmação de lista por nome — nunca chame update_campaign_draft com contactListName nesse caso, mesmo que o texto tenha um título parecido com o nome de uma lista existente. Nesse caso chame suggest_import_leads e explique que precisa importar esses contatos pelo importador (upload de arquivo CSV, Excel ou PDF) antes de disparar — o importador NÃO aceita colar a lista aqui no chat, nunca prometa isso.
 - request_media_upload: chame se quiser oferecer anexar imagem/vídeo/áudio ao disparo.
-- request_timing_confirmation: chame quando lista e mensagem já estiverem definidas e faltar confirmar o tempo entre mensagens/tamanho dos lotes — isso mostra um seletor visual com valores recomendados, mas quem decide é o usuário. NUNCA pergunte esses números em texto nem assuma que ele aceitou o valor recomendado sem passar por esse seletor.
+- request_timing_confirmation: chame quando lista e mensagem já estiverem definidas e faltar confirmar o horário de envio e quantas mensagens por dia — isso mostra um seletor visual com valores recomendados, mas quem decide é o usuário. NUNCA pergunte esses números em texto nem assuma que ele aceitou o valor recomendado sem passar por esse seletor.
 - request_schedule_confirmation: chame sempre que o usuário mencionar agendar/data/hora pro disparo — NÃO tente converter "amanhã de manhã" pra ISO você mesmo, sempre mostre o seletor.
 - request_instance_selection: chame pra escolher o(s) WhatsApp(s) do disparo em vez de tentar casar o nome por texto — mesmo se o usuário só tiver 1 WhatsApp conectado, use essa ferramenta pra confirmar (não assuma).
 - request_message_variations_editor: use se o usuário quiser adicionar mais variações da mensagem ou reorganizar as que já existem (a primeira mensagem continua sendo capturada por texto normalmente).
@@ -1071,7 +1109,8 @@ SKILL DE DISPARO (o produto NÃO tem tela de criar campanha — é você quem mo
 - REGRA DE OURO (vale só enquanto você estiver ativamente montando o disparo, não pra toda e qualquer resposta): nunca termine uma resposta sobre o disparo sem dar um próximo passo claro — ou uma pergunta específica (não genérica) sobre o que falta, ou um aviso de que está tudo pronto pra confirmar. Isso não significa forçar o assunto do disparo quando o usuário estava falando de outra coisa (veja PRIORIDADE DA CONVERSA acima).
 - Mensagem de texto e mídia (imagem/vídeo/áudio) não são cumulativas nem uma pré-requisito da outra — o disparo pode ser só texto, só mídia, ou os dois juntos. Se o usuário disser explicitamente que não quer texto (só mídia), pare de perguntar por mensagem e siga o fluxo normalmente — NUNCA insista pedindo mensagem de novo depois disso.
 - Depois que lista, WhatsApp e (mensagem OU mídia) já estiverem definidos, ainda falta confirmar o timing antes de considerar o disparo pronto — chame request_timing_confirmation (não é uma pergunta de texto, é sempre o seletor visual). Se ainda não perguntou sobre anexar mídia nem o usuário recusou, pergunte uma vez em texto (ou use request_media_upload se ele topar) antes de seguir pro timing — mas não trave nisso se ele já disse que não quer.
-- O tempo/modo de envio/tamanho de lote têm valores recomendados calculados automaticamente, mas NUNCA são aplicados sozinhos — a confirmação é sempre via request_timing_confirmation (seletor visual com inputs editáveis), nunca perguntando em texto e aceitando a resposta em texto livre.
+- O horário de envio/quantidade por dia/modo de envio têm valores recomendados calculados automaticamente, mas NUNCA são aplicados sozinhos — a confirmação é sempre via request_timing_confirmation (seletor visual com inputs editáveis), nunca perguntando em texto e aceitando a resposta em texto livre.
+- Todo disparo tem horário de envio (padrão: 8h às 17h, segunda a sábado, até 100 por dia). Fora do horário nada sai — o que sobrar continua sozinho no próximo dia marcado. Lista grande NÃO precisa ser reduzida: com a quantidade por dia baixa ela sai em vários dias, e isso é o que mais protege o número de bloqueio. Nunca diga que o disparo vai sair agora se estiver fora do horário escolhido.
 - Se "AINDA FALTA" incluir "mensagem" e o usuário escrever qualquer texto que pareça ser o conteúdo a enviar (entre aspas, depois de "essa mensagem", "manda isso", "pode ser assim", ou uma frase que faça sentido pra um lead) — SEMPRE capture esse texto via update_campaign_draft, mesmo que o tom seja informal ou pareça um desabafo. Você não decide se a mensagem é "boa o suficiente" — só captura, e se quiser, sugere uma versão melhorada como opção.
 - Se a mensagem do usuário contiver um trecho "[Anexo disponível: nome (tipo) em URL]", é um arquivo que ele já anexou pela interface — a vinculação já foi persistida automaticamente antes desse turno chegar até você, então trate normalmente como "JÁ DEFINIDO" (confira no checklist) e confirme no reply. Nunca diga que uma mídia ficou vinculada se o checklist não mostrar isso. EXCEÇÃO IMPORTANTE: se o tipo do anexo for "document" (PDF, Word etc.), NÃO confirme como "mídia vinculada ao disparo" — um documento anexado aqui no chat é quase sempre, na verdade, uma lista de contatos que a pessoa queria importar. Avise que esse PDF/documento não vira lista de contatos por aqui, e que o caminho certo é o menu Leads → Importar (aceita upload de PDF, CSV ou Excel direto e extrai nome+telefone automaticamente) — só trate como mídia de verdade pro disparo (ex: uma brochura de imóvel) se o usuário confirmar explicitamente que é essa a intenção.
 - Personalização: o placeholder {nome} dentro de uma mensagem é substituído automaticamente pelo nome de cada lead no envio. Ofereça isso proativamente quando ajudar a escrever/melhorar uma mensagem (ex: "Oi {nome}, tudo bem?") — não é necessário perguntar, só avise que vai personalizar.
@@ -1504,8 +1543,8 @@ async function executeTool(
           delaySeconds: state.draft?.delaySeconds ?? defaults.delaySeconds,
           sequentialMode: state.draft?.sequentialMode ?? defaults.sequentialMode,
           blockDelay: state.draft?.blockDelay ?? defaults.blockDelay,
-          batchSize: state.draft?.batchSize ?? 30,
-          batchDelaySeconds: state.draft?.batchDelaySeconds ?? 60,
+          sendWindow: recommendedSendWindow(state.draft),
+          leadCount: state.draft?.leadCount ?? null,
         }),
       };
       return { ok: true };
@@ -2653,8 +2692,13 @@ export async function executeAction(
         draft.delaySeconds = Number(data?.delaySeconds) || draft.delaySeconds || 5;
         draft.sequentialMode = Boolean(data?.sequentialMode);
         draft.blockDelay = Number(data?.blockDelay) || draft.blockDelay || 5;
-        draft.batchSize = Number(data?.batchSize) || draft.batchSize || 30;
-        draft.batchDelaySeconds = Number(data?.batchDelaySeconds) || draft.batchDelaySeconds || 60;
+        try {
+          draft.sendWindow = normalizeSendWindow(data?.sendWindow ?? recommendedSendWindow(draft));
+        } catch (windowError: any) {
+          return { success: false, message: windowError.message };
+        }
+        // Com teto diário o intervalo sai da conta da janela (mesma conta do createCampaign).
+        draft.delaySeconds = computeWindowDelaySeconds(draft.sendWindow) ?? draft.delaySeconds;
         draft.timingConfirmed = true;
 
         draft = await recomputeDraftMeta(userId, planId, draft);
@@ -2663,7 +2707,7 @@ export async function executeAction(
         const followUp = await continueAfterAction(
           userId,
           sessionId,
-          `O usuário acabou de confirmar o timing do disparo através do seletor visual: ${draft.delaySeconds}s entre mensagens, ${draft.sequentialMode ? 'modo sequencial ligado' : 'modo sequencial desligado'}, lotes de ${draft.batchSize} leads a cada ${draft.batchDelaySeconds}s.`
+          `O usuário acabou de confirmar o timing do disparo através do seletor visual: ${describeTimingForModel(draft)}${draft.sequentialMode ? '' : ', modo sequencial desligado'}.`
         );
 
         return {
@@ -3009,7 +3053,8 @@ export async function executeAction(
           draft.mediaUrl || undefined,
           draft.sequentialMode ?? false,
           draft.blockDelay ?? 5,
-          draft.excludedContactIds ?? []
+          draft.excludedContactIds ?? [],
+          draft.sendWindow ?? recommendedSendWindow(draft)
         );
 
         await saveDraft(userId, sessionId, null);

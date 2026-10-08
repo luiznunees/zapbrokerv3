@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { campaignQueue } from '../queues/campaignQueue';
-import { getInstanceSendVolume } from './campaignService';
+import { getInstanceSendVolume, getCampaignSentToday } from './campaignService';
+import { isInsideWindow, sendWindowFromCampaignRow } from '../utils/sendWindow';
 
 const BATCH_SIZE = 50; // Can process more now as we just enqueue
 const INTERVAL_MS = 5000; // Check every 5 seconds
@@ -70,59 +71,13 @@ const processQueue = async () => {
             console.warn(`[CampaignProcessor] ${requeued.length} mensagem(ns) travada(s) em QUEUED por mais de 15min — revertidas pra PENDING.`);
         }
 
-        // Fetch PENDING messages
-        const { data: messages, error } = await supabase
-            .from('campaign_messages')
-            .select(`
-                id,
-                contact_id,
-                campaign_id,
-                campaigns!inner (
-                    id,
-                    user_id,
-                    message,
-                    message_variations,
-                    sequential_mode,
-                    block_delay,
-                    instance_id,
-                    delay_seconds,
-                    batch_size,
-                    batch_delay_seconds,
-                    media_type,
-                    media_url,
-                    scheduled_at,
-                    status
-                )
-            `)
-            .eq('status', 'PENDING')
-            .not('campaigns.status', 'eq', 'PAUSED') // Ensure we don't pick up paused campaigns
-            .limit(BATCH_SIZE);
-
-        if (error) {
-            // Suppress full error stack for network failures to avoid spam
-            console.warn(`[CampaignProcessor] Failed to fetch queue: ${error.message} (Retrying...)`);
+        const validMessages = await fetchSendableMessages();
+        if (!validMessages || validMessages.length === 0) {
             isProcessing = false;
             return;
         }
 
-        if (!messages || messages.length === 0) {
-            isProcessing = false;
-            return;
-        }
-
-        // Filter out messages where campaign is missing (failed join) or Paused
-        const validMessages = messages.filter(msg => {
-            const camp = msg.campaigns as any;
-            return camp && camp.status !== 'PAUSED';
-        });
-
-        if (validMessages.length === 0) {
-            console.log(`[CampaignProcessor] Fetched ${messages.length} messages, but all were Paused/Invalid. Ignoring.`);
-            isProcessing = false;
-            return;
-        }
-
-        console.log(`[CampaignProcessor] Found ${validMessages.length} active messages (filtered from ${messages.length}). Enqueuing...`);
+        console.log(`[CampaignProcessor] Found ${validMessages.length} active messages dentro da janela de envio. Enqueuing...`);
 
         // Mark as QUEUED immediately — reserva atômica: só enfileira o que ESTE processo
         // conseguiu virar de PENDING pra QUEUED. Durante um deploy sem downtime dois processos
@@ -188,6 +143,128 @@ const processQueue = async () => {
         isProcessing = false;
     }
 };
+
+// Campanhas fora da janela de envio (ou com o teto do dia batido) ficam de fora da busca até
+// esse horário — sem isso, as PENDING delas ocupavam o lote inteiro a cada volta e o disparo
+// de outro cliente, que podia sair agora, nunca era buscado.
+const windowBlockedUntil = new Map<string, number>();
+const WINDOW_RECHECK_MS = 60 * 1000;
+
+function campaignsBlockedNow(): string[] {
+    const now = Date.now();
+    for (const [id, until] of windowBlockedUntil) if (until <= now) windowBlockedUntil.delete(id);
+    return [...windowBlockedUntil.keys()];
+}
+
+async function fetchPendingBatch(excludeCampaignIds: string[]) {
+    let query = supabase
+        .from('campaign_messages')
+        .select(`
+            id,
+            contact_id,
+            campaign_id,
+            campaigns!inner (
+                id,
+                user_id,
+                message,
+                message_variations,
+                sequential_mode,
+                block_delay,
+                instance_id,
+                delay_seconds,
+                media_type,
+                media_url,
+                scheduled_at,
+                status,
+                window_start_minute,
+                window_end_minute,
+                window_weekdays,
+                window_max_per_day
+            )
+        `)
+        .eq('status', 'PENDING')
+        .not('campaigns.status', 'eq', 'PAUSED'); // Ensure we don't pick up paused campaigns
+    if (excludeCampaignIds.length > 0) {
+        query = query.not('campaign_id', 'in', `(${excludeCampaignIds.join(',')})`);
+    }
+    return query.limit(BATCH_SIZE);
+}
+
+// Aplica a janela de envio por campanha: fora do horário/dia não sai nada; com teto diário,
+// só enfileira o que ainda cabe hoje (já enviadas hoje + as que já estão na fila contam).
+// Devolve as mensagens liberadas e quantas campanhas foram tiradas da busca nessa volta.
+async function applySendWindows(messages: any[]): Promise<{ allowed: any[]; newlyBlocked: number }> {
+    const byCampaign = new Map<string, any[]>();
+    for (const msg of messages) {
+        const id = (msg.campaigns as any).id;
+        if (!byCampaign.has(id)) byCampaign.set(id, []);
+        byCampaign.get(id)!.push(msg);
+    }
+
+    const allowed: any[] = [];
+    let newlyBlocked = 0;
+    const block = (campaignId: string) => {
+        windowBlockedUntil.set(campaignId, Date.now() + WINDOW_RECHECK_MS);
+        newlyBlocked++;
+    };
+
+    for (const [campaignId, msgs] of byCampaign) {
+        const window = sendWindowFromCampaignRow(msgs[0].campaigns);
+        if (!isInsideWindow(window)) {
+            block(campaignId);
+            continue;
+        }
+        if (!window.maxPerDay) {
+            allowed.push(...msgs);
+            continue;
+        }
+
+        const [sentToday, { count: inFlight }] = await Promise.all([
+            getCampaignSentToday(campaignId, window),
+            supabase
+                .from('campaign_messages')
+                .select('id', { count: 'exact', head: true })
+                .eq('campaign_id', campaignId)
+                .in('status', ['QUEUED', 'SENDING']),
+        ]);
+        const remaining = window.maxPerDay - sentToday - (inFlight || 0);
+        if (remaining <= 0) {
+            if (sentToday >= window.maxPerDay) {
+                console.log(`[CampaignProcessor] Campanha ${campaignId} bateu o teto do dia (${sentToday}/${window.maxPerDay}) — continua amanhã na janela.`);
+            }
+            block(campaignId);
+            continue;
+        }
+        allowed.push(...msgs.slice(0, remaining));
+    }
+
+    return { allowed, newlyBlocked };
+}
+
+// Busca PENDING já filtradas pela janela de envio. Se o lote inteiro era de campanhas fora da
+// janela, busca de novo sem elas (até 3 vezes) pra não deixar outro disparo esperando 5s à toa.
+async function fetchSendableMessages(): Promise<any[] | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const { data: messages, error } = await fetchPendingBatch(campaignsBlockedNow());
+
+        if (error) {
+            // Suppress full error stack for network failures to avoid spam
+            console.warn(`[CampaignProcessor] Failed to fetch queue: ${error.message} (Retrying...)`);
+            return null;
+        }
+        if (!messages || messages.length === 0) return null;
+
+        // Filter out messages where campaign is missing (failed join) or Paused
+        const valid = messages.filter(msg => {
+            const camp = msg.campaigns as any;
+            return camp && camp.status !== 'PAUSED';
+        });
+
+        const { allowed, newlyBlocked } = await applySendWindows(valid);
+        if (allowed.length > 0 || newlyBlocked === 0) return allowed;
+    }
+    return null;
+}
 
 // Monta, pra cada campanha do lote atual, uma função que escolhe o número de WhatsApp
 // menos carregado (volume das últimas 24h) a cada chamada — balanceando o disparo entre

@@ -6,6 +6,22 @@ import fs from 'fs';
 import path from 'path';
 import { injectInvisibleMarker } from '../utils/invisibleMarker';
 import * as eventLogService from '../services/eventLogService';
+import { getCampaignSentToday } from '../services/campaignService';
+import { isInsideWindow, sendWindowFromCampaignRow } from '../utils/sendWindow';
+
+const CAMPAIGN_WINDOW_COLUMNS = 'status, window_start_minute, window_end_minute, window_weekdays, window_max_per_day';
+
+// A fila pode ter sido montada antes do fim da janela (o processor enfileira em lote e cada
+// mensagem espera minutos) — então o worker confere de novo na hora de enviar. Devolve o
+// motivo pra não enviar agora, ou null se pode.
+async function sendWindowBlock(campaignId: string, campaignRow: any): Promise<string | null> {
+    const window = sendWindowFromCampaignRow(campaignRow);
+    if (!isInsideWindow(window)) return 'fora da janela de envio';
+    if (window.maxPerDay && (await getCampaignSentToday(campaignId, window)) >= window.maxPerDay) {
+        return `teto do dia atingido (${window.maxPerDay})`;
+    }
+    return null;
+}
 
 const MIMETYPE_BY_EXTENSION: Record<string, string> = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
@@ -91,7 +107,8 @@ async function releaseMessage(messageId: string) {
 async function failWithoutResend(messageId: string, campaignId: string, reason: string) {
     await supabase
         .from('campaign_messages')
-        .update({ status: 'FAILED', error_message: reason, updated_at: new Date().toISOString() })
+        // sent_at: parte chegou ao lead, então conta no teto do dia.
+        .update({ status: 'FAILED', error_message: reason, sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', messageId);
     const { data: campaignRow } = await supabase.from('campaigns').select('user_id').eq('id', campaignId).maybeSingle();
     eventLogService.logEvent({
@@ -128,7 +145,7 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     // 0.1 CHECK PAUSE/CANCEL STATUS
     const { data: campaignData, error: campaignError } = await supabase
         .from('campaigns')
-        .select('status')
+        .select(CAMPAIGN_WINDOW_COLUMNS)
         .eq('id', campaignId)
         .single();
 
@@ -142,6 +159,15 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     if (campaignData?.status === 'CANCELLED') {
         console.log(`[CampaignWorker] Campaign ${campaignId} is CANCELLED. Aborting job ${job.id}.`);
         // Não reverte pra PENDING: campanha cancelada não volta a disparar.
+        return;
+    }
+
+    // Fora da janela/teto: devolve pra fila sem gastar a espera anti-ban — o processor só
+    // pega de novo quando a janela abrir.
+    const blockedBefore = campaignData ? await sendWindowBlock(campaignId, campaignData) : null;
+    if (blockedBefore) {
+        console.log(`[CampaignWorker] Campaign ${campaignId}: ${blockedBefore} — mensagem ${messageId} volta pra fila.`);
+        await releaseMessage(messageId);
         return;
     }
 
@@ -185,10 +211,17 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
 
     // Confere de novo depois da espera: o corretor pode ter pausado ou cancelado nesse meio
     // tempo (a espera anti-ban passa de 1 min) — pausar tem que valer na hora, são leads reais.
-    const { data: campaignNow } = await supabase.from('campaigns').select('status').eq('id', campaignId).single();
+    const { data: campaignNow } = await supabase.from('campaigns').select(CAMPAIGN_WINDOW_COLUMNS).eq('id', campaignId).single();
     if (campaignNow?.status === 'PAUSED' || campaignNow?.status === 'CANCELLED') {
         console.log(`[CampaignWorker] Campaign ${campaignId} ficou ${campaignNow.status} durante a espera — job ${job.id} não envia.`);
         if (campaignNow.status === 'PAUSED') await releaseMessage(messageId);
+        return;
+    }
+    // A janela pode ter fechado durante a espera (ex: 16h58 → 17h02).
+    const blockedAfter = campaignNow ? await sendWindowBlock(campaignId, campaignNow) : null;
+    if (blockedAfter) {
+        console.log(`[CampaignWorker] Campaign ${campaignId}: ${blockedAfter} durante a espera — mensagem ${messageId} volta pra fila.`);
+        await releaseMessage(messageId);
         return;
     }
 
@@ -425,6 +458,7 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         .update({
             ...(evolutionMessageId ? { evolution_message_id: evolutionMessageId } : {}),
             status: 'SENT',
+            sent_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         })
         .eq('id', messageId);
