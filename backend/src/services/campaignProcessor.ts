@@ -183,7 +183,7 @@ async function fetchPendingBatch(excludeCampaignIds: string[]) {
             )
         `)
         .eq('status', 'PENDING')
-        .not('campaigns.status', 'eq', 'PAUSED'); // Ensure we don't pick up paused campaigns
+        .not('campaigns.status', 'in', '(PAUSED,CANCELLED)'); // cancelada também: o worker não envia e a mensagem ficava girando QUEUED→PENDING pra sempre
     if (excludeCampaignIds.length > 0) {
         query = query.not('campaign_id', 'in', `(${excludeCampaignIds.join(',')})`);
     }
@@ -257,7 +257,7 @@ async function fetchSendableMessages(): Promise<any[] | null> {
         // Filter out messages where campaign is missing (failed join) or Paused
         const valid = messages.filter(msg => {
             const camp = msg.campaigns as any;
-            return camp && camp.status !== 'PAUSED';
+            return camp && camp.status !== 'PAUSED' && camp.status !== 'CANCELLED';
         });
 
         const { allowed, newlyBlocked } = await applySendWindows(valid);
