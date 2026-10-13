@@ -535,6 +535,20 @@ campaignWorker.on('failed', async (job, err) => {
     const attemptsMade = job.attemptsMade;
     const maxAttempts = job.opts.attempts || 1;
 
+    // Toda tentativa que falha fica registrada com o motivo — não só a última. Achado real
+    // (Fernanda, 13/10): 54 tentativas falharam das 8h às 13h, nenhuma esgotou as 3 (a janela
+    // fechou antes) e o motivo só existia no log do container, que some no deploy.
+    if (attemptsMade < maxAttempts) {
+        const { data: campaignRow } = await supabase.from('campaigns').select('user_id').eq('id', job.data.campaignId).maybeSingle();
+        eventLogService.logEvent({
+            type: 'campaign.message_attempt_failed',
+            severity: 'warn',
+            message: `Tentativa ${attemptsMade}/${maxAttempts} de envio falhou (campanha ${job.data.campaignId}): ${err.message}`,
+            userId: campaignRow?.user_id,
+            metadata: { campaignId: job.data.campaignId, messageId: job.data.id, attempt: attemptsMade, instanceId: job.data.instanceId, mediaType: job.data.mediaType },
+        });
+    }
+
     if (attemptsMade >= maxAttempts) {
         console.error(`[CampaignWorker] Job ${job.id} exhausted all ${maxAttempts} attempts. Marking message ${job.data.id} as FAILED.`);
         await supabase
