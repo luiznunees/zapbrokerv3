@@ -44,33 +44,63 @@ function isTrustedMediaUrl(mediaUrl: string): boolean {
     }
 }
 
-// Se o arquivo estiver hospedado localmente (uploads/), lê e converte pra base64 puro —
-// a Evolution API prefere isso a mandar só a URL. Reaproveitado por imagem/vídeo/áudio.
+// Arquivo de mídia do disparo não está mais no disco (uploads/ some a cada deploy/reinício
+// se o EasyPanel não tiver volume montado em /app/uploads). Não adianta tentar de novo.
+class MediaMissingError extends Error {
+    constructor(public filename: string) {
+        super(`Imagem/vídeo/áudio do disparo não encontrado no servidor (${filename})`);
+    }
+}
+
+function localMediaPath(mediaUrl: string): string {
+    return path.join(process.cwd(), 'uploads', path.basename(mediaUrl.split('/').pop() as string));
+}
+
+function campaignNeedsMediaFile(mediaType: string, mediaUrl: string): boolean {
+    return Boolean(mediaUrl) && ['image', 'video', 'audio'].includes(mediaType);
+}
+
+// Lê o arquivo de uploads/ e manda pra Evolution em base64. Sem o arquivo não existe plano B:
+// mandar só a URL fazia a Evolution baixar de /uploads, que exige login desde 25/09 (9cadbe9)
+// — achado real (Fernanda, 13/10): toda tentativa voltava 401 e o disparo ficou o dia inteiro
+// falhando em silêncio, 1 tentativa a cada ~5min.
 function readLocalMediaAsBase64(mediaUrl: string, fallbackMimetype: string): { mediaData: string; mimetype: string } {
     if (!mediaUrl || !isTrustedMediaUrl(mediaUrl)) {
         throw new Error(`mediaUrl fora do domínio confiável, recusando envio: ${mediaUrl}`);
     }
-
-    let mediaData = mediaUrl;
-    let mimetype = fallbackMimetype;
-
-    try {
-        const filename = path.basename(mediaUrl.split('/').pop() as string);
-        const filePath = path.join(process.cwd(), 'uploads', filename);
-
-        if (fs.existsSync(filePath)) {
-            const fileBuffer = fs.readFileSync(filePath);
-            const extension = path.extname(filePath).toLowerCase().replace('.', '');
-            mimetype = MIMETYPE_BY_EXTENSION[extension] || fallbackMimetype;
-            mediaData = fileBuffer.toString('base64');
-        } else {
-            console.warn(`[CampaignWorker] Local file not found: ${filePath}`);
-        }
-    } catch (err: any) {
-        console.error('[CampaignWorker] Failed to convert local media to base64:', err.message);
+    const filePath = localMediaPath(mediaUrl);
+    if (!fs.existsSync(filePath)) {
+        throw new MediaMissingError(path.basename(filePath));
     }
+    const extension = path.extname(filePath).toLowerCase().replace('.', '');
+    return {
+        mediaData: fs.readFileSync(filePath).toString('base64'),
+        mimetype: MIMETYPE_BY_EXTENSION[extension] || fallbackMimetype,
+    };
+}
 
-    return { mediaData, mimetype };
+// Pausa o disparo inteiro (as próximas mensagens falhariam do mesmo jeito) e avisa: o
+// corretor precisa reenviar a mídia. A mensagem atual volta pra fila — nada saiu.
+async function pauseForMissingMedia(messageId: string, campaignId: string, filename: string) {
+    console.error(`[CampaignWorker] Mídia do disparo ${campaignId} sumiu do servidor (${filename}) — pausando o disparo.`);
+    await supabase
+        .from('campaign_messages')
+        .update({ status: 'PENDING', updated_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .in('status', ['QUEUED', 'SENDING']);
+    const { data: campaignRow } = await supabase
+        .from('campaigns')
+        .update({ status: 'PAUSED' })
+        .eq('id', campaignId)
+        .select('user_id, name')
+        .maybeSingle();
+    eventLogService.logEvent({
+        type: 'campaign.media_missing',
+        severity: 'error',
+        message: `Disparo "${campaignRow?.name ?? campaignId}" pausado: a imagem/vídeo/áudio não está mais no servidor (${filename}). Precisa reenviar a mídia.`,
+        userId: campaignRow?.user_id,
+        metadata: { campaignId, messageId, filename },
+    });
 }
 
 // ─── Desligamento controlado (deploy/restart) ───────────────────
@@ -168,6 +198,12 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
     if (blockedBefore) {
         console.log(`[CampaignWorker] Campaign ${campaignId}: ${blockedBefore} — mensagem ${messageId} volta pra fila.`);
         await releaseMessage(messageId);
+        return;
+    }
+
+    // Mídia sumiu do disco: pausa já, sem gastar a espera anti-ban nem as 3 tentativas.
+    if (campaignNeedsMediaFile(mediaType, mediaUrl) && isTrustedMediaUrl(mediaUrl) && !fs.existsSync(localMediaPath(mediaUrl))) {
+        await pauseForMissingMedia(messageId, campaignId, path.basename(localMediaPath(mediaUrl)));
         return;
     }
 
@@ -464,6 +500,10 @@ export const campaignWorker = new Worker('campaign-dispatch', async (job) => {
         .eq('id', messageId);
 
     } catch (err: any) {
+        if (err instanceof MediaMissingError && !sentAny) {
+            await pauseForMissingMedia(messageId, campaignId, err.filename);
+            return;
+        }
         if (!sentAny) {
             // Nada chegou ao lead: devolve pra QUEUED e deixa o BullMQ tentar de novo.
             await supabase
