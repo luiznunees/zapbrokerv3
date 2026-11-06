@@ -1,0 +1,85 @@
+name: Deploy agendado
+
+# Deploy de produção num horário fixo (22h de Brasília): movimento de corretor já caiu e o
+# fundador ainda está acordado pra ver se deu certo. Só faz deploy do que mudou desde o
+# último deploy agendado (backend e/ou frontend). Urgência: rodar manualmente aqui em
+# Actions ("Run workflow") ou usar o botão de deploy do painel admin.
+#
+# Pra funcionar:
+# - Secrets do repositório: EASYPANEL_DEPLOY_HOOK_API e EASYPANEL_DEPLOY_HOOK_APP (as mesmas
+#   URLs de gatilho do .env do backend).
+# - Desligar o "auto deploy" a cada push no EasyPanel — senão o deploy continua saindo na hora.
+#
+# O GitHub pode atrasar execuções agendadas (normalmente minutos, às vezes mais).
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # 01:00 UTC = 22:00 em Brasília (UTC-3)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Fazer deploy de tudo mesmo sem mudança'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # pra mover a tag deploy-producao
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: O que mudou desde o último deploy
+        id: diff
+        run: |
+          FORCE="${{ github.event.inputs.force }}"
+          if git rev-parse -q --verify refs/tags/deploy-producao >/dev/null; then
+            LAST=$(git rev-list -n1 deploy-producao)
+            CHANGED=$(git diff --name-only "$LAST" HEAD)
+            echo "Último deploy agendado: $LAST"
+          else
+            echo "Primeiro deploy agendado — sem referência anterior, faz deploy de tudo."
+            CHANGED=$(printf 'backend/\nfrontend/')
+          fi
+          if [ "$FORCE" = "true" ]; then CHANGED=$(printf 'backend/\nfrontend/'); fi
+
+          echo "$CHANGED" | grep -q '^backend/' && echo "api=true" >> "$GITHUB_OUTPUT" || echo "api=false" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" | grep -q '^frontend/' && echo "app=true" >> "$GITHUB_OUTPUT" || echo "app=false" >> "$GITHUB_OUTPUT"
+          echo "Arquivos alterados:"
+          echo "$CHANGED"
+
+      - name: Deploy da API (backend)
+        if: steps.diff.outputs.api == 'true'
+        run: |
+          if [ -z "$HOOK" ]; then echo "Secret EASYPANEL_DEPLOY_HOOK_API não configurado"; exit 1; fi
+          curl -fsS -o /dev/null "$HOOK" && echo "Deploy da API acionado."
+        env:
+          HOOK: ${{ secrets.EASYPANEL_DEPLOY_HOOK_API }}
+
+      - name: Deploy do app (frontend)
+        if: steps.diff.outputs.app == 'true'
+        run: |
+          if [ -z "$HOOK" ]; then echo "Secret EASYPANEL_DEPLOY_HOOK_APP não configurado"; exit 1; fi
+          curl -fsS -o /dev/null "$HOOK" && echo "Deploy do app acionado."
+        env:
+          HOOK: ${{ secrets.EASYPANEL_DEPLOY_HOOK_APP }}
+
+      - name: Nada pra fazer
+        if: steps.diff.outputs.api != 'true' && steps.diff.outputs.app != 'true'
+        run: echo "Sem mudança em backend/ ou frontend/ desde o último deploy — nada a fazer."
+
+      - name: Marca o commit deployado
+        if: steps.diff.outputs.api == 'true' || steps.diff.outputs.app == 'true'
+        run: |
+          git tag -f deploy-producao HEAD
+          git push -f origin refs/tags/deploy-producao

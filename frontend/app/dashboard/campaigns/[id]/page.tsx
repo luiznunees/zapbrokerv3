@@ -93,7 +93,7 @@ export default function CampaignDetailsPage() {
         total: messages.length,
         sent: messages.filter((m: any) => m.status === 'SENT').length,
         failed: messages.filter((m: any) => m.status === 'FAILED').length,
-        pending: messages.filter((m: any) => m.status === 'PENDING' || m.status === 'QUEUED').length,
+        pending: messages.filter((m: any) => m.status === 'PENDING' || m.status === 'QUEUED' || m.status === 'SENDING').length,
     };
 
     const filteredMessages = messages.filter((m: any) =>
@@ -276,6 +276,7 @@ function StatusBadge({ status }: { status: string }) {
         'FAILED': { label: 'Falhou', class: 'bg-destructive/10 text-destructive border-destructive/20' },
         'PENDING': { label: 'Pendente', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
         'QUEUED': { label: 'Na Fila', class: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+        'SENDING': { label: 'Enviando', class: 'bg-sky-500/10 text-sky-600 border-sky-500/20' },
     };
 
     const config = configs[status] || { label: status, class: 'bg-muted text-muted-foreground' };

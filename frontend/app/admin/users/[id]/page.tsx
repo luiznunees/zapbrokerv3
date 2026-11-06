@@ -71,7 +71,7 @@ function CopyButton({ getText, label }: { getText: () => string | Promise<string
 function StatusBadge({ status }: { status: string }) {
     const tone =
         status === 'connected' || status === 'COMPLETED' || status === 'SENT' ? 'bg-emerald-500/10 text-emerald-400'
-        : status === 'RUNNING' || status === 'PENDING' || status === 'QUEUED' || status === 'connecting' ? 'bg-sky-500/10 text-sky-400'
+        : status === 'RUNNING' || status === 'PENDING' || status === 'QUEUED' || status === 'SENDING' || status === 'connecting' ? 'bg-sky-500/10 text-sky-400'
         : status === 'PAUSED' || status === 'SCHEDULED' ? 'bg-amber-500/10 text-amber-400'
         : FAILURE_STATUSES.includes(status) || status === 'disconnected' || status === 'error' || status === 'CANCELLED' ? 'bg-red-500/10 text-red-400'
         : 'bg-zinc-700/50 text-zinc-300'
