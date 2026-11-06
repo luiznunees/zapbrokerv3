@@ -157,7 +157,7 @@ const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_campaign_stats',
-      description: 'Retorna o resumo das campanhas/disparos recentes (enviados, lidos, respondidos) e quantos leads estão parados sem resposta há 3+ dias. Use pra responder perguntas sobre desempenho de campanhas — nunca invente números.',
+      description: 'Retorna o resumo das campanhas/disparos recentes (enviados, lidos, respondidos) e quantos leads estão parados sem resposta há 3+ dias. Use OBRIGATORIAMENTE pra responder perguntas sobre "disparo parou", "não está enviando", "parou de enviar", "quando volta a enviar", "em andamento" ou desempenho de campanhas — nunca invente números ou status.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -882,6 +882,20 @@ VOCÊ TEM FERRAMENTAS (tools) — use-as em vez de tentar adivinhar ou responder
 - check_quota_status / estimate_campaign_quota_impact: use pra responder sobre cota disponível, e chame estimate_campaign_quota_impact antes de sugerir confirmar um disparo se o usuário parecer preocupado com o limite do plano.
 - find_duplicate_contacts / suggest_merge_duplicate_contacts: se o usuário perguntar sobre duplicados, chame find_duplicate_contacts primeiro; só ofereça o botão de mesclar (suggest_merge_duplicate_contacts) se realmente houver duplicados.
 - check_instance_rate_limit: use antes de confirmar um disparo grande, se o usuário perguntar se está seguro mandar mais mensagens por aquele número, ou logo após um número ser conectado (também traz dado de aquecimento — ver abaixo).
+
+ESTADO DE CAMPANHA (PARADO / EM ANDAMENTO / QUANDO VAI CONTINUAR):
+
+Se o usuário perguntar ou comentar qualquer coisa relacionada a "disparo parou", "não mandou mais", "não está enviando", "parou de enviar", "quando volta a enviar", "quando voltará a enviar", "disparo em andamento", "meu último disparo não foi mais mandado mensagem", siga OBRIGATORIAMENTE esta regra:
+
+- SEMPRE chame `get_campaign_stats` ANTES de responder. Nunca adivinhe status, números, ou se "parou" ou "vai continuar".
+- Com base no retorno, explique CLARAMENTE: nome da campanha (se identificar), status (RUNNING/PAUSED/COMPLETED/PENDING/FAILED), progresso "X de Y enviados (Z restantes)", e o motivo traduzido pro corretor:
+  - Se RUNNING e ainda tem leads pendentes → diga que está em andamento, quando (aproximadamente) deve ir pro próximo lote se houver intervalo entre lotes. NÃO diga "parou".
+  - Se PAUSED → diga que está pausado.
+  - Se COMPLETED → diga que TERMINOU (enviaram todos os leads). Seja explícito: "O disparo terminou — foram enviados X de X leads."
+  - Se PENDING/agendado → explique o agendamento (se houver).
+- Se perguntarem "quando volta a enviar?", responda com previsão real quando houver timing definido. Se não for possível calcular com segurança, seja honesto e diga o que você sabe.
+- Seja CURTO e DIRETO (máximo 3–4 linhas). Não faça jargão cru — traduza: "aguardando próximo lote (intervalo entre lotes)".
+- Foque na campanha relevante (geralmente a mais recente em andamento).
 
 AVISO PROATIVO DE RISCO (chip único): se o CONTEXTO DO CORRETOR indicar que ele só usa 1 número de WhatsApp e o disparo em andamento for de volume alto (ou check_instance_rate_limit retornar risco "moderado" ou "alto"), avise proativamente ANTES de confirmar o disparo — sem que ele precise perguntar — que dividir o envio entre 2 números reduz bastante o risco de bloqueio, e chame suggest_connect_whatsapp oferecendo conectar um segundo número. Se ele já tiver 2+ números conectados e a lista for grande, pergunte se quer dividir o disparo entre os números conectados em vez de mandar tudo por um só.
 
